@@ -21,10 +21,10 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node (more compatible)
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 18
 
       - name: Unzip source
         run: |
@@ -37,30 +37,32 @@ jobs:
       - name: Find project root (where package.json is)
         run: |
           set -e
-          ROOT="$(find app -maxdepth 3 -name package.json -print -quit | xargs -r dirname)"
+          ROOT="$(find app -maxdepth 6 -name package.json -print -quit | xargs -r dirname)"
           if [ -z "$ROOT" ]; then
-            echo "ERROR: package.json not found inside zip (within 3 levels)."
-            echo "Check the zip contents."
+            echo "ERROR: package.json not found inside zip (within 6 levels)."
+            echo "Tip: the zip may be wrong or contains only a build output."
             exit 1
           fi
           echo "PROJECT_ROOT=$ROOT" >> $GITHUB_ENV
           echo "Found project root: $ROOT"
           ls -la "$ROOT"
 
-      - name: Install dependencies
+      - name: Install dependencies (handle old peer deps)
         working-directory: ${{ env.PROJECT_ROOT }}
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Build (base-href = repo name)
         working-directory: ${{ env.PROJECT_ROOT }}
+        env:
+          NODE_OPTIONS: --max_old_space_size=4096
         run: npm run build -- --configuration production --base-href "/${{ github.event.repository.name }}/"
 
       - name: Detect build output folder
         run: |
           set -e
-          echo "=== dist folders under project root ==="
+          echo "=== dist folders ==="
           ls -la "${{ env.PROJECT_ROOT }}/dist" || true
-          # Common Angular outputs:
+
           if [ -d "${{ env.PROJECT_ROOT }}/dist/pokemon-roulette/browser" ]; then
             echo "PAGES_PATH=${{ env.PROJECT_ROOT }}/dist/pokemon-roulette/browser" >> $GITHUB_ENV
           elif [ -d "${{ env.PROJECT_ROOT }}/dist/pokemon-roulette" ]; then
@@ -73,6 +75,7 @@ jobs:
             fi
             echo "PAGES_PATH=${{ env.PROJECT_ROOT }}/dist/$FIRST" >> $GITHUB_ENV
           fi
+
           echo "Pages path: ${{ env.PAGES_PATH }}"
           ls -la "${{ env.PAGES_PATH }}"
 
