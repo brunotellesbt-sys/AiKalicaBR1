@@ -74,451 +74,775 @@ jobs:
           CORE_VER="${CORE_VER#~}"
           npm install @angular/localize@$CORE_VER --legacy-peer-deps
 
-      - name: Patch (wheel + evolutions + Gen9 trainers + Mobile PC + name fallback + mega animation)
+      - name: Patch (wheel bigger & sharper + mega evo animation & cries + Gen 9 trainers)
         working-directory: ${{ env.PROJECT_ROOT }}
         run: |
           set -e
+
+          # --- Gen 9 trainer sprites: bundle locally (no hotlink) ---
+          mkdir -p src/assets/trainers
+          curl -L --retry 3 --fail "https://archives.bulbagarden.net/media/upload/6/62/Spr_Masters_Florian_2.png" -o "src/assets/trainers/Spr_Masters_Florian_2.png"
+          curl -L --retry 3 --fail "https://archives.bulbagarden.net/media/upload/4/4a/Spr_Masters_Juliana.png" -o "src/assets/trainers/Spr_Masters_Juliana.png"
+
           python3 - <<'PY'
           import re
-          import textwrap
           from pathlib import Path
 
-          # ============================================================
-          # 1) WHEEL: bigger on mobile + HiDPI sharp (no missing method)
-          # ============================================================
+          # ----------------------------
+          # Trainer sprites (Gen 9)
+          # ----------------------------
+          trainer = Path("src/app/services/trainer-service/trainer-sprite-data.ts")
+          if trainer.exists():
+              txt = trainer.read_text(encoding="utf-8")
+              txt = txt.replace(
+                  "https://archives.bulbagarden.net/media/upload/6/62/Spr_Masters_Florian_2.png",
+                  "assets/trainers/Spr_Masters_Florian_2.png"
+              )
+              txt = txt.replace(
+                  "https://archives.bulbagarden.net/media/upload/4/4a/Spr_Masters_Juliana.png",
+                  "assets/trainers/Spr_Masters_Juliana.png"
+              )
+              trainer.write_text(txt, encoding="utf-8")
+
+          # ----------------------------
+          # Wheel: bigger on mobile + HiDPI sharp + pointer back
+          # ----------------------------
           wheel_ts = Path("src/app/wheel/wheel.component.ts")
           if wheel_ts.exists():
-              txt = wheel_ts.read_text(encoding="utf-8")
+              w = wheel_ts.read_text(encoding="utf-8")
 
-              pat = (
-                  r"this\.canvasHeight\s*=\s*Math\.min\(window\.innerHeight,\s*window\.innerWidth\)\s*\*\s*0\.50\s*;\s*\n"
-                  r"\s*this\.wheelWidth\s*=\s*this\.canvasHeight\s*;\s*\n"
-                  r"\s*this\.cursorWidth\s*=\s*40\s*;\s*\n"
-                  r"\s*this\.fontSize\s*=\s*this\.wheelWidth\s*/\s*24\s*;"
+              # Import OnDestroy (safe if already there)
+              w = w.replace(
+                  "import { AfterViewInit, Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';",
+                  "import { AfterViewInit, Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, OnDestroy } from '@angular/core';"
               )
-              repl = (
-                  "this.cursorWidth = 40;\n"
-                  "    const minDim = Math.min(window.innerHeight, window.innerWidth);\n"
-                  "    const isMobile = window.innerWidth <= 768;\n"
-                  "    const target = minDim * (isMobile ? 0.86 : 0.50);\n"
-                  "    const maxWheel = Math.max(120, window.innerWidth - this.cursorWidth - 16);\n"
-                  "    this.wheelWidth = Math.min(target, maxWheel);\n"
-                  "    this.canvasHeight = this.wheelWidth;\n"
-                  "    this.fontSize = this.wheelWidth / 24;"
-              )
-              txt = re.sub(pat, repl, txt, count=1)
-
-              has_method = re.search(r"\bsetupHiDpiCanvases\s*\(\)\s*:\s*void\b", txt) is not None
-              if not has_method:
-                  method = textwrap.dedent("""
-                  
-                    private setupHiDpiCanvases(): void {
-                      const dpr = window.devicePixelRatio || 1;
-
-                      this.wheelCanvas.style.width = `${this.wheelWidth}px`;
-                      this.wheelCanvas.style.height = `${this.canvasHeight}px`;
-                      this.wheelCanvas.width = Math.floor(this.wheelWidth * dpr);
-                      this.wheelCanvas.height = Math.floor(this.canvasHeight * dpr);
-                      this.wheelCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-                      this.pointerCanvas.style.width = `${this.cursorWidth}px`;
-                      this.pointerCanvas.style.height = `${this.canvasHeight}px`;
-                      this.pointerCanvas.width = Math.floor(this.cursorWidth * dpr);
-                      this.pointerCanvas.height = Math.floor(this.canvasHeight * dpr);
-                      this.pointerCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-                    }
-                  """).rstrip() + "\n"
-                  last_brace = txt.rfind("\n}")
-                  if last_brace != -1:
-                      txt = txt[:last_brace] + "\n" + method + txt[last_brace:]
-
-              marker = "this.pointerCtx = this.pointerCanvas.getContext('2d')!;"
-              if marker in txt and "this.setupHiDpiCanvases();" not in txt:
-                  txt = txt.replace(marker, marker + "\n    this.setupHiDpiCanvases();", 1)
-
-              txt = txt.replace("const centerX = this.wheelCanvas.width / 2;", "const centerX = this.wheelWidth / 2;")
-              txt = txt.replace("const centerY = this.wheelCanvas.height / 2;", "const centerY = this.canvasHeight / 2;")
-              txt = txt.replace("const radius = (this.wheelCanvas.width / 2);", "const radius = (this.wheelWidth / 2);")
-              txt = txt.replace(
-                  "this.wheelCtx.clearRect(0, 0, this.wheelCanvas.width, this.wheelCanvas.height);",
-                  "this.wheelCtx.clearRect(0, 0, this.wheelWidth, this.canvasHeight);"
+              w = w.replace(
+                  "import { AfterViewInit, Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, OnDestroy } from '@angular/core';",
+                  "import { AfterViewInit, Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, OnDestroy } from '@angular/core';"
               )
 
-              dp_pat = r"drawPointer\(\): void \{[\s\S]*?\n\s*\}\n\n\s*spinWheel\(\): void \{"
-              dp_repl = (
+              # Implements OnDestroy
+              w = w.replace(
+                  "export class WheelComponent implements AfterViewInit, OnChanges {",
+                  "export class WheelComponent implements AfterViewInit, OnChanges, OnDestroy {"
+              )
+
+              # Replace the initial dimension block in constructor with updateDimensions()
+              w = re.sub(
+                  r"this\.canvasHeight\s*=\s*Math\.min\(window\.innerHeight,\s*window\.innerWidth\)\s*\*\s*0\.50\s*;\s*"
+                  r"this\.wheelWidth\s*=\s*this\.canvasHeight\s*;\s*"
+                  r"this\.cursorWidth\s*=\s*40\s*;\s*"
+                  r"this\.fontSize\s*=\s*this\.wheelWidth\s*/\s*24\s*;",
+                  "this.updateDimensions();",
+                  w,
+                  count=1
+              )
+
+              # Add resizeListener field if missing
+              anchor = "  private translatedItems: WheelItem[] = [];\n"
+              if anchor in w and "resizeListener" not in w:
+                  w = w.replace(
+                      anchor,
+                      anchor +
+                      "\n  private readonly resizeListener = () => {\n"
+                      "    this.updateDimensions();\n"
+                      "    this.setupHiDpiCanvases();\n"
+                      "    this.drawWheel(this.spinning ? this.currentRotation : 0);\n"
+                      "    this.drawPointer();\n"
+                      "  };\n"
+                  )
+
+              # In ngAfterViewInit: call setupHiDpiCanvases + attach resize listener (only once)
+              marker = "    this.pointerCtx = this.pointerCanvas.getContext('2d')!;"
+              if marker in w and "window.addEventListener('resize', this.resizeListener" not in w:
+                  w = w.replace(
+                      marker,
+                      marker +
+                      "\n    this.setupHiDpiCanvases();\n"
+                      "    window.addEventListener('resize', this.resizeListener, { passive: true });",
+                      1
+                  )
+
+              # drawWheel should use CSS pixel dims (wheelWidth/canvasHeight)
+              w = w.replace("    const centerX = this.wheelCanvas.width / 2;", "    const centerX = this.wheelWidth / 2;")
+              w = w.replace("    const centerY = this.wheelCanvas.height / 2;", "    const centerY = this.canvasHeight / 2;")
+              w = w.replace("    const radius = (this.wheelCanvas.width / 2);", "    const radius = (this.wheelWidth / 2);")
+              w = w.replace(
+                  "    this.wheelCtx.clearRect(0, 0, this.wheelCanvas.width, this.wheelCanvas.height);",
+                  "    this.wheelCtx.clearRect(0, 0, this.wheelWidth, this.canvasHeight);"
+              )
+
+              # Replace drawPointer with a stable version (prevents “sumiu”)
+              w = re.sub(
+                  r"drawPointer\(\): void \{[\s\S]*?\n\s*\}",
                   "drawPointer(): void {\n"
-                  "    const w = this.cursorWidth;\n"
-                  "    const h = this.canvasHeight;\n"
-                  "    this.pointerCtx.clearRect(0, 0, w, h);\n"
+                  "    const midY = this.canvasHeight / 2;\n"
+                  "    const xRight = this.cursorWidth - 2;\n"
+                  "    const tipX = 2;\n\n"
                   "    this.pointerCtx.save();\n"
+                  "    this.pointerCtx.clearRect(0, 0, this.cursorWidth, this.canvasHeight);\n"
                   "    this.pointerCtx.lineWidth = 2;\n"
                   "    this.pointerCtx.strokeStyle = this.pointerStrokeColor;\n"
                   "    this.pointerCtx.fillStyle = this.pointerFillColor;\n"
                   "    this.pointerCtx.beginPath();\n"
-                  "    this.pointerCtx.moveTo(w - 2, (h / 2) - 20);\n"
-                  "    this.pointerCtx.lineTo(w - 2, (h / 2) + 20);\n"
-                  "    this.pointerCtx.lineTo(0, h / 2);\n"
+                  "    this.pointerCtx.moveTo(xRight, midY - 20);\n"
+                  "    this.pointerCtx.lineTo(xRight, midY + 20);\n"
+                  "    this.pointerCtx.lineTo(tipX, midY);\n"
                   "    this.pointerCtx.closePath();\n"
                   "    this.pointerCtx.stroke();\n"
                   "    this.pointerCtx.fill();\n"
                   "    this.pointerCtx.restore();\n"
-                  "  }\n\n"
-                  "  spinWheel(): void {"
+                  "  }",
+                  w,
+                  count=1
               )
-              txt = re.sub(dp_pat, dp_repl, txt, count=1)
 
-              wheel_ts.write_text(txt, encoding="utf-8")
+              # Ensure helper methods exist (DON'T check just string presence because we add a call)
+              if not re.search(r"\bprivate\s+updateDimensions\(", w):
+                  add = """
+            private updateDimensions(): void {
+              const minDim = Math.min(window.innerHeight, window.innerWidth);
+              const isMobile = window.innerWidth <= 768;
 
-          # ============================================================
-          # 2) EVOLUTIONS: your requested rules
-          # ============================================================
-          evo_service = Path("src/app/services/evolution-service/evolution.service.ts")
-          if evo_service.exists():
-              evo_service.write_text(
-                  "import { Injectable } from '@angular/core';\n"
-                  "import { PokemonItem } from '../../interfaces/pokemon-item';\n"
-                  "import { evolutionChain } from './evolution-chain';\n"
-                  "import { PokemonService } from '../pokemon-service/pokemon.service';\n\n"
-                  "@Injectable({\n"
-                  "  providedIn: 'root'\n"
-                  "})\n"
-                  "export class EvolutionService {\n\n"
-                  "  constructor(private pokemonService: PokemonService) {\n"
-                  "    this.nationalDexPokemon = this.pokemonService.getAllPokemon();\n"
-                  "  }\n\n"
-                  "  evolutionChain = evolutionChain;\n"
-                  "  nationalDexPokemon: PokemonItem[];\n\n"
-                  "  private isHisuianFormId(id: number): boolean {\n"
-                  "    return id >= 10229 && id <= 10247;\n"
-                  "  }\n\n"
-                  "  canEvolve(pokemon: PokemonItem): boolean {\n"
-                  "    return this.getEvolutions(pokemon).length > 0;\n"
-                  "  }\n\n"
-                  "  getEvolutions(pokemon: PokemonItem): PokemonItem[] {\n"
-                  "    const chain = this.evolutionChain[pokemon.pokemonId];\n"
-                  "    if (!chain || chain.length === 0) return [];\n\n"
-                  "    const evolutions: PokemonItem[] = [];\n"
-                  "    for (const evolutionId of chain) {\n"
-                  "      const evolution = this.pokemonService.getPokemonById(evolutionId);\n"
-                  "      if (evolution) evolutions.push(evolution);\n"
-                  "    }\n\n"
-                  "    // Exception: Pikachu normal can evolve into Alolan Raichu\n"
-                  "    if (!pokemon.basePokemonId && pokemon.pokemonId === 25) {\n"
-                  "      return evolutions;\n"
-                  "    }\n\n"
-                  "    // Regional base forms follow their own chain\n"
-                  "    if (pokemon.basePokemonId) {\n"
-                  "      return evolutions;\n"
-                  "    }\n\n"
-                  "    // Non-regional base: block regional-form evolutions, except Hisui forms\n"
-                  "    return evolutions.filter(evo => !evo.basePokemonId || this.isHisuianFormId(evo.pokemonId));\n"
-                  "  }\n"
-                  "}\n",
+              // Bigger on mobile
+              this.canvasHeight = Math.round(minDim * (isMobile ? 0.78 : 0.55));
+              this.wheelWidth = this.canvasHeight;
+
+              // Slightly wider pointer area on mobile
+              this.cursorWidth = isMobile ? 48 : 40;
+
+              // Keep text proportional
+              this.fontSize = this.wheelWidth / 24;
+            }
+
+            private setupHiDpiCanvases(): void {
+              const dpr = window.devicePixelRatio || 1;
+
+              // Wheel canvas (internal pixels = css * dpr)
+              this.wheelCanvas.width = Math.floor(this.wheelWidth * dpr);
+              this.wheelCanvas.height = Math.floor(this.canvasHeight * dpr);
+              this.wheelCanvas.style.width = `${this.wheelWidth}px`;
+              this.wheelCanvas.style.height = `${this.canvasHeight}px`;
+              this.wheelCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+              // Pointer canvas
+              this.pointerCanvas.width = Math.floor(this.cursorWidth * dpr);
+              this.pointerCanvas.height = Math.floor(this.canvasHeight * dpr);
+              this.pointerCanvas.style.width = `${this.cursorWidth}px`;
+              this.pointerCanvas.style.height = `${this.canvasHeight}px`;
+              this.pointerCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            }
+
+            ngOnDestroy(): void {
+              window.removeEventListener('resize', this.resizeListener as any);
+            }
+          """
+                  last = w.rfind("}")
+                  if last != -1:
+                      w = w[:last] + add + "\n" + w[last:]
+
+              wheel_ts.write_text(w, encoding="utf-8")
+
+          # Wheel CSS: keep layout centered + text readable on mobile
+          wheel_css = Path("src/app/wheel/wheel.component.css")
+          if wheel_css.exists():
+              wheel_css.write_text(
+                  ".wheel-container{display:flex;flex-direction:column;align-items:center;width:100%}\n"
+                  ".wheel-container p{font-size:clamp(1.05rem,4.6vw,1.5rem);font-weight:700;text-align:center;"
+                  "max-width:min(92vw,520px);padding:0 .75rem;line-height:1.2;overflow-wrap:anywhere;word-break:break-word;"
+                  "margin:.5rem 0 0}\n"
+                  ".canvas-container{display:flex;flex-direction:row;align-items:center;justify-content:center;margin-left:0;width:100%}\n"
+                  "#wheel{touch-action:manipulation}\n",
                   encoding="utf-8"
               )
 
-          # ============================================================
-          # 3) GEN 9 TRAINERS: Florian + Juliana correct
-          # ============================================================
-          trainer = Path("src/app/services/trainer-service/trainer-sprite-data.ts")
-          if trainer.exists():
-              t = trainer.read_text(encoding="utf-8")
-              florian = "https://play.pokemonshowdown.com/sprites/trainers/florian-s.png?v=5"
-              juliana = "https://play.pokemonshowdown.com/sprites/trainers/juliana-s.png?v=5"
-
-              t, _ = re.subn(
-                  r"(9\s*:\s*\{[\s\S]*?male\s*:\s*)(['\"])[^'\"]*\2",
-                  r"\1\2" + florian + r"\2",
-                  t,
-                  count=1
-              )
-              t, _ = re.subn(
-                  r"(9\s*:\s*\{[\s\S]*?female\s*:\s*)(['\"])[^'\"]*\2",
-                  r"\1\2" + juliana + r"\2",
-                  t,
-                  count=1
-              )
-              trainer.write_text(t, encoding="utf-8")
-
-          # ============================================================
-          # 4) MOBILE PC: always accessible + tap-to-move on mobile
-          # ============================================================
-          pc_ts = Path("src/app/trainer-team/storage-pc/storage-pc.component.ts")
-          pc_html = Path("src/app/trainer-team/storage-pc/storage-pc.component.html")
-          pc_css = Path("src/app/trainer-team/storage-pc/storage-pc.component.css")
-
-          if pc_ts.exists():
-              s = pc_ts.read_text(encoding="utf-8")
-
-              if "isMobile:" not in s:
-                  s = s.replace(
-                      "    infoModalMessage = '';\n",
-                      "    infoModalMessage = '';\n\n"
-                      "    isMobile: boolean = false;\n"
-                      "    private readonly resizeHandler = () => {\n"
-                      "      this.isMobile = window.innerWidth <= 768;\n"
-                      "    };\n"
-                  )
-
-              if "window.addEventListener('resize', this.resizeHandler);" not in s:
-                  s = s.replace(
-                      "    ngOnInit(): void {\n      this.darkMode = this.darkModeService.darkMode$;\n",
-                      "    ngOnInit(): void {\n      this.darkMode = this.darkModeService.darkMode$;\n"
-                      "      this.resizeHandler();\n"
-                      "      window.addEventListener('resize', this.resizeHandler);\n"
-                  )
-
-              if "window.removeEventListener('resize', this.resizeHandler);" not in s:
-                  last = s.rfind("\n}")
-                  if last != -1:
-                      s = s[:last] + "\n\n  ngOnDestroy(): void {\n    window.removeEventListener('resize', this.resizeHandler);\n  }\n" + s[last:]
-
-              if "onTapPokemon(" not in s:
-                  s = s.replace(
-                      "  getSprite(pokemon: PokemonItem): string {",
-                      "  onTapPokemon(pokemon: PokemonItem, source: 'team' | 'stored'): void {\n"
-                      "    if (!this.isMobile) return;\n"
-                      "    if (!this.trainerTeam || !this.storedPokemon) return;\n\n"
-                      "    if (source === 'stored') {\n"
-                      "      if (this.trainerTeam.length >= 6) return;\n"
-                      "      const idx = this.storedPokemon.indexOf(pokemon);\n"
-                      "      if (idx < 0) return;\n"
-                      "      this.storedPokemon.splice(idx, 1);\n"
-                      "      this.trainerTeam.push(pokemon);\n"
-                      "      this.trainerService.updateTeam();\n"
-                      "      return;\n"
-                      "    }\n\n"
-                      "    if (this.trainerTeam.length <= 1) return;\n"
-                      "    const idx = this.trainerTeam.indexOf(pokemon);\n"
-                      "    if (idx < 0) return;\n"
-                      "    this.trainerTeam.splice(idx, 1);\n"
-                      "    this.storedPokemon.unshift(pokemon);\n"
-                      "    this.trainerService.updateTeam();\n"
-                      "  }\n\n"
-                      "  getSprite(pokemon: PokemonItem): string {"
-                  )
-
-              pc_ts.write_text(s, encoding="utf-8")
-
-          if pc_html.exists():
-              h = pc_html.read_text(encoding="utf-8")
-
-              team_target = "            <div  class=\"example-box shadow\"\n                  cdkDrag>"
-              if team_target in h and "onTapPokemon(pokemon, 'team')" not in h:
-                  h = h.replace(
-                      team_target,
-                      "            <div  class=\"example-box shadow\"\n                  cdkDrag\n                  (click)=\"onTapPokemon(pokemon, 'team')\">"
-                  )
-
-              stored_target = "        <div  class=\"example-box shadow\"\n              [cdkDragData]=\"pokemon\"\n              cdkDrag>"
-              if stored_target in h and "onTapPokemon(pokemon, 'stored')" not in h:
-                  h = h.replace(
-                      stored_target,
-                      "        <div  class=\"example-box shadow\"\n              [cdkDragData]=\"pokemon\"\n              cdkDrag\n              (click)=\"onTapPokemon(pokemon, 'stored')\">"
-                  )
-
-              pc_html.write_text(h, encoding="utf-8")
-
-          if pc_css.exists():
-              c = pc_css.read_text(encoding="utf-8")
-              if "/* MOBILE_PC_PATCH */" not in c:
-                  c += "\n\n/* MOBILE_PC_PATCH */\n"
-                  c += (
-                      ".modal-body{max-height:80vh;overflow-y:auto}\n"
-                      "@media (max-width: 768px){\n"
-                      "  :host > button.btn{position:fixed;right:12px;bottom:12px;z-index:1049;padding:12px 14px;border-width:2px}\n"
-                      "  .example-box{width:22%;padding:6px}\n"
-                      "  .example-list{gap:10px}\n"
-                      "}\n"
-                  )
-              pc_css.write_text(c, encoding="utf-8")
-
-          # ============================================================
-          # 5) GLOBAL NAME FALLBACK: fix pokemon.tapu-koko, pokemon.type-null, etc
-          # ============================================================
-          app_cfg = Path("src/app/app.config.ts")
-          if app_cfg.exists():
-              cfg = app_cfg.read_text(encoding="utf-8")
-
-              if "MissingTranslationHandler" not in cfg:
-                  cfg = cfg.replace(
-                      "import {TranslateLoader, TranslateModule} from '@ngx-translate/core';",
-                      "import { TranslateLoader, TranslateModule, MissingTranslationHandler, MissingTranslationHandlerParams } from '@ngx-translate/core';"
-                  )
-
-              if "class FallbackMissingTranslationHandler" not in cfg:
-                  insert_after = "new TranslateHttpLoader(http, 'i18n/', '.json');\n\n"
-                  handler = textwrap.dedent("""
-                  class FallbackMissingTranslationHandler implements MissingTranslationHandler {
-                    private titleize(slug: string): string {
-                      const specials: Record<string, string> = {
-                        'type-null': 'Type: Null',
-                        'tapu-koko': 'Tapu Koko',
-                        'tapu-lele': 'Tapu Lele',
-                        'tapu-bulu': 'Tapu Bulu',
-                        'tapu-fini': 'Tapu Fini',
-                        'ho-oh': 'Ho-Oh',
-                      };
-                      if (specials[slug]) return specials[slug];
-
-                      let s = slug.replace(/-/g, ' ');
-                      s = s.replace(/\\b\\w/g, (c) => c.toUpperCase());
-                      return s;
-                    }
-
-                    handle(params: MissingTranslationHandlerParams) {
-                      const key = params.key || '';
-                      if (key.startsWith('pokemon.')) {
-                        const slug = key.substring('pokemon.'.length);
-                        return this.titleize(slug);
-                      }
-                      return key;
-                    }
-                  }
-                  """).rstrip() + "\n\n"
-
-                  if insert_after in cfg:
-                      cfg = cfg.replace(insert_after, insert_after + handler, 1)
-
-              if "missingTranslationHandler:" not in cfg:
-                  cfg = cfg.replace(
-                      "deps: [HttpClient]\n      },\n      defaultLanguage: 'en'",
-                      "deps: [HttpClient]\n      },\n      missingTranslationHandler: { provide: MissingTranslationHandler, useClass: FallbackMissingTranslationHandler },\n      defaultLanguage: 'en'",
-                      1
-                  )
-
-              app_cfg.write_text(cfg, encoding="utf-8")
-
-          # ============================================================
-          # 6) MEGA EVOLUTION: real transform animation + fix mega->mega
-          # ============================================================
+          # ----------------------------
+          # Mega Evolution roulette: new transform animation + mega SFX + Showdown cries + type VFX
+          # ----------------------------
           mega_ts = Path("src/app/main-game/roulette-container/roulettes/mega-evolution-roulette/mega-evolution-roulette.component.ts")
           mega_html = Path("src/app/main-game/roulette-container/roulettes/mega-evolution-roulette/mega-evolution-roulette.component.html")
           mega_css = Path("src/app/main-game/roulette-container/roulettes/mega-evolution-roulette/mega-evolution-roulette.component.css")
 
           if mega_ts.exists():
-              t = mega_ts.read_text(encoding="utf-8")
+              mega_ts.write_text(
+                  """import { Component, EventEmitter, OnDestroy, OnInit, Output, TemplateRef, ViewChild } from '@angular/core';
+import { NgIf, NgClass } from '@angular/common';
+import { map, Subscription, forkJoin } from 'rxjs';
+import { TranslatePipe } from '@ngx-translate/core';
+import { NgbModal, NgbModalRef } from '@ng-bootstrap/ng-bootstrap';
 
-              # Expand popup fields
-              t = t.replace(
-                  "  /** Data for the popup. */\n  popupBeforePokemon: PokemonItem | null = null;\n  popupAfterName = '';\n  popupAfterSpriteUrl = '';",
-                  "  /** Data for the popup. */\n"
-                  "  popupBeforePokemon: PokemonItem | null = null;\n"
-                  "  popupBeforeName = '';\n"
-                  "  popupBeforeSpriteUrl = '';\n"
-                  "  popupAfterName = '';\n"
-                  "  popupAfterSpriteUrl = '';\n"
-                  "  isMegaAnimating = false;"
+import { WheelComponent } from '../../../../wheel/wheel.component';
+import { PokemonItem } from '../../../../interfaces/pokemon-item';
+import { MegaEvolutionService, MegaForm } from '../../../../services/mega-evolution-service/mega-evolution.service';
+import { GameStateService } from '../../../../services/game-state-service/game-state.service';
+import { PokemonService } from '../../../../services/pokemon-service/pokemon.service';
+import { GameModeService } from '../../../../services/game-mode/game-mode.service';
+
+type ShowdownPokedexEntry = { types?: string[] };
+
+@Component({
+  selector: 'app-mega-evolution-roulette',
+  standalone: true,
+  imports: [WheelComponent, TranslatePipe, NgIf, NgClass],
+  templateUrl: './mega-evolution-roulette.component.html',
+  styleUrls: ['./mega-evolution-roulette.component.css']
+})
+export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
+  @Output() megaEvolutionEvent = new EventEmitter<PokemonItem[]>();
+  @ViewChild('megaPopup', { static: true }) megaPopup!: TemplateRef<any>;
+
+  pokemons: PokemonItem[] = [];
+  wheelItems: { text: string; weight: number; color: string }[] = [];
+
+  isLoading = true;
+  hasAvailableMegaEvolutions = false;
+
+  private subscriptions: Subscription[] = [];
+  private modalRef?: NgbModalRef;
+
+  popupTitle = 'megaEvolution.popupTitle';
+  popupMessage = '';
+
+  // Popup visuals
+  popupBeforeName = '';
+  popupAfterName = '';
+  popupBeforeSpriteUrl = '';
+  popupAfterSpriteUrl = '';
+  popupAfterApiName = '';
+
+  // Animation + VFX
+  isMegaAnimating = false;
+  typeClass = 'type-normal';
+
+  // Audio
+  private audioCtx?: AudioContext;
+  private cryAudio?: HTMLAudioElement;
+  private timers: number[] = [];
+
+  // Dex cache (for type-based VFX)
+  private static showdownDexPromise: Promise<Record<string, ShowdownPokedexEntry>> | null = null;
+
+  constructor(
+    private megaEvolutionService: MegaEvolutionService,
+    private gameStateService: GameStateService,
+    private pokemonService: PokemonService,
+    private gameModeService: GameModeService,
+    private modalService: NgbModal
+  ) {}
+
+  ngOnInit(): void {
+    const sub = this.gameStateService.pokemons$
+      .pipe(map(p => p.filter(pk => pk.isCaught)))
+      .subscribe(async (caughtPokemons) => {
+        this.pokemons = caughtPokemons;
+        await this.buildWheelItemsAndAvailability(caughtPokemons);
+        this.isLoading = false;
+      });
+
+    this.subscriptions.push(sub);
+  }
+
+  ngOnDestroy(): void {
+    this.subscriptions.forEach(s => s.unsubscribe());
+    this.cleanupAudio();
+    this.clearTimers();
+    if (this.modalRef) {
+      try { this.modalRef.close(); } catch {}
+    }
+  }
+
+  private async buildWheelItemsAndAvailability(pokemons: PokemonItem[]): Promise<void> {
+    this.hasAvailableMegaEvolutions = false;
+
+    if (!pokemons?.length) {
+      this.wheelItems = [];
+      return;
+    }
+
+    const checks$ = pokemons.map(pokemon =>
+      this.megaEvolutionService.getAvailableMegaFormsForPokemon(pokemon).pipe(
+        map((forms) => ({ pokemon, forms }))
+      )
+    );
+
+    const sub = forkJoin(checks$).subscribe(results => {
+      this.wheelItems = results.map(({ pokemon, forms }) => {
+        if (forms.length > 0) this.hasAvailableMegaEvolutions = true;
+        return { text: pokemon.text, weight: 1, color: '#222' };
+      });
+    });
+
+    this.subscriptions.push(sub);
+  }
+
+  async onPokemonSelected(winningNumber: number): Promise<void> {
+    if (!this.pokemons?.length) return;
+
+    const snapshotPokemons = [...this.pokemons];
+    const selectedPokemon = snapshotPokemons[winningNumber - 1];
+    if (!selectedPokemon) return;
+
+    const sub = this.megaEvolutionService.getAvailableMegaFormsForPokemon(selectedPokemon).subscribe(async (forms) => {
+      if (!forms?.length) return;
+
+      const chosenForm = this.megaEvolutionService.chooseMegaFormForPokemon(selectedPokemon, forms);
+      if (!chosenForm) return;
+
+      const updated = this.applyMegaEvolution(snapshotPokemons, winningNumber, chosenForm);
+
+      // Type-based VFX (from Showdown dex), best-effort fallback to Normal
+      this.typeClass = await this.getTypeClassForApiName(this.popupAfterApiName || chosenForm.apiName || selectedPokemon.text);
+
+      this.openMegaPopupAndProceed(updated);
+    });
+
+    this.subscriptions.push(sub);
+  }
+
+  private openMegaPopupAndProceed(updatedPokemons: PokemonItem[]): void {
+    this.popupMessage = 'megaEvolution.popupMessage';
+
+    this.modalRef = this.modalService.open(this.megaPopup, {
+      centered: true,
+      backdrop: 'static',
+      keyboard: false
+    });
+
+    // If user closes manually, stop audio/timers cleanly
+    this.modalRef.result.finally(() => {
+      this.isMegaAnimating = false;
+      this.stopCry();
+      this.clearTimers();
+    }).catch(() => {});
+
+    this.isMegaAnimating = true;
+
+    // Mega-evo SFX (synth, avoids needing copyrighted file)
+    this.playMegaEvolutionSfx();
+
+    // Cry shortly after transformation completes
+    this.timers.push(window.setTimeout(() => {
+      this.playCryForMega(this.popupAfterApiName, this.popupAfterName);
+    }, 900));
+
+    // Close popup after short showcase + emit result
+    this.timers.push(window.setTimeout(() => {
+      this.isMegaAnimating = false;
+      try { this.modalRef?.close(); } catch {}
+      this.megaEvolutionEvent.emit(updatedPokemons);
+    }, 2000));
+  }
+
+  private applyMegaEvolution(pokemons: PokemonItem[], winningNumber: number, megaForm: MegaForm): PokemonItem[] {
+    const pokemon = pokemons[winningNumber - 1];
+
+    // Popup BEFORE
+    this.popupBeforeName = pokemon.text;
+    this.popupBeforeSpriteUrl = this.pokemonService.getPokemonImage(pokemon.pokemonId);
+
+    const megaPokemon: PokemonItem = {
+      ...pokemon,
+      pokemonId: megaForm.id,
+      text: megaForm.displayName,
+      isMega: true,
+      megaBasePokemonId: pokemon.pokemonId,
+      megaFormName: megaForm.apiName
+    };
+
+    pokemons[winningNumber - 1] = megaPokemon;
+
+    // Popup AFTER
+    this.popupAfterName = megaPokemon.text;
+    this.popupAfterSpriteUrl = this.pokemonService.getPokemonImage(megaPokemon.pokemonId);
+    this.popupAfterApiName = megaForm.apiName;
+
+    this.gameModeService.lootPokemon(megaPokemon);
+
+    return pokemons;
+  }
+
+  // ----------------------
+  // Audio
+  // ----------------------
+
+  private playMegaEvolutionSfx(): void {
+    try {
+      if (!this.audioCtx) {
+        this.audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      const ctx = this.audioCtx;
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+
+      const now = ctx.currentTime;
+
+      // Rising synth
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(220, now);
+      osc.frequency.exponentialRampToValueAtTime(1200, now + 0.55);
+
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.16, now + 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.75);
+
+      // Whoosh noise
+      const bufferSize = Math.floor(ctx.sampleRate * 0.5);
+      const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const out = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) out[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+
+      const noise = ctx.createBufferSource();
+      noise.buffer = noiseBuffer;
+
+      const bandpass = ctx.createBiquadFilter();
+      bandpass.type = 'bandpass';
+      bandpass.frequency.setValueAtTime(800, now);
+      bandpass.frequency.linearRampToValueAtTime(1400, now + 0.4);
+
+      const noiseGain = ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.0001, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.12, now + 0.08);
+      noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
+
+      osc.connect(gain);
+      noise.connect(bandpass);
+      bandpass.connect(noiseGain);
+
+      gain.connect(ctx.destination);
+      noiseGain.connect(ctx.destination);
+
+      osc.start(now);
+      noise.start(now);
+
+      osc.stop(now + 0.8);
+      noise.stop(now + 0.6);
+    } catch {
+      // best-effort only
+    }
+  }
+
+  private playCryForMega(apiName: string, fallbackName: string): void {
+    const cryId = this.toShowdownCryId(apiName || fallbackName);
+    const url = `https://play.pokemonshowdown.com/audio/cries/${cryId}.mp3`;
+
+    this.stopCry();
+
+    const audio = new Audio();
+    audio.preload = 'auto';
+    audio.src = url;
+    audio.volume = 0.9;
+
+    // If mega cry doesn't exist, fall back to base species
+    audio.onerror = () => {
+      const base = cryId.split('-mega')[0];
+      if (base && base !== cryId) {
+        audio.src = `https://play.pokemonshowdown.com/audio/cries/${base}.mp3`;
+        audio.play().catch(() => {});
+      }
+    };
+
+    audio.play().catch(() => {});
+    this.cryAudio = audio;
+  }
+
+  private stopCry(): void {
+    if (this.cryAudio) {
+      try {
+        this.cryAudio.pause();
+        this.cryAudio.currentTime = 0;
+      } catch {}
+    }
+    this.cryAudio = undefined;
+  }
+
+  private cleanupAudio(): void {
+    this.stopCry();
+    if (this.audioCtx) {
+      try { this.audioCtx.close(); } catch {}
+    }
+    this.audioCtx = undefined;
+  }
+
+  private clearTimers(): void {
+    this.timers.forEach(t => clearTimeout(t));
+    this.timers = [];
+  }
+
+  // ----------------------
+  // Showdown dex (types)
+  // ----------------------
+
+  private async getTypeClassForApiName(nameOrApi: string): Promise<string> {
+    const type = await this.getPrimaryType(nameOrApi);
+    return `type-${(type || 'Normal').toLowerCase()}`;
+  }
+
+  private async getPrimaryType(nameOrApi: string): Promise<string> {
+    try {
+      const dex = await this.getShowdownDex();
+      const toId = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+      const candidates = [
+        toId(nameOrApi),
+        toId(this.toShowdownCryId(nameOrApi)),
+      ];
+
+      for (const id of candidates) {
+        const entry = dex[id];
+        const t = entry?.types?.[0];
+        if (t) return t;
+      }
+    } catch {
+      // ignore
+    }
+    return 'Normal';
+  }
+
+  private async getShowdownDex(): Promise<Record<string, ShowdownPokedexEntry>> {
+    if (!MegaEvolutionRouletteComponent.showdownDexPromise) {
+      MegaEvolutionRouletteComponent.showdownDexPromise =
+        fetch('https://play.pokemonshowdown.com/data/pokedex.json').then(r => r.json());
+    }
+    return MegaEvolutionRouletteComponent.showdownDexPromise;
+  }
+
+  private toShowdownCryId(nameOrApi: string): string {
+    const raw = (nameOrApi || '').trim().toLowerCase();
+
+    // If displayName like "Mega Charizard X", convert to something like "charizard-mega-x"
+    let s = raw;
+    if (s.startswith?.('mega ') or s.startsWith('mega ')):
+      pass
+
+    if (s.startsWith('mega ')) {
+      const without = s.replace(/^mega\\s+/, '').trim(); // "charizard x" OR "gyarados"
+      const parts = without.split(/\\s+/).filter(Boolean);
+      if (parts.length >= 2) {
+        const last = parts[parts.length - 1];
+        if (last === 'x' || last === 'y') {
+          s = `${parts.slice(0, -1).join('-')}-mega-${last}`;
+        } else {
+          s = `${parts.join('-')}-mega`;
+        }
+      } else {
+        s = `${without.replace(/\\s+/g, '-')}-mega`;
+      }
+    } else {
+      // keep api-style names; normalize spaces -> hyphen
+      s = s.replace(/\\s+/g, '-');
+    }
+
+    // keep a-z0-9 and hyphen only
+    s = s.replace(/[^a-z0-9\\-]/g, '');
+
+    // PokeAPI "-mega-x/-mega-y" -> Showdown "-megax/-megay"
+    s = s.replace(/-mega-x\\b/g, '-megax').replace(/-mega-y\\b/g, '-megay');
+
+    return s;
+  }
+}
+""",
+                  encoding="utf-8"
               )
-
-              # Capture BEFORE sprite/name before mutation
-              if "this.popupBeforeName =" not in t:
-                  t = t.replace(
-                      "    // Prepare popup before we mutate the Pokémon.\n    this.popupBeforePokemon = pokemon;\n    this.popupAfterName = megaForm.displayName;\n",
-                      "    // Prepare popup BEFORE we mutate the Pokémon.\n"
-                      "    this.popupBeforePokemon = pokemon;\n"
-                      "    this.popupBeforeName = pokemon.text;\n"
-                      "    const beforeSprite = pokemon.sprite;\n"
-                      "    this.popupBeforeSpriteUrl = pokemon.shiny\n"
-                      "      ? (beforeSprite?.front_shiny || beforeSprite?.front_default || '')\n"
-                      "      : (beforeSprite?.front_default || '');\n"
-                      "    this.popupAfterName = megaForm.displayName;\n"
-                  )
-
-              # Toggle animation flag when opening modal
-              if "this.isMegaAnimating = true;" not in t:
-                  t = t.replace(
-                      "      this.modalRef = this.modalService.open(this.megaEvolutionModal, {",
-                      "      this.isMegaAnimating = true;\n"
-                      "      this.modalRef = this.modalService.open(this.megaEvolutionModal, {"
-                  )
-
-              t = t.replace(
-                  "        } finally {\n          this.megaEvolutionFinished.emit();\n        }\n      }, 1200);",
-                  "        } finally {\n"
-                  "          this.isMegaAnimating = false;\n"
-                  "          this.megaEvolutionFinished.emit();\n"
-                  "        }\n"
-                  "      }, 1200);"
-              )
-
-              t = t.replace(
-                  "    } catch {\n      // If modal fails (shouldn't), just proceed.\n      this.megaEvolutionFinished.emit();\n    }",
-                  "    } catch {\n"
-                  "      this.isMegaAnimating = false;\n"
-                  "      // If modal fails (shouldn't), just proceed.\n"
-                  "      this.megaEvolutionFinished.emit();\n"
-                  "    }"
-              )
-
-              mega_ts.write_text(t, encoding="utf-8")
 
           if mega_html.exists():
-              h = mega_html.read_text(encoding="utf-8")
+              mega_html.write_text(
+                  """<div *ngIf="isLoading" class="loading">
+  <p>{{ 'loading' | translate }}</p>
+</div>
 
-              # Replace ONLY the evolution-panel block safely (no extra </div>)
-              panel_pat = r"<div class=\"evolution-panel\">[\s\S]*?</div>\s*\n\s*<div class=\"actions\">"
-              panel_repl = (
-                  "<div class=\"evolution-panel\" [class.animating]=\"isMegaAnimating\">\n"
-                  "  <div class=\"pokemon before\">\n"
-                  "    <img class=\"sprite before-sprite\" [src]=\"popupBeforeSpriteUrl\" alt=\"Before\">\n"
-                  "    <div class=\"name\">{{ popupBeforeName | translate }}</div>\n"
-                  "  </div>\n\n"
-                  "  <div class=\"arrow\">➜</div>\n\n"
-                  "  <div class=\"pokemon after\">\n"
-                  "    <img class=\"sprite after-sprite\" [src]=\"popupAfterSpriteUrl\" alt=\"After\">\n"
-                  "    <div class=\"name\">{{ popupAfterName | translate }}</div>\n"
-                  "  </div>\n"
-                  "</div>\n\n"
-                  "<div class=\"actions\">"
+<div *ngIf="!isLoading && !hasAvailableMegaEvolutions" class="subtitle">
+  <p>{{ 'megaEvolution.noAvailableMegaEvolutions' | translate }}</p>
+</div>
+
+<div *ngIf="!isLoading && hasAvailableMegaEvolutions">
+  <app-wheel
+    [items]="wheelItems"
+    (selectedItemEvent)="onPokemonSelected($event)">
+  </app-wheel>
+</div>
+
+<ng-template #megaPopup let-modal>
+  <div class="modal-header">
+    <h4 class="modal-title popup-title">{{ popupTitle | translate }}</h4>
+  </div>
+
+  <div class="modal-body">
+    <p class="subtitle">{{ popupMessage | translate }}</p>
+
+    <div class="evo-wrap" [ngClass]="[typeClass, isMegaAnimating ? 'animating' : '']">
+      <div class="particles" aria-hidden="true"></div>
+
+      <div class="evolution-stage">
+        <img class="sprite sprite-before" [src]="popupBeforeSpriteUrl" [alt]="popupBeforeName" />
+        <img class="sprite sprite-after" [src]="popupAfterSpriteUrl" [alt]="popupAfterName" />
+      </div>
+
+      <div class="name-row">
+        <div class="name">{{ popupBeforeName }}</div>
+        <div class="arrow" aria-hidden="true">→</div>
+        <div class="name">{{ popupAfterName }}</div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-dark" (click)="modal.close()">{{ 'ok' | translate }}</button>
+    </div>
+  </div>
+</ng-template>
+""",
+                  encoding="utf-8"
               )
-              h2, n = re.subn(panel_pat, panel_repl, h, count=1)
-              if n == 1:
-                  mega_html.write_text(h2, encoding="utf-8")
 
           if mega_css.exists():
-              c = mega_css.read_text(encoding="utf-8")
-              if "/* MEGA_ANIM_PATCH */" not in c:
-                  c += "\n\n/* MEGA_ANIM_PATCH */\n"
-                  c += textwrap.dedent("""
-                  .evolution-panel.animating .before-sprite {
-                    animation: megaBefore 1.2s ease-in-out forwards;
-                  }
+              mega_css.write_text(
+                  """.loading{text-align:center;margin-top:1rem}
+.subtitle{text-align:center;opacity:.9;margin-bottom:.75rem}
+.popup-title{text-align:center;margin-bottom:0}
+.actions{display:flex;justify-content:center;margin-top:1rem}
 
-                  .after-sprite {
-                    opacity: 0;
-                    transform: scale(0.85);
-                  }
+.evo-wrap{display:flex;flex-direction:column;align-items:center;gap:.75rem;position:relative}
+.evolution-stage{position:relative;width:11rem;height:11rem;display:flex;align-items:center;justify-content:center}
+.sprite{position:absolute;width:11rem;height:11rem;object-fit:contain;will-change:transform,opacity,filter}
+.sprite-after{opacity:0;transform:scale(.92);filter:brightness(1.2) drop-shadow(0 0 .35rem rgba(255,255,255,.35))}
 
-                  .evolution-panel.animating .after-sprite {
-                    animation: megaAfter 1.2s ease-in-out forwards;
-                    animation-delay: 0.35s;
-                  }
+.name-row{display:flex;align-items:center;justify-content:center;gap:.75rem;flex-wrap:wrap}
+.name{min-width:6.5rem;text-align:center;font-weight:700}
+.arrow{font-size:1.6rem;opacity:.85}
 
-                  .evolution-panel.animating .arrow {
-                    animation: megaArrow 1.2s ease-in-out infinite;
-                  }
+.particles{position:absolute;inset:-10%;pointer-events:none;overflow:hidden;border-radius:999px}
+.particles::before{content:'';position:absolute;inset:0;opacity:0;transform:translateY(15%);will-change:transform,opacity,filter}
 
-                  @keyframes megaBefore {
-                    0%   { opacity: 1; transform: scale(1); filter: none; }
-                    55%  { opacity: 0.15; transform: scale(1.35); filter: brightness(1.6) drop-shadow(0 0 10px rgba(255,255,255,0.7)); }
-                    100% { opacity: 0; transform: scale(0.75); filter: none; }
-                  }
+.animating .sprite-before{animation:megaBefore .85s ease-in-out forwards}
+.animating .sprite-after{animation:megaAfter .85s ease-in-out forwards}
+.animating .particles::before{opacity:1;animation:particleMove .9s ease-out forwards}
 
-                  @keyframes megaAfter {
-                    0%   { opacity: 0; transform: scale(0.75); filter: brightness(1.1) drop-shadow(0 0 0 rgba(0,0,0,0)); }
-                    60%  { opacity: 1; transform: scale(1.2); filter: brightness(1.4) drop-shadow(0 0 12px rgba(255,255,255,0.75)); }
-                    100% { opacity: 1; transform: scale(1); filter: none; }
-                  }
+@keyframes megaBefore{
+  0%{opacity:1;transform:scale(1);filter:brightness(1)}
+  45%{opacity:1;transform:scale(1.02);filter:brightness(1.7)}
+  100%{opacity:0;transform:scale(1.1);filter:brightness(1.2) blur(2px)}
+}
+@keyframes megaAfter{
+  0%{opacity:0;transform:scale(.92);filter:brightness(2.2) blur(2px)}
+  60%{opacity:1;transform:scale(1.06);filter:brightness(1.25)}
+  100%{opacity:1;transform:scale(1);filter:brightness(1.05)}
+}
+@keyframes particleMove{
+  from{transform:translateY(18%) scale(.98);filter:blur(0)}
+  to{transform:translateY(-20%) scale(1.02);filter:blur(.4px)}
+}
 
-                  @keyframes megaArrow {
-                    0%, 100% { transform: scale(1); opacity: 0.85; }
-                    50%      { transform: scale(1.15); opacity: 1; }
-                  }
-                  """).strip() + "\n"
-              mega_css.write_text(c, encoding="utf-8")
+/* Type VFX (leve e bonito) */
+.type-water .particles::before{
+  background-image:
+    radial-gradient(circle at 15% 80%, rgba(200,240,255,.95) 0 2px, transparent 3px),
+    radial-gradient(circle at 45% 90%, rgba(200,240,255,.95) 0 3px, transparent 4px),
+    radial-gradient(circle at 75% 85%, rgba(200,240,255,.95) 0 2px, transparent 3px),
+    radial-gradient(circle at 35% 60%, rgba(200,240,255,.75) 0 2px, transparent 3px),
+    radial-gradient(circle at 65% 70%, rgba(200,240,255,.75) 0 3px, transparent 4px);
+  background-size:24px 24px;
+}
+.type-fire .particles::before{
+  background-image:
+    radial-gradient(circle at 20% 80%, rgba(255,190,120,.95) 0 2px, transparent 3px),
+    radial-gradient(circle at 55% 90%, rgba(255,150,90,.9) 0 3px, transparent 4px),
+    radial-gradient(circle at 80% 85%, rgba(255,210,140,.9) 0 2px, transparent 3px);
+  background-size:22px 22px;
+}
+.type-electric .particles::before{
+  background-image:
+    linear-gradient(135deg, transparent 45%, rgba(255,255,160,.85) 46%, rgba(255,255,160,.85) 54%, transparent 55%),
+    linear-gradient(45deg, transparent 45%, rgba(255,255,160,.75) 46%, rgba(255,255,160,.75) 54%, transparent 55%);
+  background-size:28px 28px;
+  mix-blend-mode:screen;
+}
+.type-grass .particles::before{
+  background-image:
+    radial-gradient(circle at 25% 85%, rgba(170,255,180,.85) 0 2px, transparent 3px),
+    radial-gradient(circle at 60% 90%, rgba(170,255,180,.8) 0 3px, transparent 4px),
+    radial-gradient(circle at 80% 75%, rgba(170,255,180,.75) 0 2px, transparent 3px);
+  background-size:26px 26px;
+}
+.type-psychic .particles::before{
+  background-image:
+    radial-gradient(circle at 35% 85%, rgba(230,170,255,.85) 0 2px, transparent 3px),
+    radial-gradient(circle at 60% 78%, rgba(230,170,255,.7) 0 3px, transparent 4px),
+    radial-gradient(circle at 80% 90%, rgba(230,170,255,.75) 0 2px, transparent 3px);
+  background-size:28px 28px;
+}
+.type-ice .particles::before{
+  background-image:
+    radial-gradient(circle at 25% 85%, rgba(220,245,255,.9) 0 2px, transparent 3px),
+    radial-gradient(circle at 55% 90%, rgba(220,245,255,.8) 0 3px, transparent 4px),
+    radial-gradient(circle at 80% 75%, rgba(220,245,255,.8) 0 2px, transparent 3px);
+  background-size:26px 26px;
+}
+.type-dark .particles::before{
+  background-image:
+    radial-gradient(circle at 25% 85%, rgba(0,0,0,.25) 0 10px, transparent 11px),
+    radial-gradient(circle at 70% 80%, rgba(0,0,0,.20) 0 12px, transparent 13px);
+  background-size:42px 42px;
+}
+.type-fairy .particles::before{
+  background-image:
+    radial-gradient(circle at 20% 85%, rgba(255,210,245,.9) 0 2px, transparent 3px),
+    radial-gradient(circle at 55% 90%, rgba(255,210,245,.85) 0 3px, transparent 4px),
+    radial-gradient(circle at 80% 80%, rgba(255,210,245,.8) 0 2px, transparent 3px);
+  background-size:24px 24px;
+}
+.type-ghost .particles::before{
+  background-image:
+    radial-gradient(circle at 30% 85%, rgba(190,190,255,.35) 0 10px, transparent 11px),
+    radial-gradient(circle at 70% 80%, rgba(190,190,255,.25) 0 14px, transparent 15px);
+  background-size:46px 46px;
+}
+.type-dragon .particles::before{
+  background-image:
+    linear-gradient(90deg, transparent 44%, rgba(170,220,255,.65) 45%, rgba(170,220,255,.65) 55%, transparent 56%),
+    radial-gradient(circle at 70% 80%, rgba(170,220,255,.55) 0 6px, transparent 7px);
+  background-size:34px 34px;
+}
+.type-steel .particles::before{
+  background-image:
+    radial-gradient(circle at 25% 85%, rgba(230,230,230,.7) 0 2px, transparent 3px),
+    radial-gradient(circle at 60% 90%, rgba(230,230,230,.6) 0 3px, transparent 4px);
+  background-size:22px 22px;
+}
+.type-poison .particles::before{
+  background-image:
+    radial-gradient(circle at 20% 85%, rgba(210,160,255,.8) 0 3px, transparent 4px),
+    radial-gradient(circle at 60% 90%, rgba(210,160,255,.7) 0 2px, transparent 3px);
+  background-size:24px 24px;
+}
+.type-fighting .particles::before{
+  background-image:
+    linear-gradient(135deg, transparent 40%, rgba(255,210,180,.65) 41%, rgba(255,210,180,.65) 59%, transparent 60%),
+    linear-gradient(45deg, transparent 40%, rgba(255,210,180,.55) 41%, rgba(255,210,180,.55) 59%, transparent 60%);
+  background-size:30px 30px;
+}
+.type-flying .particles::before{
+  background-image:
+    radial-gradient(circle at 25% 85%, rgba(220,235,255,.75) 0 2px, transparent 3px),
+    radial-gradient(circle at 60% 90%, rgba(220,235,255,.65) 0 3px, transparent 4px);
+  background-size:28px 28px;
+}
+.type-bug .particles::before{
+  background-image:
+    radial-gradient(circle at 20% 85%, rgba(210,255,190,.8) 0 2px, transparent 3px),
+    radial-gradient(circle at 55% 90%, rgba(210,255,190,.75) 0 3px, transparent 4px);
+  background-size:22px 22px;
+}
+.type-normal .particles::before{
+  background-image:
+    radial-gradient(circle at 25% 85%, rgba(255,255,255,.5) 0 2px, transparent 3px),
+    radial-gradient(circle at 60% 90%, rgba(255,255,255,.45) 0 3px, transparent 4px);
+  background-size:26px 26px;
+}
+""",
+                  encoding="utf-8"
+              )
 
-          print("Patch OK: wheel + evolutions + Gen9 trainers + Mobile PC + fallback names + mega animation.")
           PY
 
       - name: Build (relative paths for GitHub Pages)
