@@ -1,112 +1,32 @@
-name: Deploy to GitHub Pages (from zip)
-
-on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
-
-env:
-  ZIP_FILE: pokemon-roulette-source.zip
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
-
-      - name: Unzip source
-        run: |
-          set -e
-          if [ ! -f "${{ env.ZIP_FILE }}" ]; then
-            echo "ERROR: zip '${{ env.ZIP_FILE }}' not found."
-            ls -la *.zip || true
-            exit 1
-          fi
-          rm -rf app
-          mkdir -p app
-          unzip -q "${{ env.ZIP_FILE }}" -d app
-          ls -la app
-
-      - name: Find project root (package.json)
-        run: |
-          set -e
-          ROOT="$(find app -maxdepth 12 -name package.json -print -quit | xargs -r dirname)"
-          if [ -z "$ROOT" ]; then
-            echo "ERROR: package.json not found inside zip."
-            exit 1
-          fi
-          echo "PROJECT_ROOT=$ROOT" >> $GITHUB_ENV
-          ls -la "$ROOT"
-
-      - name: Install dependencies
-        working-directory: ${{ env.PROJECT_ROOT }}
-        run: npm install --legacy-peer-deps
-
-      - name: Install @angular/localize (match Angular version)
-        working-directory: ${{ env.PROJECT_ROOT }}
-        run: |
-          set -e
-          CORE_VER=$(node -p "require('./package.json').dependencies?.['@angular/core'] || require('./package.json').devDependencies?.['@angular/core'] || ''")
-          if [ -z "$CORE_VER" ]; then
-            echo "ERROR: Could not detect @angular/core version from package.json"
-            exit 1
-          fi
-          CORE_VER="${CORE_VER#^}"
-          CORE_VER="${CORE_VER#~}"
-          npm install @angular/localize@$CORE_VER --legacy-peer-deps
-
-      - name: Patch (Gen 9 images + bigger & sharper wheel on mobile)
+- name: Patch (Gen 9 images + bigger & sharper wheel on mobile + PIX only + evolution regional rules)
         working-directory: ${{ env.PROJECT_ROOT }}
         run: |
           set -e
           python3 - <<'PY'
           import re
+          import subprocess
+          import sys
           from pathlib import Path
 
-          # ✅ LINKS CERTOS (Gen 9)
-          FLORIAN = "https://play.pokemonshowdown.com/sprites/trainers/florian-s.png?v=2"
-          JULIANA = "https://play.pokemonshowdown.com/sprites/trainers/juliana-s.png?v=2"
-
+          # ---------------------------
+          # Existing patch: Gen 9 trainer images
+          # ---------------------------
           trainer = Path("src/app/services/trainer-service/trainer-sprite-data.ts")
           if trainer.exists():
               txt = trainer.read_text(encoding="utf-8")
-
-              # Força o bloco da Gen 9 a ficar correto (independente do que estiver hoje)
-              # Procura "9: { male: '...', female: '...' }" e substitui os dois.
-              txt = re.sub(
-                  r"(9\s*:\s*\{\s*[\s\S]*?male\s*:\s*)'[^']*'",
-                  r"\1'" + FLORIAN + r"'",
-                  txt,
-                  count=1
+              txt = txt.replace(
+                  "https://archives.bulbagarden.net/media/upload/6/62/Spr_Masters_Florian_2.png",
+                  "https://raw.githubusercontent.com/zeroxm/pokemon-roulette-trainer-sprites/main/sprites/Spr_Masters_Florian_2.png"
               )
-              txt = re.sub(
-                  r"(9\s*:\s*\{\s*[\s\S]*?female\s*:\s*)'[^']*'",
-                  r"\1'" + JULIANA + r"'",
-                  txt,
-                  count=1
+              txt = txt.replace(
+                  "https://archives.bulbagarden.net/media/upload/4/4a/Spr_Masters_Juliana.png",
+                  "https://raw.githubusercontent.com/zeroxm/pokemon-roulette-trainer-sprites/main/sprites/Spr_Masters_Juliana.png"
               )
-
               trainer.write_text(txt, encoding="utf-8")
 
+          # ---------------------------
+          # Existing patch: bigger & sharper wheel on mobile
+          # ---------------------------
           wheel_ts = Path("src/app/wheel/wheel.component.ts")
           if wheel_ts.exists():
               txt = wheel_ts.read_text(encoding="utf-8")
@@ -190,38 +110,228 @@ jobs:
                   ".canvas-container{display:flex;flex-direction:row;align-items:center;justify-content:center;margin-left:0}\n"
               )
               wheel_css.write_text(css, encoding="utf-8")
+
+          # ---------------------------
+          # NEW: PIX-only donation page (remove international)
+          # ---------------------------
+          pix_key = "f1f43bfc-b355-4102-b530-256a03241385"
+
+          coffee_html = Path("src/app/coffee/coffee.component.html")
+          if coffee_html.exists():
+              coffee_html.write_text(f"""<div class="row">
+    <div class="col-12 col-sm-2">
+        <div class="row py-4">
+            <div class="col-6 col-sm-12 mb-2">
+                <app-main-game-button></app-main-game-button>
+            </div>
+            <div class="col-6 col-sm-12 mb-2">
+                <app-credits-button></app-credits-button>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-9">
+        <div class="container text-center">
+            <div class="mt-2">
+                <h3>{{{{ 'coffee.title' | translate}}}}</h3>
+                <p>{{{{ 'coffee.how_to_help' | translate }}}}</p>
+                <p>{{{{ 'coffee.donations' | translate }}}}</p>
+            </div>
+            <h1 class="mt-sm-5"><ng-icon name="bootstrapCupHotFill"></ng-icon></h1>
+            <div>
+                <h3>{{{{ 'coffee.support' | translate }}}}</h3>
+                <div class="row justify-content-center">
+                    <div class="col-12 col-md-8">
+                        <p>🇧🇷 É do Brasil? 🇧🇷 Manda um PIX! 🇧🇷</p>
+                        <img appImgFallback src="qr_code.jpeg" alt="PIX QR Code" style="height: 225px;" class="img-fluid" (click)="copyPixCode()">
+                        <p class="mt-3 mb-1"><strong>Chave PIX:</strong></p>
+                        <p class="mb-2" style="word-break: break-all;">{{{{ pixKey }}}}</p>
+                        <a href="javascript:void(0)" class="link-primary" (click)="copyPixCode()">
+                            {{{{pixCodeCopied ? 'PIX copiado!' : 'Clique para copiar!'}}}}
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-5">
+                <h3>{{{{ 'coffee.thanks' | translate }}}}</h3>
+                <p>{{{{ 'coffee.hope' | translate }}}}</p>
+            </div>
+        </div>
+    </div>
+  </div>
+""", encoding="utf-8")
+
+          coffee_ts = Path("src/app/coffee/coffee.component.ts")
+          if coffee_ts.exists():
+              coffee_ts.write_text(f"""import {{ Component }} from '@angular/core';
+import {{ NgIconsModule }} from '@ng-icons/core';
+import {{ MainGameButtonComponent }} from "../main-game-button/main-game-button.component";
+import {{ CommonModule }} from '@angular/common';
+import {{ TranslatePipe }} from '@ngx-translate/core';
+import {{ ImgFallbackDirective }} from '../shared/img-fallback.directive';
+import {{ CreditsButtonComponent }} from "../main-game/credits-button/credits-button.component";
+
+@Component({{
+  selector: 'app-coffee',
+  imports: [
+    ImgFallbackDirective,
+    CommonModule,
+    NgIconsModule,
+    MainGameButtonComponent,
+    TranslatePipe,
+    CreditsButtonComponent
+  ],
+  templateUrl: './coffee.component.html',
+  styleUrl: './coffee.component.css'
+}})
+export class CoffeeComponent {{
+
+  readonly pixKey = '{pix_key}';
+  pixCodeCopied = false;
+
+  copyPixCode(): void {{
+    navigator.clipboard.writeText(this.pixKey).then(() => {{
+      this.pixCodeCopied = true;
+      setTimeout(() => (this.pixCodeCopied = false), 2000);
+    }}).catch((err) => {{
+      console.error('Could not copy PIX key: ', err);
+    }});
+  }}
+}}
+""", encoding="utf-8")
+
+          # Generate a PIX QR code (BR Code EMV) into public/qr_code.jpeg
+          # (installs qrcode/pillow if missing)
+          def ensure_import(mod, pip_name=None):
+              try:
+                  __import__(mod)
+              except Exception:
+                  pkg = pip_name or mod
+                  subprocess.check_call([sys.executable, "-m", "pip", "install", "--quiet", pkg])
+
+          ensure_import("qrcode")
+          ensure_import("PIL", "pillow")
+
+          import qrcode
+          from PIL import Image
+
+          def crc16_ccitt(payload: str) -> str:
+              crc = 0xFFFF
+              for b in payload.encode("utf-8"):
+                  crc ^= (b << 8)
+                  for _ in range(8):
+                      if crc & 0x8000:
+                          crc = ((crc << 1) ^ 0x1021) & 0xFFFF
+                      else:
+                          crc = (crc << 1) & 0xFFFF
+              return f"{crc:04X}"
+
+          def tlv(tag: str, value: str) -> str:
+              ln = f"{len(value):02d}"
+              return f"{tag}{ln}{value}"
+
+          # Minimal static PIX payload (works for most banks)
+          gui = tlv("00", "BR.GOV.BCB.PIX")
+          key = tlv("01", pix_key)
+          desc = tlv("02", "PokeRoleta")
+          mai_26 = tlv("26", gui + key + desc)
+
+          payload = ""
+          payload += tlv("00", "01")         # Payload format indicator
+          payload += tlv("01", "11")         # Static
+          payload += mai_26
+          payload += tlv("52", "0000")       # MCC
+          payload += tlv("53", "986")        # BRL
+          payload += tlv("58", "BR")         # Country
+          payload += tlv("59", "POKEROLETA") # Merchant name
+          payload += tlv("60", "BRASIL")     # Merchant city
+          payload += tlv("62", tlv("05", "POKEROLETA"))  # Reference
+
+          payload_for_crc = payload + "6304"
+          payload = payload_for_crc + crc16_ccitt(payload_for_crc)
+
+          qr_img = qrcode.QRCode(
+              version=None,
+              error_correction=qrcode.constants.ERROR_CORRECT_M,
+              box_size=10,
+              border=2,
+          )
+          qr_img.add_data(payload)
+          qr_img.make(fit=True)
+          img = qr_img.make_image(fill_color="black", back_color="white").convert("RGB")
+          img = img.resize((530, 530), Image.NEAREST)
+
+          out_qr = Path("public/qr_code.jpeg")
+          out_qr.parent.mkdir(parents=True, exist_ok=True)
+          img.save(out_qr, format="JPEG", quality=95)
+
+          # ---------------------------
+          # NEW: Evolution fix (prevents empty-evo freezes + regional rules + Hisui exception)
+          # ---------------------------
+          evo_service = Path("src/app/services/evolution-service/evolution.service.ts")
+          if evo_service.exists():
+              evo_service.write_text("""import { Injectable } from '@angular/core';
+import { PokemonItem } from '../../interfaces/pokemon-item';
+import { evolutionChain } from './evolution-chain';
+import { PokemonService } from '../pokemon-service/pokemon.service';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class EvolutionService {
+
+  constructor(private pokemonService: PokemonService) {
+    this.nationalDexPokemon = this.pokemonService.getAllPokemon();
+  }
+
+  evolutionChain = evolutionChain;
+  nationalDexPokemon: PokemonItem[];
+
+  /**
+   * Hisui isn't a playable "generation region" in this game, so we allow Hisuian
+   * forms as evolution targets even when the base Pokémon isn't regional.
+   *
+   * In this codebase, Hisuian forms are typically in the PokeAPI form-id range:
+   * 10229..10247
+   */
+  private isHisuianFormId(id: number): boolean {
+    return id >= 10229 && id <= 10247;
+  }
+
+  /**
+   * A Pokémon can evolve only if there is at least one valid evolution after
+   * applying the game's regional rules.
+   */
+  canEvolve(pokemon: PokemonItem): boolean {
+    return this.getEvolutions(pokemon).length > 0;
+  }
+
+  /**
+   * Evolution rules implemented:
+   * - If the base Pokémon is a *regional form* (has basePokemonId), it only evolves
+   *   through its own chain (as defined in evolutionChain).
+   * - If the base Pokémon is the *original* form (no basePokemonId), it evolves only
+   *   into *non-regional* evolutions (no basePokemonId),
+   *   EXCEPT: allow Hisuian form evolutions.
+   */
+  getEvolutions(pokemon: PokemonItem): PokemonItem[] {
+    const chain = this.evolutionChain[pokemon.pokemonId];
+    if (!chain || chain.length === 0) return [];
+
+    const candidates: PokemonItem[] = chain
+      .map((evolutionId) => this.pokemonService.getPokemonById(evolutionId))
+      .filter((p): p is PokemonItem => !!p);
+
+    // Non-regional base: remove non-Hisui regional-form evolution targets.
+    if (!pokemon.basePokemonId) {
+      return candidates.filter((evo) => !evo.basePokemonId || this.isHisuianFormId(evo.pokemonId));
+    }
+
+    // Regional base: keep whatever the chain defines.
+    return candidates;
+  }
+}
+""", encoding="utf-8")
+
+          print("Patch applied: PIX-only + QR + evolution rules/fix.")
           PY
-
-      - name: Build (relative paths for GitHub Pages)
-        working-directory: ${{ env.PROJECT_ROOT }}
-        env:
-          NODE_OPTIONS: --max_old_space_size=4096
-        run: npm run build -- --configuration production --base-href "./" --deploy-url "./"
-
-      - name: Locate index.html for Pages
-        run: |
-          set -e
-          IDX="$(find "${{ env.PROJECT_ROOT }}/dist" -maxdepth 12 -type f -name index.html -print -quit)"
-          if [ -z "$IDX" ]; then
-            echo "ERROR: index.html not found in dist."
-            exit 1
-          fi
-          PAGES_DIR="$(dirname "$IDX")"
-          echo "PAGES_PATH=$PAGES_DIR" >> $GITHUB_ENV
-          touch "$PAGES_DIR/.nojekyll"
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ${{ env.PAGES_PATH }}
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
