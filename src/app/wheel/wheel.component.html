@@ -1,0 +1,20 @@
+<div class="wheel-container">
+    <p>{{ currentSegment | translate }}</p>
+    <div class="canvas-container">
+        <canvas id="wheel"
+                [width]="wheelWidth"
+                [height]="canvasHeight"
+                (click)="spinWheel()">
+        </canvas>
+        <canvas id="pointer"
+                [width]="cursorWidth"
+                [height]="canvasHeight">
+        </canvas>
+    </div>
+    <button class="btn my-3"
+            [ngClass]="(darkMode | async) ? 'btn-light' : 'btn-dark'"
+            (click)="spinWheel()">
+            {{ 'wheel.spin' | translate }}
+    </button>
+</div>
+

@@ -1,0 +1,39 @@
+<h1 class="title">{{ 'game.main.roulette.elite.title' | translate }}</h1>
+<p class="respin-reason">{{ (retries > 0) ? currentItem.text+" x"+retries : ""}}</p>
+<app-wheel
+    #wheel
+    [items]="victoryOdds"
+    (selectedItemEvent)="onItemSelected($event)">
+</app-wheel>
+
+<ng-template #eliteFourPresentationModal let-modal>
+    <div class="modal-body">
+        <h1>{{ 'game.main.roulette.elite.elite4' | translate }} {{ currentElite.name }}!</h1>
+        <div class="elite-panel">
+            <img appImgFallback [src]="currentElite.sprite"
+                 alt="{{currentElite.name}}"
+                 height="128">
+            <div class="quotes">
+                <p *ngFor="let quote of currentElite.quotes">{{quote}}</p>
+            </div>
+        </div>
+    </div>
+    <div class="modal-footer">
+        <button type="button" class="btn btn-outline-primary" (click)="closeModal()">{{ 'game.main.roulette.elite.go' | translate }}</button>
+    </div>
+</ng-template>
+
+<ng-template #itemUsedModal let-modal>
+    <div class="modal-body">
+        <h1>{{ 'game.main.roulette.elite.use' | translate }} {{ currentItem.text }}!</h1>
+        <div class="item-panel">
+            <img appImgFallback [src]="currentItem.sprite" height="128">
+            <div class="quotes">
+                <p>{{ currentItem.description }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="modal-footer">
+        <button type="button" class="btn btn-outline-primary" (click)="closeModal()">Ok</button>
+    </div>
+</ng-template>
