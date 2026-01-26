@@ -74,7 +74,7 @@ jobs:
           CORE_VER="${CORE_VER#~}"
           npm install @angular/localize@$CORE_VER --legacy-peer-deps
 
-      - name: Patch (wheel bigger + HiDPI sharp + evolution rules + Gen9 trainer fix)
+      - name: Patch (wheel HiDPI + bigger + evolutions + Gen9 trainer fix)
         working-directory: ${{ env.PROJECT_ROOT }}
         run: |
           set -e
@@ -84,7 +84,7 @@ jobs:
           from pathlib import Path
 
           # ============================================================
-          # 1) WHEEL: bigger on mobile + HiDPI sharp (and NO missing method)
+          # 1) WHEEL: bigger on mobile + HiDPI sharp (no missing method)
           # ============================================================
           wheel_ts = Path("src/app/wheel/wheel.component.ts")
           if wheel_ts.exists():
@@ -109,10 +109,8 @@ jobs:
               )
               txt = re.sub(pat, repl, txt, count=1)
 
-              # Detect if METHOD exists (signature), NOT substring
+              # Ensure method exists (check signature, not substring)
               has_method = re.search(r"\bsetupHiDpiCanvases\s*\(\)\s*:\s*void\b", txt) is not None
-
-              # If method missing, inject before last closing brace of the class
               if not has_method:
                   method = textwrap.dedent("""
                   
@@ -182,7 +180,7 @@ jobs:
               wheel_ts.write_text(txt, encoding="utf-8")
 
           # ============================================================
-          # 2) EVOLUTIONS: your requested rules
+          # 2) EVOLUTIONS: rules you requested
           # ============================================================
           evo_service = Path("src/app/services/evolution-service/evolution.service.ts")
           if evo_service.exists():
@@ -203,6 +201,7 @@ jobs:
                   "  private isHisuianFormId(id: number): boolean {\n"
                   "    return id >= 10229 && id <= 10247;\n"
                   "  }\n\n"
+                  "  // Fix: [] is truthy, so require at least one valid option\n"
                   "  canEvolve(pokemon: PokemonItem): boolean {\n"
                   "    return this.getEvolutions(pokemon).length > 0;\n"
                   "  }\n\n"
@@ -214,15 +213,15 @@ jobs:
                   "      const evolution = this.pokemonService.getPokemonById(evolutionId);\n"
                   "      if (evolution) evolutions.push(evolution);\n"
                   "    }\n\n"
-                  "    // Exception: Pikachu normal can evolve into Alolan Raichu\n"
+                  "    // Exception: Pikachu (normal) can evolve into Alolan Raichu\n"
                   "    if (!pokemon.basePokemonId && pokemon.pokemonId === 25) {\n"
                   "      return evolutions;\n"
                   "    }\n\n"
-                  "    // Regional base: follow its own chain (e.g., Hisuian Qwilfish -> Overqwil)\n"
+                  "    // Regional base forms follow their own chain\n"
                   "    if (pokemon.basePokemonId) {\n"
                   "      return evolutions;\n"
                   "    }\n\n"
-                  "    // Non-regional base: block regional-form evolutions, except Hisui forms\n"
+                  "    // Non-regional base: block regional evolutions, except Hisui forms\n"
                   "    return evolutions.filter(evo => !evo.basePokemonId || this.isHisuianFormId(evo.pokemonId));\n"
                   "  }\n"
                   "}\n",
@@ -230,7 +229,7 @@ jobs:
               )
 
           # ============================================================
-          # 3) GEN 9 TRAINERS: force Florian + Juliana (fix wrong female sprite)
+          # 3) GEN 9 TRAINERS: force Florian + Juliana (fix female sprite)
           # ============================================================
           trainer = Path("src/app/services/trainer-service/trainer-sprite-data.ts")
           if trainer.exists():
@@ -239,15 +238,12 @@ jobs:
               florian = "https://play.pokemonshowdown.com/sprites/trainers/florian-s.png?v=3"
               juliana = "https://play.pokemonshowdown.com/sprites/trainers/juliana-s.png?v=3"
 
-              # Replace male inside Gen 9 block
               t, n1 = re.subn(
                   r"(9\s*:\s*\{[\s\S]*?male\s*:\s*)(['\"])[^'\"]*\2",
                   r"\1\2" + florian + r"\2",
                   t,
                   count=1
               )
-
-              # Replace female inside Gen 9 block
               t, n2 = re.subn(
                   r"(9\s*:\s*\{[\s\S]*?female\s*:\s*)(['\"])[^'\"]*\2",
                   r"\1\2" + juliana + r"\2",
@@ -255,9 +251,9 @@ jobs:
                   count=1
               )
 
-              # If female accidentally equals male, force Juliana
+              # If female didn't match due to formatting, hard-force a safe fallback:
               if n2 == 0:
-                  t = t.replace(florian, juliana)
+                  t = re.sub(r"(female\s*:\s*)(['\"]).*?\2", r"\1'" + juliana + r"'", t, count=1)
 
               trainer.write_text(t, encoding="utf-8")
 
@@ -297,4 +293,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-```0
