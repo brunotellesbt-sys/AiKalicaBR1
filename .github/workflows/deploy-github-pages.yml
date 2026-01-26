@@ -80,21 +80,22 @@ jobs:
           set -e
           python3 - <<'PY'
           import re
+          import textwrap
           from pathlib import Path
 
           # ============================================================
-          # 1) WHEEL: bigger on mobile + HiDPI sharp (keep pointer)
+          # 1) WHEEL: bigger on mobile + HiDPI sharp (and NO missing method)
           # ============================================================
           wheel_ts = Path("src/app/wheel/wheel.component.ts")
           if wheel_ts.exists():
               txt = wheel_ts.read_text(encoding="utf-8")
 
-              # Bigger wheel on mobile, but keep room for pointer (cursorWidth)
+              # Bigger wheel on mobile (keep room for pointer/cursor)
               pat = (
-                  r"this\.canvasHeight\s*=\s*Math\.minwindow\.innerHeight,\s*window\.innerWidth\s*\*\s*0\.50;\s*\n"
-                  r"\s*this\.wheelWidth\s*=\s*this\.canvasHeight;\s*\n"
-                  r"\s*this\.cursorWidth\s*=\s*40;\s*\n"
-                  r"\s*this\.fontSize\s*=\s*this\.wheelWidth\s*/\s*24;"
+                  r"this\.canvasHeight\s*=\s*Math\.min\(window\.innerHeight,\s*window\.innerWidth\)\s*\*\s*0\.50\s*;\s*\n"
+                  r"\s*this\.wheelWidth\s*=\s*this\.canvasHeight\s*;\s*\n"
+                  r"\s*this\.cursorWidth\s*=\s*40\s*;\s*\n"
+                  r"\s*this\.fontSize\s*=\s*this\.wheelWidth\s*/\s*24\s*;"
               )
               repl = (
                   "this.cursorWidth = 40;\n"
@@ -106,37 +107,46 @@ jobs:
                   "    this.canvasHeight = this.wheelWidth;\n"
                   "    this.fontSize = this.wheelWidth / 24;"
               )
-              txt, _ = re.subn(pat, repl, txt, count=1)
+              txt = re.sub(pat, repl, txt, count=1)
 
-              # Call setupHiDpiCanvases() after getting 2D contexts
+              # Detect if METHOD exists (signature), NOT substring
+              has_method = re.search(r"\bsetupHiDpiCanvases\s*\(\)\s*:\s*void\b", txt) is not None
+
+              # If method missing, inject before last closing brace of the class
+              if not has_method:
+                  method = textwrap.dedent("""
+                  
+                    private setupHiDpiCanvases(): void {
+                      const dpr = window.devicePixelRatio || 1;
+
+                      // Wheel canvas: keep CSS size, increase internal resolution
+                      this.wheelCanvas.style.width = `${this.wheelWidth}px`;
+                      this.wheelCanvas.style.height = `${this.canvasHeight}px`;
+                      this.wheelCanvas.width = Math.floor(this.wheelWidth * dpr);
+                      this.wheelCanvas.height = Math.floor(this.canvasHeight * dpr);
+                      this.wheelCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+                      // Pointer canvas
+                      this.pointerCanvas.style.width = `${this.cursorWidth}px`;
+                      this.pointerCanvas.style.height = `${this.canvasHeight}px`;
+                      this.pointerCanvas.width = Math.floor(this.cursorWidth * dpr);
+                      this.pointerCanvas.height = Math.floor(this.canvasHeight * dpr);
+                      this.pointerCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                    }
+                  """).rstrip() + "\n"
+
+                  last_brace = txt.rfind("\n}")
+                  if last_brace != -1:
+                      txt = txt[:last_brace] + "\n" + method + txt[last_brace:]
+                  else:
+                      txt = txt + "\n" + method
+
+              # Ensure we call setupHiDpiCanvases() after grabbing pointerCtx
               marker = "this.pointerCtx = this.pointerCanvas.getContext('2d')!;"
               if marker in txt and "this.setupHiDpiCanvases();" not in txt:
                   txt = txt.replace(marker, marker + "\n    this.setupHiDpiCanvases();", 1)
 
-              # Add HiDPI helper method if missing (insert before preprocessTranslations)
-              if "setupHiDpiCanvases" not in txt:
-                  insert_before = "  private preprocessTranslations(): void {"
-                  method = (
-                      "  private setupHiDpiCanvases(): void {\n"
-                      "    const dpr = window.devicePixelRatio || 1;\n\n"
-                      "    // Wheel canvas: keep CSS size, increase internal resolution\n"
-                      "    this.wheelCanvas.style.width = `${this.wheelWidth}px`;\n"
-                      "    this.wheelCanvas.style.height = `${this.canvasHeight}px`;\n"
-                      "    this.wheelCanvas.width = Math.floor(this.wheelWidth * dpr);\n"
-                      "    this.wheelCanvas.height = Math.floor(this.canvasHeight * dpr);\n"
-                      "    this.wheelCtx.setTransform(dpr, 0, 0, dpr, 0, 0);\n\n"
-                      "    // Pointer canvas\n"
-                      "    this.pointerCanvas.style.width = `${this.cursorWidth}px`;\n"
-                      "    this.pointerCanvas.style.height = `${this.canvasHeight}px`;\n"
-                      "    this.pointerCanvas.width = Math.floor(this.cursorWidth * dpr);\n"
-                      "    this.pointerCanvas.height = Math.floor(this.canvasHeight * dpr);\n"
-                      "    this.pointerCtx.setTransform(dpr, 0, 0, dpr, 0, 0);\n"
-                      "  }\n\n"
-                  )
-                  if insert_before in txt:
-                      txt = txt.replace(insert_before, method + insert_before, 1)
-
-              # Draw wheel in CSS pixels (not DPR-scaled canvas.width)
+              # Draw wheel in CSS pixels (not DPR-scaled canvas.width/height)
               txt = txt.replace("const centerX = this.wheelCanvas.width / 2;", "const centerX = this.wheelWidth / 2;")
               txt = txt.replace("const centerY = this.wheelCanvas.height / 2;", "const centerY = this.canvasHeight / 2;")
               txt = txt.replace("const radius = (this.wheelCanvas.width / 2);", "const radius = (this.wheelWidth / 2);")
@@ -145,8 +155,8 @@ jobs:
                   "this.wheelCtx.clearRect(0, 0, this.wheelWidth, this.canvasHeight);"
               )
 
-              # Replace drawPointer with DPR-safe version (and clear before drawing)
-              dp_pat = r"drawPointer: void \{[\s\S]*?\n\s*\}\n\n\s*spinWheel: void \{"
+              # Pointer: DPR-safe and clears before drawing (keeps arrow visible)
+              dp_pat = r"drawPointer\(\): void \{[\s\S]*?\n\s*\}\n\n\s*spinWheel\(\): void \{"
               dp_repl = (
                   "drawPointer(): void {\n"
                   "    const w = this.cursorWidth;\n"
@@ -172,7 +182,7 @@ jobs:
               wheel_ts.write_text(txt, encoding="utf-8")
 
           # ============================================================
-          # 2) EVOLUTIONS: rules you requested (no chain edits needed)
+          # 2) EVOLUTIONS: your requested rules
           # ============================================================
           evo_service = Path("src/app/services/evolution-service/evolution.service.ts")
           if evo_service.exists():
@@ -190,11 +200,9 @@ jobs:
                   "  }\n\n"
                   "  evolutionChain = evolutionChain;\n"
                   "  nationalDexPokemon: PokemonItem[];\n\n"
-                  "  // Hisui forms are treated as allowed exceptions (no Hisui region in-game)\n"
                   "  private isHisuianFormId(id: number): boolean {\n"
                   "    return id >= 10229 && id <= 10247;\n"
                   "  }\n\n"
-                  "  // Fix: [] is truthy, so require at least one valid evolution option\n"
                   "  canEvolve(pokemon: PokemonItem): boolean {\n"
                   "    return this.getEvolutions(pokemon).length > 0;\n"
                   "  }\n\n"
@@ -206,22 +214,22 @@ jobs:
                   "      const evolution = this.pokemonService.getPokemonById(evolutionId);\n"
                   "      if (evolution) evolutions.push(evolution);\n"
                   "    }\n\n"
-                  "    // Exception: Pikachu (normal) can evolve into both Raichu and Alolan Raichu\n"
+                  "    // Exception: Pikachu normal can evolve into Alolan Raichu\n"
                   "    if (!pokemon.basePokemonId && pokemon.pokemonId === 25) {\n"
                   "      return evolutions;\n"
                   "    }\n\n"
-                  "    // Regional base forms follow their own chain (e.g., Hisuian Qwilfish -> Overqwil)\n"
+                  "    // Regional base: follow its own chain (e.g., Hisuian Qwilfish -> Overqwil)\n"
                   "    if (pokemon.basePokemonId) {\n"
                   "      return evolutions;\n"
                   "    }\n\n"
-                  "    // Non-regional base forms: block regional-form evolutions, except Hisui forms\n"
+                  "    // Non-regional base: block regional-form evolutions, except Hisui forms\n"
                   "    return evolutions.filter(evo => !evo.basePokemonId || this.isHisuianFormId(evo.pokemonId));\n"
                   "  }\n"
                   "}\n",
                   encoding="utf-8"
               )
 
-          print('Patch applied: wheel bigger+HiDPI + evolution rules.')
+          print("Patch OK: wheel method fixed + evolutions patched.")
           PY
 
       - name: Build (relative paths for GitHub Pages)
