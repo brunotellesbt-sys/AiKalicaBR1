@@ -1,0 +1,43 @@
+<button
+  type="button"
+  class="btn w-100"
+  [ngClass]="isOpen ? 'btn-primary' : 'btn-outline-primary'"
+  (click)="toggle()">
+  Pokédex
+</button>
+
+<div *ngIf="isOpen" class="pokedex-panel mt-2">
+  <div class="d-flex gap-2 align-items-center mb-2">
+    <input
+      class="form-control"
+      type="text"
+      placeholder="Buscar por nome ou número (ex: 25, Pikachu)"
+      [(ngModel)]="search"
+      (ngModelChange)="onSearchChange()" />
+
+    <button type="button" class="btn btn-outline-secondary" (click)="prevPage()" [disabled]="pageIndex === 0">◀</button>
+    <button type="button" class="btn btn-outline-secondary" (click)="nextPage()" [disabled]="(pageIndex + 1) * pageSize >= filteredRows().length">▶</button>
+  </div>
+
+  <div class="small text-muted mb-2">{{ pageLabel() }}</div>
+
+  <div class="pokedex-list">
+    <div class="pokedex-row" *ngFor="let row of visibleRows">
+      <img class="pokedex-img" [src]="row.imgUrl" [alt]="row.name" loading="lazy" />
+      <div class="pokedex-meta">
+        <div class="pokedex-title">
+          <span class="pokedex-id">#{{ row.id }}</span>
+          <span class="pokedex-name">{{ row.name }}</span>
+          <span class="pokedex-power">Power: {{ row.power }}</span>
+        </div>
+        <div class="pokedex-sub">
+          <span *ngIf="row.heightM !== undefined && row.weightKg !== undefined">
+            Altura: {{ row.heightM }} m · Peso: {{ row.weightKg }} kg
+          </span>
+          <span *ngIf="row.loading" class="ms-2">(carregando…)</span>
+        </div>
+        <div class="pokedex-desc" *ngIf="row.descriptionPt">{{ row.descriptionPt }}</div>
+      </div>
+    </div>
+  </div>
+</div>

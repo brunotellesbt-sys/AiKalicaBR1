@@ -1,0 +1,28 @@
+<h1 class="title">{{ 'game.main.roulette.teamrocket.title' | translate }}</h1>
+<app-wheel  #wheel
+            [items]="outcomes"
+            (selectedItemEvent)="onItemSelected($event)">
+</app-wheel>
+
+<ng-template #teamRockerModal let-modal>
+	<div class="modal-body">
+        <h1>{{ 'game.main.roulette.teamrocket.teamrocket' | translate }}</h1>
+        <div class="team-rocket-panel">
+            <img appImgFallback [src]="james.sprite"
+                 alt="{{james.name}}"
+                 height="128">
+            <div class="message">
+                <p>{{ 'game.main.roulette.teamrocket.trouble' | translate }}</p>
+                <p>{{ 'game.main.roulette.teamrocket.double' | translate }}</p>
+            </div>
+            <img appImgFallback [src]="jessie.sprite"
+                 alt="{{jessie.name}}"
+                 height="128">
+        </div>
+	</div>
+    <div class="modal-footer">
+        <button type="button"
+                class="btn btn-outline-primary"
+                (click)="closeModal()">{{ 'game.main.roulette.teamrocket.meowth' | translate }}</button>
+    </div>
+</ng-template>

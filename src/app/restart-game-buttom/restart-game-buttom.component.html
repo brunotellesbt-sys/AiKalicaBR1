@@ -1,0 +1,19 @@
+<button class="btn btn-primary w-100"
+        (click)="showRestartGameConfirmModal()">
+    <ng-icon name="bootstrapArrowRepeat"></ng-icon> {{ 'game.restart.action' | translate }}
+</button>
+
+<ng-template #restartGameModal let-modal>
+	<div class="modal-body">
+        <h1>{{ 'game.restart.title' | translate }}</h1>
+        <div class="restart-panel">
+            <div class="message">
+                <p>{{ 'game.restart.warning' | translate }}</p>
+            </div>
+        </div>
+	</div>
+    <div class="modal-footer">
+        <button type="button" class="btn btn-primary" (click)="confirmRestart()">{{ 'game.restart.confirm' | translate}}</button>
+        <button type="button" class="btn btn-danger" (click)="closeModal()">{{ 'game.restart.cancel' | translate}} </button>
+    </div>
+</ng-template>
