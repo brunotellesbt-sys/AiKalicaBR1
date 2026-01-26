@@ -169,6 +169,11 @@
             "your": "Your"
           }
         },
+        "megaEvolution": {
+          "selectingForm": "Selecting Mega form...",
+          "loading": "Loading Mega Evolutions...",
+          "continue": "Continue"
+        },
         "adventure": {
           "title": "What do you do between Gyms?"
         },
@@ -213,7 +218,7 @@
           "which": "Which"
         },
         "gym": {
-          "against": "Battle against",
+          "against": "Battle against Gym Leader",
           "defeated": "Defeated?",
           "go": "Let's Go!",
           "used": "Used a"

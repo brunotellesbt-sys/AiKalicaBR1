@@ -164,9 +164,14 @@
           "who": "Quem vai evoluir?",
           "modal": {
             "title": "Evolução!",
-            "to": "evoluiu para",
+            "evolved": "evoluiu para",
             "your": "Seu"
           }
+        },
+        "megaEvolution": {
+          "selectingForm": "Escolhendo a forma Mega...",
+          "loading": "Carregando Mega Evolutions...",
+          "continue": "Continuar"
         },
         "adventure": {
           "title": "O que você faz entre os Ginásios?"
@@ -212,7 +217,7 @@
           "which": "Qual"
         },
         "gym": {
-          "against": "Batalha contra",
+          "against": "Batalha contra o Líder de Ginásio",
           "defeated": "derrotado?",
           "go": "Vamos lá!",
           "used": "Usou "

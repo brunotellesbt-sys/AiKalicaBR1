@@ -8,6 +8,7 @@ import { WheelComponent } from '../../../../wheel/wheel.component';
 import { PokemonItem } from '../../../../interfaces/pokemon-item';
 import { MegaEvolutionService, MegaForm } from '../../../../services/mega-evolution-service/mega-evolution.service';
 import { TrainerService } from '../../../../services/trainer-service/trainer.service';
+import { AudioService } from '../../../../services/audio-service/audio.service';
 
 type MegaRouletteMode = 'select-pokemon' | 'select-mega-form';
 
@@ -47,7 +48,8 @@ export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
   constructor(
     private trainerService: TrainerService,
     private megaEvolutionService: MegaEvolutionService,
-    private modalService: NgbModal
+    private modalService: NgbModal,
+    private audioService: AudioService
   ) {}
 
   ngOnInit(): void {
@@ -171,6 +173,9 @@ export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
 
   private openMegaPopupAndProceed(): void {
     try {
+      // Play Mega Evolution cry audio
+      this.playMegaCry();
+
       this.modalRef = this.modalService.open(this.megaEvolutionModal, {
         centered: true,
         backdrop: 'static',
@@ -189,5 +194,40 @@ export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
       // If modal fails (shouldn't), just proceed.
       this.megaEvolutionFinished.emit();
     }
+  }
+
+  /**
+   * Plays the cry audio for the Mega Evolved Pokémon.
+   * Uses Pokemon Showdown's audio CDN with the Mega form's API name.
+   */
+  private playMegaCry(): void {
+    if (!this.popupBeforePokemon) {
+      return;
+    }
+
+    // Extract the Mega form name from popupAfterName (e.g., "Mega Charizard X")
+    // and convert it to the API format expected by Pokemon Showdown
+    const megaApiName = this.convertDisplayNameToApiName(this.popupAfterName);
+    
+    // Pokemon Showdown cry URL format: https://play.pokemonshowdown.com/audio/cries/<pokemon-name>.mp3
+    const cryUrl = `https://play.pokemonshowdown.com/audio/cries/${megaApiName}.mp3`;
+    
+    try {
+      const cryAudio = this.audioService.createAudio(cryUrl);
+      this.audioService.playAudio(cryAudio, 0.5);
+    } catch (error) {
+      // If cry playback fails, just continue silently
+      console.warn('Failed to play Mega Evolution cry:', error);
+    }
+  }
+
+  /**
+   * Converts a display name like "Mega Charizard X" to API format "charizardmegax"
+   * for use with Pokemon Showdown's cry URLs.
+   */
+  private convertDisplayNameToApiName(displayName: string): string {
+    // Remove spaces and convert to lowercase
+    // "Mega Charizard X" -> "megacharizardx"
+    return displayName.toLowerCase().replace(/\s+/g, '');
   }
 }

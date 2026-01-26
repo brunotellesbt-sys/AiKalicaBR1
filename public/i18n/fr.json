@@ -168,6 +168,11 @@
             "your": "Votre"
           }
         },
+        "megaEvolution": {
+          "selectingForm": "Sélection de la forme Méga...",
+          "loading": "Chargement des Méga Évolutions...",
+          "continue": "Continuer"
+        },
         "adventure": {
           "title": "Que fais-tu entre les arènes ?"
         },
@@ -212,7 +217,7 @@
           "which": "Quel"
         },
         "gym": {
-          "against": "Combat contre",
+          "against": "Combat contre le Champion d'Arène",
           "defeated": "Vaincu ?",
           "go": "C'est parti !",
           "used": "A utilisé un(e)"

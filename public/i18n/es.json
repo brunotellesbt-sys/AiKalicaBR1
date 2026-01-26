@@ -168,6 +168,11 @@
             "your": "Tu"
           }
         },
+        "megaEvolution": {
+          "selectingForm": "Seleccionando forma Mega...",
+          "loading": "Cargando Mega Evoluciones...",
+          "continue": "Continuar"
+        },
         "adventure": {
           "title": "¿Qué haces entre los gimnasios?"
         },
@@ -212,7 +217,7 @@
           "which": "¿Cuál"
         },
         "gym": {
-          "against": "Combate contra",
+          "against": "Combate contra el Líder de Gimnasio",
           "defeated": "Derrotado?",
           "go": "¡Vamos!",
           "used": "Usó un(a)"

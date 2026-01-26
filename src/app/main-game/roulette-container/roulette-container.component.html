@@ -190,7 +190,7 @@
         <div class="pokemon-switch-panel">
             <img appImgFallback [src]="pkmnOut.sprite?.front_default" height="128">
             <div class="message">
-                <p>{{ 'game.main.roulette.evolve.modal.your' | translate }} {{ pkmnOut.text | translate }} {{ 'game.main.roulette.evolve.modal.to' | translate }} {{ pkmnIn.text | translate }}!</p>
+                <p>{{ pkmnOut.text | translate }} {{ 'game.main.roulette.evolve.modal.evolved' | translate }} {{ pkmnIn.text | translate }}!</p>
             </div>
             <img appImgFallback [src]="pkmnIn.sprite?.front_default" height="128">
         </div>
