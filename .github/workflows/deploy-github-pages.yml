@@ -86,6 +86,7 @@ jobs:
 
           python3 - <<'PY'
           import re
+          import textwrap
           from pathlib import Path
 
           # ----------------------------
@@ -111,23 +112,16 @@ jobs:
           if wheel_ts.exists():
               w = wheel_ts.read_text(encoding="utf-8")
 
-              # Import OnDestroy (safe if already there)
               w = w.replace(
                   "import { AfterViewInit, Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';",
                   "import { AfterViewInit, Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, OnDestroy } from '@angular/core';"
               )
-              w = w.replace(
-                  "import { AfterViewInit, Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, OnDestroy } from '@angular/core';",
-                  "import { AfterViewInit, Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, OnDestroy } from '@angular/core';"
-              )
 
-              # Implements OnDestroy
               w = w.replace(
                   "export class WheelComponent implements AfterViewInit, OnChanges {",
                   "export class WheelComponent implements AfterViewInit, OnChanges, OnDestroy {"
               )
 
-              # Replace the initial dimension block in constructor with updateDimensions()
               w = re.sub(
                   r"this\.canvasHeight\s*=\s*Math\.min\(window\.innerHeight,\s*window\.innerWidth\)\s*\*\s*0\.50\s*;\s*"
                   r"this\.wheelWidth\s*=\s*this\.canvasHeight\s*;\s*"
@@ -138,7 +132,6 @@ jobs:
                   count=1
               )
 
-              # Add resizeListener field if missing
               anchor = "  private translatedItems: WheelItem[] = [];\n"
               if anchor in w and "resizeListener" not in w:
                   w = w.replace(
@@ -152,7 +145,6 @@ jobs:
                       "  };\n"
                   )
 
-              # In ngAfterViewInit: call setupHiDpiCanvases + attach resize listener (only once)
               marker = "    this.pointerCtx = this.pointerCanvas.getContext('2d')!;"
               if marker in w and "window.addEventListener('resize', this.resizeListener" not in w:
                   w = w.replace(
@@ -163,7 +155,6 @@ jobs:
                       1
                   )
 
-              # drawWheel should use CSS pixel dims (wheelWidth/canvasHeight)
               w = w.replace("    const centerX = this.wheelCanvas.width / 2;", "    const centerX = this.wheelWidth / 2;")
               w = w.replace("    const centerY = this.wheelCanvas.height / 2;", "    const centerY = this.canvasHeight / 2;")
               w = w.replace("    const radius = (this.wheelCanvas.width / 2);", "    const radius = (this.wheelWidth / 2);")
@@ -172,7 +163,6 @@ jobs:
                   "    this.wheelCtx.clearRect(0, 0, this.wheelWidth, this.canvasHeight);"
               )
 
-              # Replace drawPointer with a stable version (prevents “sumiu”)
               w = re.sub(
                   r"drawPointer\(\): void \{[\s\S]*?\n\s*\}",
                   "drawPointer(): void {\n"
@@ -197,35 +187,27 @@ jobs:
                   count=1
               )
 
-              # Ensure helper methods exist (DON'T check just string presence because we add a call)
               if not re.search(r"\bprivate\s+updateDimensions\(", w):
                   add = """
             private updateDimensions(): void {
               const minDim = Math.min(window.innerHeight, window.innerWidth);
               const isMobile = window.innerWidth <= 768;
 
-              // Bigger on mobile
               this.canvasHeight = Math.round(minDim * (isMobile ? 0.78 : 0.55));
               this.wheelWidth = this.canvasHeight;
-
-              // Slightly wider pointer area on mobile
               this.cursorWidth = isMobile ? 48 : 40;
-
-              // Keep text proportional
               this.fontSize = this.wheelWidth / 24;
             }
 
             private setupHiDpiCanvases(): void {
               const dpr = window.devicePixelRatio || 1;
 
-              // Wheel canvas (internal pixels = css * dpr)
               this.wheelCanvas.width = Math.floor(this.wheelWidth * dpr);
               this.wheelCanvas.height = Math.floor(this.canvasHeight * dpr);
               this.wheelCanvas.style.width = `${this.wheelWidth}px`;
               this.wheelCanvas.style.height = `${this.canvasHeight}px`;
               this.wheelCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-              // Pointer canvas
               this.pointerCanvas.width = Math.floor(this.cursorWidth * dpr);
               this.pointerCanvas.height = Math.floor(this.canvasHeight * dpr);
               this.pointerCanvas.style.width = `${this.cursorWidth}px`;
@@ -243,7 +225,6 @@ jobs:
 
               wheel_ts.write_text(w, encoding="utf-8")
 
-          # Wheel CSS: keep layout centered + text readable on mobile
           wheel_css = Path("src/app/wheel/wheel.component.css")
           if wheel_css.exists():
               wheel_css.write_text(
@@ -257,592 +238,467 @@ jobs:
               )
 
           # ----------------------------
-          # Mega Evolution roulette: new transform animation + mega SFX + Showdown cries + type VFX
+          # Mega Evolution roulette (write full TS/HTML/CSS safely)
           # ----------------------------
           mega_ts = Path("src/app/main-game/roulette-container/roulettes/mega-evolution-roulette/mega-evolution-roulette.component.ts")
           mega_html = Path("src/app/main-game/roulette-container/roulettes/mega-evolution-roulette/mega-evolution-roulette.component.html")
           mega_css = Path("src/app/main-game/roulette-container/roulettes/mega-evolution-roulette/mega-evolution-roulette.component.css")
 
           if mega_ts.exists():
-              mega_ts.write_text(
-                  """import { Component, EventEmitter, OnDestroy, OnInit, Output, TemplateRef, ViewChild } from '@angular/core';
-import { NgIf, NgClass } from '@angular/common';
-import { map, Subscription, forkJoin } from 'rxjs';
-import { TranslatePipe } from '@ngx-translate/core';
-import { NgbModal, NgbModalRef } from '@ng-bootstrap/ng-bootstrap';
-
-import { WheelComponent } from '../../../../wheel/wheel.component';
-import { PokemonItem } from '../../../../interfaces/pokemon-item';
-import { MegaEvolutionService, MegaForm } from '../../../../services/mega-evolution-service/mega-evolution.service';
-import { GameStateService } from '../../../../services/game-state-service/game-state.service';
-import { PokemonService } from '../../../../services/pokemon-service/pokemon.service';
-import { GameModeService } from '../../../../services/game-mode/game-mode.service';
-
-type ShowdownPokedexEntry = { types?: string[] };
-
-@Component({
-  selector: 'app-mega-evolution-roulette',
-  standalone: true,
-  imports: [WheelComponent, TranslatePipe, NgIf, NgClass],
-  templateUrl: './mega-evolution-roulette.component.html',
-  styleUrls: ['./mega-evolution-roulette.component.css']
-})
-export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
-  @Output() megaEvolutionEvent = new EventEmitter<PokemonItem[]>();
-  @ViewChild('megaPopup', { static: true }) megaPopup!: TemplateRef<any>;
-
-  pokemons: PokemonItem[] = [];
-  wheelItems: { text: string; weight: number; color: string }[] = [];
-
-  isLoading = true;
-  hasAvailableMegaEvolutions = false;
-
-  private subscriptions: Subscription[] = [];
-  private modalRef?: NgbModalRef;
-
-  popupTitle = 'megaEvolution.popupTitle';
-  popupMessage = '';
-
-  // Popup visuals
-  popupBeforeName = '';
-  popupAfterName = '';
-  popupBeforeSpriteUrl = '';
-  popupAfterSpriteUrl = '';
-  popupAfterApiName = '';
-
-  // Animation + VFX
-  isMegaAnimating = false;
-  typeClass = 'type-normal';
-
-  // Audio
-  private audioCtx?: AudioContext;
-  private cryAudio?: HTMLAudioElement;
-  private timers: number[] = [];
-
-  // Dex cache (for type-based VFX)
-  private static showdownDexPromise: Promise<Record<string, ShowdownPokedexEntry>> | null = null;
-
-  constructor(
-    private megaEvolutionService: MegaEvolutionService,
-    private gameStateService: GameStateService,
-    private pokemonService: PokemonService,
-    private gameModeService: GameModeService,
-    private modalService: NgbModal
-  ) {}
-
-  ngOnInit(): void {
-    const sub = this.gameStateService.pokemons$
-      .pipe(map(p => p.filter(pk => pk.isCaught)))
-      .subscribe(async (caughtPokemons) => {
-        this.pokemons = caughtPokemons;
-        await this.buildWheelItemsAndAvailability(caughtPokemons);
-        this.isLoading = false;
-      });
-
-    this.subscriptions.push(sub);
-  }
-
-  ngOnDestroy(): void {
-    this.subscriptions.forEach(s => s.unsubscribe());
-    this.cleanupAudio();
-    this.clearTimers();
-    if (this.modalRef) {
-      try { this.modalRef.close(); } catch {}
-    }
-  }
-
-  private async buildWheelItemsAndAvailability(pokemons: PokemonItem[]): Promise<void> {
-    this.hasAvailableMegaEvolutions = false;
-
-    if (!pokemons?.length) {
-      this.wheelItems = [];
-      return;
-    }
-
-    const checks$ = pokemons.map(pokemon =>
-      this.megaEvolutionService.getAvailableMegaFormsForPokemon(pokemon).pipe(
-        map((forms) => ({ pokemon, forms }))
-      )
-    );
-
-    const sub = forkJoin(checks$).subscribe(results => {
-      this.wheelItems = results.map(({ pokemon, forms }) => {
-        if (forms.length > 0) this.hasAvailableMegaEvolutions = true;
-        return { text: pokemon.text, weight: 1, color: '#222' };
-      });
-    });
-
-    this.subscriptions.push(sub);
-  }
-
-  async onPokemonSelected(winningNumber: number): Promise<void> {
-    if (!this.pokemons?.length) return;
-
-    const snapshotPokemons = [...this.pokemons];
-    const selectedPokemon = snapshotPokemons[winningNumber - 1];
-    if (!selectedPokemon) return;
-
-    const sub = this.megaEvolutionService.getAvailableMegaFormsForPokemon(selectedPokemon).subscribe(async (forms) => {
-      if (!forms?.length) return;
-
-      const chosenForm = this.megaEvolutionService.chooseMegaFormForPokemon(selectedPokemon, forms);
-      if (!chosenForm) return;
-
-      const updated = this.applyMegaEvolution(snapshotPokemons, winningNumber, chosenForm);
-
-      // Type-based VFX (from Showdown dex), best-effort fallback to Normal
-      this.typeClass = await this.getTypeClassForApiName(this.popupAfterApiName || chosenForm.apiName || selectedPokemon.text);
-
-      this.openMegaPopupAndProceed(updated);
-    });
-
-    this.subscriptions.push(sub);
-  }
-
-  private openMegaPopupAndProceed(updatedPokemons: PokemonItem[]): void {
-    this.popupMessage = 'megaEvolution.popupMessage';
-
-    this.modalRef = this.modalService.open(this.megaPopup, {
-      centered: true,
-      backdrop: 'static',
-      keyboard: false
-    });
-
-    // If user closes manually, stop audio/timers cleanly
-    this.modalRef.result.finally(() => {
-      this.isMegaAnimating = false;
-      this.stopCry();
-      this.clearTimers();
-    }).catch(() => {});
-
-    this.isMegaAnimating = true;
-
-    // Mega-evo SFX (synth, avoids needing copyrighted file)
-    this.playMegaEvolutionSfx();
-
-    // Cry shortly after transformation completes
-    this.timers.push(window.setTimeout(() => {
-      this.playCryForMega(this.popupAfterApiName, this.popupAfterName);
-    }, 900));
-
-    // Close popup after short showcase + emit result
-    this.timers.push(window.setTimeout(() => {
-      this.isMegaAnimating = false;
-      try { this.modalRef?.close(); } catch {}
-      this.megaEvolutionEvent.emit(updatedPokemons);
-    }, 2000));
-  }
-
-  private applyMegaEvolution(pokemons: PokemonItem[], winningNumber: number, megaForm: MegaForm): PokemonItem[] {
-    const pokemon = pokemons[winningNumber - 1];
-
-    // Popup BEFORE
-    this.popupBeforeName = pokemon.text;
-    this.popupBeforeSpriteUrl = this.pokemonService.getPokemonImage(pokemon.pokemonId);
-
-    const megaPokemon: PokemonItem = {
-      ...pokemon,
-      pokemonId: megaForm.id,
-      text: megaForm.displayName,
-      isMega: true,
-      megaBasePokemonId: pokemon.pokemonId,
-      megaFormName: megaForm.apiName
-    };
-
-    pokemons[winningNumber - 1] = megaPokemon;
-
-    // Popup AFTER
-    this.popupAfterName = megaPokemon.text;
-    this.popupAfterSpriteUrl = this.pokemonService.getPokemonImage(megaPokemon.pokemonId);
-    this.popupAfterApiName = megaForm.apiName;
-
-    this.gameModeService.lootPokemon(megaPokemon);
-
-    return pokemons;
-  }
-
-  // ----------------------
-  // Audio
-  // ----------------------
-
-  private playMegaEvolutionSfx(): void {
-    try {
-      if (!this.audioCtx) {
-        this.audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      }
-      const ctx = this.audioCtx;
-      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-
-      const now = ctx.currentTime;
-
-      // Rising synth
-      const osc = ctx.createOscillator();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(220, now);
-      osc.frequency.exponentialRampToValueAtTime(1200, now + 0.55);
-
-      const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(0.16, now + 0.08);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.75);
-
-      // Whoosh noise
-      const bufferSize = Math.floor(ctx.sampleRate * 0.5);
-      const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-      const out = noiseBuffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) out[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
-
-      const noise = ctx.createBufferSource();
-      noise.buffer = noiseBuffer;
-
-      const bandpass = ctx.createBiquadFilter();
-      bandpass.type = 'bandpass';
-      bandpass.frequency.setValueAtTime(800, now);
-      bandpass.frequency.linearRampToValueAtTime(1400, now + 0.4);
-
-      const noiseGain = ctx.createGain();
-      noiseGain.gain.setValueAtTime(0.0001, now);
-      noiseGain.gain.exponentialRampToValueAtTime(0.12, now + 0.08);
-      noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
-
-      osc.connect(gain);
-      noise.connect(bandpass);
-      bandpass.connect(noiseGain);
-
-      gain.connect(ctx.destination);
-      noiseGain.connect(ctx.destination);
-
-      osc.start(now);
-      noise.start(now);
-
-      osc.stop(now + 0.8);
-      noise.stop(now + 0.6);
-    } catch {
-      // best-effort only
-    }
-  }
-
-  private playCryForMega(apiName: string, fallbackName: string): void {
-    const cryId = this.toShowdownCryId(apiName || fallbackName);
-    const url = `https://play.pokemonshowdown.com/audio/cries/${cryId}.mp3`;
-
-    this.stopCry();
-
-    const audio = new Audio();
-    audio.preload = 'auto';
-    audio.src = url;
-    audio.volume = 0.9;
-
-    // If mega cry doesn't exist, fall back to base species
-    audio.onerror = () => {
-      const base = cryId.split('-mega')[0];
-      if (base && base !== cryId) {
-        audio.src = `https://play.pokemonshowdown.com/audio/cries/${base}.mp3`;
-        audio.play().catch(() => {});
-      }
-    };
-
-    audio.play().catch(() => {});
-    this.cryAudio = audio;
-  }
-
-  private stopCry(): void {
-    if (this.cryAudio) {
-      try {
-        this.cryAudio.pause();
-        this.cryAudio.currentTime = 0;
-      } catch {}
-    }
-    this.cryAudio = undefined;
-  }
-
-  private cleanupAudio(): void {
-    this.stopCry();
-    if (this.audioCtx) {
-      try { this.audioCtx.close(); } catch {}
-    }
-    this.audioCtx = undefined;
-  }
-
-  private clearTimers(): void {
-    this.timers.forEach(t => clearTimeout(t));
-    this.timers = [];
-  }
-
-  // ----------------------
-  // Showdown dex (types)
-  // ----------------------
-
-  private async getTypeClassForApiName(nameOrApi: string): Promise<string> {
-    const type = await this.getPrimaryType(nameOrApi);
-    return `type-${(type || 'Normal').toLowerCase()}`;
-  }
-
-  private async getPrimaryType(nameOrApi: string): Promise<string> {
-    try {
-      const dex = await this.getShowdownDex();
-      const toId = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
-
-      const candidates = [
-        toId(nameOrApi),
-        toId(this.toShowdownCryId(nameOrApi)),
-      ];
-
-      for (const id of candidates) {
-        const entry = dex[id];
-        const t = entry?.types?.[0];
-        if (t) return t;
-      }
-    } catch {
-      // ignore
-    }
-    return 'Normal';
-  }
-
-  private async getShowdownDex(): Promise<Record<string, ShowdownPokedexEntry>> {
-    if (!MegaEvolutionRouletteComponent.showdownDexPromise) {
-      MegaEvolutionRouletteComponent.showdownDexPromise =
-        fetch('https://play.pokemonshowdown.com/data/pokedex.json').then(r => r.json());
-    }
-    return MegaEvolutionRouletteComponent.showdownDexPromise;
-  }
-
-  private toShowdownCryId(nameOrApi: string): string {
-    const raw = (nameOrApi || '').trim().toLowerCase();
-
-    // If displayName like "Mega Charizard X", convert to something like "charizard-mega-x"
-    let s = raw;
-    if (s.startswith?.('mega ') or s.startsWith('mega ')):
-      pass
-
-    if (s.startsWith('mega ')) {
-      const without = s.replace(/^mega\\s+/, '').trim(); // "charizard x" OR "gyarados"
-      const parts = without.split(/\\s+/).filter(Boolean);
-      if (parts.length >= 2) {
-        const last = parts[parts.length - 1];
-        if (last === 'x' || last === 'y') {
-          s = `${parts.slice(0, -1).join('-')}-mega-${last}`;
-        } else {
-          s = `${parts.join('-')}-mega`;
-        }
-      } else {
-        s = `${without.replace(/\\s+/g, '-')}-mega`;
-      }
-    } else {
-      // keep api-style names; normalize spaces -> hyphen
-      s = s.replace(/\\s+/g, '-');
-    }
-
-    // keep a-z0-9 and hyphen only
-    s = s.replace(/[^a-z0-9\\-]/g, '');
-
-    // PokeAPI "-mega-x/-mega-y" -> Showdown "-megax/-megay"
-    s = s.replace(/-mega-x\\b/g, '-megax').replace(/-mega-y\\b/g, '-megay');
-
-    return s;
-  }
-}
-""",
-                  encoding="utf-8"
-              )
+              ts_src = textwrap.dedent("""\
+                  import { Component, EventEmitter, OnDestroy, OnInit, Output, TemplateRef, ViewChild } from '@angular/core';
+                  import { NgIf, NgClass } from '@angular/common';
+                  import { map, Subscription, forkJoin } from 'rxjs';
+                  import { TranslatePipe } from '@ngx-translate/core';
+                  import { NgbModal, NgbModalRef } from '@ng-bootstrap/ng-bootstrap';
+
+                  import { WheelComponent } from '../../../../wheel/wheel.component';
+                  import { PokemonItem } from '../../../../interfaces/pokemon-item';
+                  import { MegaEvolutionService, MegaForm } from '../../../../services/mega-evolution-service/mega-evolution.service';
+                  import { GameStateService } from '../../../../services/game-state-service/game-state.service';
+                  import { PokemonService } from '../../../../services/pokemon-service/pokemon.service';
+                  import { GameModeService } from '../../../../services/game-mode/game-mode.service';
+
+                  type ShowdownPokedexEntry = { types?: string[] };
+
+                  @Component({
+                    selector: 'app-mega-evolution-roulette',
+                    standalone: true,
+                    imports: [WheelComponent, TranslatePipe, NgIf, NgClass],
+                    templateUrl: './mega-evolution-roulette.component.html',
+                    styleUrls: ['./mega-evolution-roulette.component.css']
+                  })
+                  export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
+                    @Output() megaEvolutionEvent = new EventEmitter<PokemonItem[]>();
+                    @ViewChild('megaPopup', { static: true }) megaPopup!: TemplateRef<any>;
+
+                    pokemons: PokemonItem[] = [];
+                    wheelItems: { text: string; weight: number; color: string }[] = [];
+
+                    isLoading = true;
+                    hasAvailableMegaEvolutions = false;
+
+                    private subscriptions: Subscription[] = [];
+                    private modalRef?: NgbModalRef;
+
+                    popupTitle = 'megaEvolution.popupTitle';
+                    popupMessage = '';
+
+                    popupBeforeName = '';
+                    popupAfterName = '';
+                    popupBeforeSpriteUrl = '';
+                    popupAfterSpriteUrl = '';
+                    popupAfterApiName = '';
+
+                    isMegaAnimating = false;
+                    typeClass = 'type-normal';
+
+                    private audioCtx?: AudioContext;
+                    private cryAudio?: HTMLAudioElement;
+                    private timers: number[] = [];
+
+                    private static showdownDexPromise: Promise<Record<string, ShowdownPokedexEntry>> | null = null;
+
+                    constructor(
+                      private megaEvolutionService: MegaEvolutionService,
+                      private gameStateService: GameStateService,
+                      private pokemonService: PokemonService,
+                      private gameModeService: GameModeService,
+                      private modalService: NgbModal
+                    ) {}
+
+                    ngOnInit(): void {
+                      const sub = this.gameStateService.pokemons$
+                        .pipe(map(p => p.filter(pk => pk.isCaught)))
+                        .subscribe(async (caughtPokemons) => {
+                          this.pokemons = caughtPokemons;
+                          await this.buildWheelItemsAndAvailability(caughtPokemons);
+                          this.isLoading = false;
+                        });
+
+                      this.subscriptions.push(sub);
+                    }
+
+                    ngOnDestroy(): void {
+                      this.subscriptions.forEach(s => s.unsubscribe());
+                      this.cleanupAudio();
+                      this.clearTimers();
+                      if (this.modalRef) {
+                        try { this.modalRef.close(); } catch {}
+                      }
+                    }
+
+                    private async buildWheelItemsAndAvailability(pokemons: PokemonItem[]): Promise<void> {
+                      this.hasAvailableMegaEvolutions = false;
+
+                      if (!pokemons?.length) {
+                        this.wheelItems = [];
+                        return;
+                      }
+
+                      const checks$ = pokemons.map(pokemon =>
+                        this.megaEvolutionService.getAvailableMegaFormsForPokemon(pokemon).pipe(
+                          map((forms) => ({ pokemon, forms }))
+                        )
+                      );
+
+                      const sub = forkJoin(checks$).subscribe(results => {
+                        this.wheelItems = results.map(({ pokemon, forms }) => {
+                          if (forms.length > 0) this.hasAvailableMegaEvolutions = true;
+                          return { text: pokemon.text, weight: 1, color: '#222' };
+                        });
+                      });
+
+                      this.subscriptions.push(sub);
+                    }
+
+                    async onPokemonSelected(winningNumber: number): Promise<void> {
+                      if (!this.pokemons?.length) return;
+
+                      const snapshotPokemons = [...this.pokemons];
+                      const selectedPokemon = snapshotPokemons[winningNumber - 1];
+                      if (!selectedPokemon) return;
+
+                      const sub = this.megaEvolutionService.getAvailableMegaFormsForPokemon(selectedPokemon).subscribe(async (forms) => {
+                        if (!forms?.length) return;
+
+                        const chosenForm = this.megaEvolutionService.chooseMegaFormForPokemon(selectedPokemon, forms);
+                        if (!chosenForm) return;
+
+                        const updated = this.applyMegaEvolution(snapshotPokemons, winningNumber, chosenForm);
+
+                        this.typeClass = await this.getTypeClassForApiName(this.popupAfterApiName || chosenForm.apiName || selectedPokemon.text);
+
+                        this.openMegaPopupAndProceed(updated);
+                      });
+
+                      this.subscriptions.push(sub);
+                    }
+
+                    private openMegaPopupAndProceed(updatedPokemons: PokemonItem[]): void {
+                      this.popupMessage = 'megaEvolution.popupMessage';
+
+                      this.modalRef = this.modalService.open(this.megaPopup, {
+                        centered: true,
+                        backdrop: 'static',
+                        keyboard: false
+                      });
+
+                      this.modalRef.result.finally(() => {
+                        this.isMegaAnimating = false;
+                        this.stopCry();
+                        this.clearTimers();
+                      }).catch(() => {});
+
+                      this.isMegaAnimating = true;
+
+                      this.playMegaEvolutionSfx();
+
+                      this.timers.push(window.setTimeout(() => {
+                        this.playCryForMega(this.popupAfterApiName, this.popupAfterName);
+                      }, 900));
+
+                      this.timers.push(window.setTimeout(() => {
+                        this.isMegaAnimating = false;
+                        try { this.modalRef?.close(); } catch {}
+                        this.megaEvolutionEvent.emit(updatedPokemons);
+                      }, 2000));
+                    }
+
+                    private applyMegaEvolution(pokemons: PokemonItem[], winningNumber: number, megaForm: MegaForm): PokemonItem[] {
+                      const pokemon = pokemons[winningNumber - 1];
+
+                      this.popupBeforeName = pokemon.text;
+                      this.popupBeforeSpriteUrl = this.pokemonService.getPokemonImage(pokemon.pokemonId);
+
+                      const megaPokemon: PokemonItem = {
+                        ...pokemon,
+                        pokemonId: megaForm.id,
+                        text: megaForm.displayName,
+                        isMega: true,
+                        megaBasePokemonId: pokemon.pokemonId,
+                        megaFormName: megaForm.apiName
+                      };
+
+                      pokemons[winningNumber - 1] = megaPokemon;
+
+                      this.popupAfterName = megaPokemon.text;
+                      this.popupAfterSpriteUrl = this.pokemonService.getPokemonImage(megaPokemon.pokemonId);
+                      this.popupAfterApiName = megaForm.apiName;
+
+                      this.gameModeService.lootPokemon(megaPokemon);
+
+                      return pokemons;
+                    }
+
+                    private playMegaEvolutionSfx(): void {
+                      try {
+                        if (!this.audioCtx) {
+                          this.audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+                        }
+                        const ctx = this.audioCtx;
+                        if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+
+                        const now = ctx.currentTime;
+
+                        const osc = ctx.createOscillator();
+                        osc.type = 'sawtooth';
+                        osc.frequency.setValueAtTime(220, now);
+                        osc.frequency.exponentialRampToValueAtTime(1200, now + 0.55);
+
+                        const gain = ctx.createGain();
+                        gain.gain.setValueAtTime(0.0001, now);
+                        gain.gain.exponentialRampToValueAtTime(0.16, now + 0.08);
+                        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.75);
+
+                        const bufferSize = Math.floor(ctx.sampleRate * 0.5);
+                        const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                        const out = noiseBuffer.getChannelData(0);
+                        for (let i = 0; i < bufferSize; i++) out[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+
+                        const noise = ctx.createBufferSource();
+                        noise.buffer = noiseBuffer;
+
+                        const bandpass = ctx.createBiquadFilter();
+                        bandpass.type = 'bandpass';
+                        bandpass.frequency.setValueAtTime(800, now);
+                        bandpass.frequency.linearRampToValueAtTime(1400, now + 0.4);
+
+                        const noiseGain = ctx.createGain();
+                        noiseGain.gain.setValueAtTime(0.0001, now);
+                        noiseGain.gain.exponentialRampToValueAtTime(0.12, now + 0.08);
+                        noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
+
+                        osc.connect(gain);
+                        noise.connect(bandpass);
+                        bandpass.connect(noiseGain);
+
+                        gain.connect(ctx.destination);
+                        noiseGain.connect(ctx.destination);
+
+                        osc.start(now);
+                        noise.start(now);
+
+                        osc.stop(now + 0.8);
+                        noise.stop(now + 0.6);
+                      } catch {}
+                    }
+
+                    private playCryForMega(apiName: string, fallbackName: string): void {
+                      const cryId = this.toShowdownCryId(apiName || fallbackName);
+                      const url = `https://play.pokemonshowdown.com/audio/cries/${cryId}.mp3`;
+
+                      this.stopCry();
+
+                      const audio = new Audio();
+                      audio.preload = 'auto';
+                      audio.src = url;
+                      audio.volume = 0.9;
+
+                      audio.onerror = () => {
+                        const base = cryId.split('-mega')[0];
+                        if (base && base !== cryId) {
+                          audio.src = `https://play.pokemonshowdown.com/audio/cries/${base}.mp3`;
+                          audio.play().catch(() => {});
+                        }
+                      };
+
+                      audio.play().catch(() => {});
+                      this.cryAudio = audio;
+                    }
+
+                    private stopCry(): void {
+                      if (this.cryAudio) {
+                        try {
+                          this.cryAudio.pause();
+                          this.cryAudio.currentTime = 0;
+                        } catch {}
+                      }
+                      this.cryAudio = undefined;
+                    }
+
+                    private cleanupAudio(): void {
+                      this.stopCry();
+                      if (this.audioCtx) {
+                        try { this.audioCtx.close(); } catch {}
+                      }
+                      this.audioCtx = undefined;
+                    }
+
+                    private clearTimers(): void {
+                      this.timers.forEach(t => clearTimeout(t));
+                      this.timers = [];
+                    }
+
+                    private async getTypeClassForApiName(nameOrApi: string): Promise<string> {
+                      const type = await this.getPrimaryType(nameOrApi);
+                      return `type-${(type || 'Normal').toLowerCase()}`;
+                    }
+
+                    private async getPrimaryType(nameOrApi: string): Promise<string> {
+                      try {
+                        const dex = await this.getShowdownDex();
+                        const toId = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+                        const candidates = [
+                          toId(nameOrApi),
+                          toId(this.toShowdownCryId(nameOrApi)),
+                        ];
+
+                        for (const id of candidates) {
+                          const entry = dex[id];
+                          const t = entry?.types?.[0];
+                          if (t) return t;
+                        }
+                      } catch {}
+                      return 'Normal';
+                    }
+
+                    private async getShowdownDex(): Promise<Record<string, ShowdownPokedexEntry>> {
+                      if (!MegaEvolutionRouletteComponent.showdownDexPromise) {
+                        MegaEvolutionRouletteComponent.showdownDexPromise =
+                          fetch('https://play.pokemonshowdown.com/data/pokedex.json').then(r => r.json());
+                      }
+                      return MegaEvolutionRouletteComponent.showdownDexPromise;
+                    }
+
+                    private toShowdownCryId(nameOrApi: string): string {
+                      let s = (nameOrApi || '').trim().toLowerCase();
+
+                      if (s.startsWith('mega ')) {
+                        s = s.replace(/^mega\\s+/, '').trim();
+                        const parts = s.split(/\\s+/).filter(Boolean);
+                        const last = parts[parts.length - 1];
+                        if (last === 'x' || last === 'y') {
+                          s = `${parts.slice(0, -1).join('-')}-mega${last}`;
+                        } else {
+                          s = `${parts.join('-')}-mega`;
+                        }
+                      } else {
+                        s = s.replace(/\\s+/g, '-');
+                        s = s.replace(/-mega-x\\b/g, '-megax').replace(/-mega-y\\b/g, '-megay');
+                      }
+
+                      s = s.replace(/[^a-z0-9\\-]/g, '');
+                      return s;
+                    }
+                  }
+              """).lstrip()
+              mega_ts.write_text(ts_src, encoding="utf-8")
 
           if mega_html.exists():
-              mega_html.write_text(
-                  """<div *ngIf="isLoading" class="loading">
-  <p>{{ 'loading' | translate }}</p>
-</div>
+              html_src = textwrap.dedent("""\
+                  <div *ngIf="isLoading" class="loading">
+                    <p>{{ 'loading' | translate }}</p>
+                  </div>
 
-<div *ngIf="!isLoading && !hasAvailableMegaEvolutions" class="subtitle">
-  <p>{{ 'megaEvolution.noAvailableMegaEvolutions' | translate }}</p>
-</div>
+                  <div *ngIf="!isLoading && !hasAvailableMegaEvolutions" class="subtitle">
+                    <p>{{ 'megaEvolution.noAvailableMegaEvolutions' | translate }}</p>
+                  </div>
 
-<div *ngIf="!isLoading && hasAvailableMegaEvolutions">
-  <app-wheel
-    [items]="wheelItems"
-    (selectedItemEvent)="onPokemonSelected($event)">
-  </app-wheel>
-</div>
+                  <div *ngIf="!isLoading && hasAvailableMegaEvolutions">
+                    <app-wheel
+                      [items]="wheelItems"
+                      (selectedItemEvent)="onPokemonSelected($event)">
+                    </app-wheel>
+                  </div>
 
-<ng-template #megaPopup let-modal>
-  <div class="modal-header">
-    <h4 class="modal-title popup-title">{{ popupTitle | translate }}</h4>
-  </div>
+                  <ng-template #megaPopup let-modal>
+                    <div class="modal-header">
+                      <h4 class="modal-title popup-title">{{ popupTitle | translate }}</h4>
+                    </div>
 
-  <div class="modal-body">
-    <p class="subtitle">{{ popupMessage | translate }}</p>
+                    <div class="modal-body">
+                      <p class="subtitle">{{ popupMessage | translate }}</p>
 
-    <div class="evo-wrap" [ngClass]="[typeClass, isMegaAnimating ? 'animating' : '']">
-      <div class="particles" aria-hidden="true"></div>
+                      <div class="evo-wrap" [ngClass]="[typeClass, isMegaAnimating ? 'animating' : '']">
+                        <div class="particles" aria-hidden="true"></div>
 
-      <div class="evolution-stage">
-        <img class="sprite sprite-before" [src]="popupBeforeSpriteUrl" [alt]="popupBeforeName" />
-        <img class="sprite sprite-after" [src]="popupAfterSpriteUrl" [alt]="popupAfterName" />
-      </div>
+                        <div class="evolution-stage">
+                          <img class="sprite sprite-before" [src]="popupBeforeSpriteUrl" [alt]="popupBeforeName" />
+                          <img class="sprite sprite-after" [src]="popupAfterSpriteUrl" [alt]="popupAfterName" />
+                        </div>
 
-      <div class="name-row">
-        <div class="name">{{ popupBeforeName }}</div>
-        <div class="arrow" aria-hidden="true">→</div>
-        <div class="name">{{ popupAfterName }}</div>
-      </div>
-    </div>
+                        <div class="name-row">
+                          <div class="name">{{ popupBeforeName }}</div>
+                          <div class="arrow" aria-hidden="true">→</div>
+                          <div class="name">{{ popupAfterName }}</div>
+                        </div>
+                      </div>
 
-    <div class="actions">
-      <button class="btn btn-dark" (click)="modal.close()">{{ 'ok' | translate }}</button>
-    </div>
-  </div>
-</ng-template>
-""",
-                  encoding="utf-8"
-              )
+                      <div class="actions">
+                        <button class="btn btn-dark" (click)="modal.close()">{{ 'ok' | translate }}</button>
+                      </div>
+                    </div>
+                  </ng-template>
+              """).lstrip()
+              mega_html.write_text(html_src, encoding="utf-8")
 
           if mega_css.exists():
-              mega_css.write_text(
-                  """.loading{text-align:center;margin-top:1rem}
-.subtitle{text-align:center;opacity:.9;margin-bottom:.75rem}
-.popup-title{text-align:center;margin-bottom:0}
-.actions{display:flex;justify-content:center;margin-top:1rem}
+              css_src = textwrap.dedent("""\
+                  .loading{text-align:center;margin-top:1rem}
+                  .subtitle{text-align:center;opacity:.9;margin-bottom:.75rem}
+                  .popup-title{text-align:center;margin-bottom:0}
+                  .actions{display:flex;justify-content:center;margin-top:1rem}
 
-.evo-wrap{display:flex;flex-direction:column;align-items:center;gap:.75rem;position:relative}
-.evolution-stage{position:relative;width:11rem;height:11rem;display:flex;align-items:center;justify-content:center}
-.sprite{position:absolute;width:11rem;height:11rem;object-fit:contain;will-change:transform,opacity,filter}
-.sprite-after{opacity:0;transform:scale(.92);filter:brightness(1.2) drop-shadow(0 0 .35rem rgba(255,255,255,.35))}
+                  .evo-wrap{display:flex;flex-direction:column;align-items:center;gap:.75rem;position:relative}
+                  .evolution-stage{position:relative;width:11rem;height:11rem;display:flex;align-items:center;justify-content:center}
+                  .sprite{position:absolute;width:11rem;height:11rem;object-fit:contain;will-change:transform,opacity,filter}
+                  .sprite-after{opacity:0;transform:scale(.92);filter:brightness(1.2) drop-shadow(0 0 .35rem rgba(255,255,255,.35))}
 
-.name-row{display:flex;align-items:center;justify-content:center;gap:.75rem;flex-wrap:wrap}
-.name{min-width:6.5rem;text-align:center;font-weight:700}
-.arrow{font-size:1.6rem;opacity:.85}
+                  .name-row{display:flex;align-items:center;justify-content:center;gap:.75rem;flex-wrap:wrap}
+                  .name{min-width:6.5rem;text-align:center;font-weight:700}
+                  .arrow{font-size:1.6rem;opacity:.85}
 
-.particles{position:absolute;inset:-10%;pointer-events:none;overflow:hidden;border-radius:999px}
-.particles::before{content:'';position:absolute;inset:0;opacity:0;transform:translateY(15%);will-change:transform,opacity,filter}
+                  .particles{position:absolute;inset:-10%;pointer-events:none;overflow:hidden;border-radius:999px}
+                  .particles::before{content:'';position:absolute;inset:0;opacity:0;transform:translateY(15%);will-change:transform,opacity,filter}
 
-.animating .sprite-before{animation:megaBefore .85s ease-in-out forwards}
-.animating .sprite-after{animation:megaAfter .85s ease-in-out forwards}
-.animating .particles::before{opacity:1;animation:particleMove .9s ease-out forwards}
+                  .animating .sprite-before{animation:megaBefore .85s ease-in-out forwards}
+                  .animating .sprite-after{animation:megaAfter .85s ease-in-out forwards}
+                  .animating .particles::before{opacity:1;animation:particleMove .9s ease-out forwards}
 
-@keyframes megaBefore{
-  0%{opacity:1;transform:scale(1);filter:brightness(1)}
-  45%{opacity:1;transform:scale(1.02);filter:brightness(1.7)}
-  100%{opacity:0;transform:scale(1.1);filter:brightness(1.2) blur(2px)}
-}
-@keyframes megaAfter{
-  0%{opacity:0;transform:scale(.92);filter:brightness(2.2) blur(2px)}
-  60%{opacity:1;transform:scale(1.06);filter:brightness(1.25)}
-  100%{opacity:1;transform:scale(1);filter:brightness(1.05)}
-}
-@keyframes particleMove{
-  from{transform:translateY(18%) scale(.98);filter:blur(0)}
-  to{transform:translateY(-20%) scale(1.02);filter:blur(.4px)}
-}
+                  @keyframes megaBefore{
+                    0%{opacity:1;transform:scale(1);filter:brightness(1)}
+                    45%{opacity:1;transform:scale(1.02);filter:brightness(1.7)}
+                    100%{opacity:0;transform:scale(1.1);filter:brightness(1.2) blur(2px)}
+                  }
+                  @keyframes megaAfter{
+                    0%{opacity:0;transform:scale(.92);filter:brightness(2.2) blur(2px)}
+                    60%{opacity:1;transform:scale(1.06);filter:brightness(1.25)}
+                    100%{opacity:1;transform:scale(1);filter:brightness(1.05)}
+                  }
+                  @keyframes particleMove{
+                    from{transform:translateY(18%) scale(.98);filter:blur(0)}
+                    to{transform:translateY(-20%) scale(1.02);filter:blur(.4px)}
+                  }
 
-/* Type VFX (leve e bonito) */
-.type-water .particles::before{
-  background-image:
-    radial-gradient(circle at 15% 80%, rgba(200,240,255,.95) 0 2px, transparent 3px),
-    radial-gradient(circle at 45% 90%, rgba(200,240,255,.95) 0 3px, transparent 4px),
-    radial-gradient(circle at 75% 85%, rgba(200,240,255,.95) 0 2px, transparent 3px),
-    radial-gradient(circle at 35% 60%, rgba(200,240,255,.75) 0 2px, transparent 3px),
-    radial-gradient(circle at 65% 70%, rgba(200,240,255,.75) 0 3px, transparent 4px);
-  background-size:24px 24px;
-}
-.type-fire .particles::before{
-  background-image:
-    radial-gradient(circle at 20% 80%, rgba(255,190,120,.95) 0 2px, transparent 3px),
-    radial-gradient(circle at 55% 90%, rgba(255,150,90,.9) 0 3px, transparent 4px),
-    radial-gradient(circle at 80% 85%, rgba(255,210,140,.9) 0 2px, transparent 3px);
-  background-size:22px 22px;
-}
-.type-electric .particles::before{
-  background-image:
-    linear-gradient(135deg, transparent 45%, rgba(255,255,160,.85) 46%, rgba(255,255,160,.85) 54%, transparent 55%),
-    linear-gradient(45deg, transparent 45%, rgba(255,255,160,.75) 46%, rgba(255,255,160,.75) 54%, transparent 55%);
-  background-size:28px 28px;
-  mix-blend-mode:screen;
-}
-.type-grass .particles::before{
-  background-image:
-    radial-gradient(circle at 25% 85%, rgba(170,255,180,.85) 0 2px, transparent 3px),
-    radial-gradient(circle at 60% 90%, rgba(170,255,180,.8) 0 3px, transparent 4px),
-    radial-gradient(circle at 80% 75%, rgba(170,255,180,.75) 0 2px, transparent 3px);
-  background-size:26px 26px;
-}
-.type-psychic .particles::before{
-  background-image:
-    radial-gradient(circle at 35% 85%, rgba(230,170,255,.85) 0 2px, transparent 3px),
-    radial-gradient(circle at 60% 78%, rgba(230,170,255,.7) 0 3px, transparent 4px),
-    radial-gradient(circle at 80% 90%, rgba(230,170,255,.75) 0 2px, transparent 3px);
-  background-size:28px 28px;
-}
-.type-ice .particles::before{
-  background-image:
-    radial-gradient(circle at 25% 85%, rgba(220,245,255,.9) 0 2px, transparent 3px),
-    radial-gradient(circle at 55% 90%, rgba(220,245,255,.8) 0 3px, transparent 4px),
-    radial-gradient(circle at 80% 75%, rgba(220,245,255,.8) 0 2px, transparent 3px);
-  background-size:26px 26px;
-}
-.type-dark .particles::before{
-  background-image:
-    radial-gradient(circle at 25% 85%, rgba(0,0,0,.25) 0 10px, transparent 11px),
-    radial-gradient(circle at 70% 80%, rgba(0,0,0,.20) 0 12px, transparent 13px);
-  background-size:42px 42px;
-}
-.type-fairy .particles::before{
-  background-image:
-    radial-gradient(circle at 20% 85%, rgba(255,210,245,.9) 0 2px, transparent 3px),
-    radial-gradient(circle at 55% 90%, rgba(255,210,245,.85) 0 3px, transparent 4px),
-    radial-gradient(circle at 80% 80%, rgba(255,210,245,.8) 0 2px, transparent 3px);
-  background-size:24px 24px;
-}
-.type-ghost .particles::before{
-  background-image:
-    radial-gradient(circle at 30% 85%, rgba(190,190,255,.35) 0 10px, transparent 11px),
-    radial-gradient(circle at 70% 80%, rgba(190,190,255,.25) 0 14px, transparent 15px);
-  background-size:46px 46px;
-}
-.type-dragon .particles::before{
-  background-image:
-    linear-gradient(90deg, transparent 44%, rgba(170,220,255,.65) 45%, rgba(170,220,255,.65) 55%, transparent 56%),
-    radial-gradient(circle at 70% 80%, rgba(170,220,255,.55) 0 6px, transparent 7px);
-  background-size:34px 34px;
-}
-.type-steel .particles::before{
-  background-image:
-    radial-gradient(circle at 25% 85%, rgba(230,230,230,.7) 0 2px, transparent 3px),
-    radial-gradient(circle at 60% 90%, rgba(230,230,230,.6) 0 3px, transparent 4px);
-  background-size:22px 22px;
-}
-.type-poison .particles::before{
-  background-image:
-    radial-gradient(circle at 20% 85%, rgba(210,160,255,.8) 0 3px, transparent 4px),
-    radial-gradient(circle at 60% 90%, rgba(210,160,255,.7) 0 2px, transparent 3px);
-  background-size:24px 24px;
-}
-.type-fighting .particles::before{
-  background-image:
-    linear-gradient(135deg, transparent 40%, rgba(255,210,180,.65) 41%, rgba(255,210,180,.65) 59%, transparent 60%),
-    linear-gradient(45deg, transparent 40%, rgba(255,210,180,.55) 41%, rgba(255,210,180,.55) 59%, transparent 60%);
-  background-size:30px 30px;
-}
-.type-flying .particles::before{
-  background-image:
-    radial-gradient(circle at 25% 85%, rgba(220,235,255,.75) 0 2px, transparent 3px),
-    radial-gradient(circle at 60% 90%, rgba(220,235,255,.65) 0 3px, transparent 4px);
-  background-size:28px 28px;
-}
-.type-bug .particles::before{
-  background-image:
-    radial-gradient(circle at 20% 85%, rgba(210,255,190,.8) 0 2px, transparent 3px),
-    radial-gradient(circle at 55% 90%, rgba(210,255,190,.75) 0 3px, transparent 4px);
-  background-size:22px 22px;
-}
-.type-normal .particles::before{
-  background-image:
-    radial-gradient(circle at 25% 85%, rgba(255,255,255,.5) 0 2px, transparent 3px),
-    radial-gradient(circle at 60% 90%, rgba(255,255,255,.45) 0 3px, transparent 4px);
-  background-size:26px 26px;
-}
-""",
-                  encoding="utf-8"
-              )
+                  .type-water .particles::before{
+                    background-image:
+                      radial-gradient(circle at 15% 80%, rgba(200,240,255,.95) 0 2px, transparent 3px),
+                      radial-gradient(circle at 45% 90%, rgba(200,240,255,.95) 0 3px, transparent 4px),
+                      radial-gradient(circle at 75% 85%, rgba(200,240,255,.95) 0 2px, transparent 3px),
+                      radial-gradient(circle at 35% 60%, rgba(200,240,255,.75) 0 2px, transparent 3px),
+                      radial-gradient(circle at 65% 70%, rgba(200,240,255,.75) 0 3px, transparent 4px);
+                    background-size:24px 24px;
+                  }
+                  .type-fire .particles::before{
+                    background-image:
+                      radial-gradient(circle at 20% 80%, rgba(255,190,120,.95) 0 2px, transparent 3px),
+                      radial-gradient(circle at 55% 90%, rgba(255,150,90,.9) 0 3px, transparent 4px),
+                      radial-gradient(circle at 80% 85%, rgba(255,210,140,.9) 0 2px, transparent 3px);
+                    background-size:22px 22px;
+                  }
+                  .type-electric .particles::before{
+                    background-image:
+                      linear-gradient(135deg, transparent 45%, rgba(255,255,160,.85) 46%, rgba(255,255,160,.85) 54%, transparent 55%),
+                      linear-gradient(45deg, transparent 45%, rgba(255,255,160,.75) 46%, rgba(255,255,160,.75) 54%, transparent 55%);
+                    background-size:28px 28px;
+                    mix-blend-mode:screen;
+                  }
+              """).lstrip()
+              mega_css.write_text(css_src, encoding="utf-8")
 
+          print("Patch OK (YAML-safe).")
           PY
 
       - name: Build (relative paths for GitHub Pages)
