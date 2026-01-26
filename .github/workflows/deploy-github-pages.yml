@@ -45,23 +45,24 @@ jobs:
           mkdir -p app
           unzip -q "${{ env.ZIP_FILE }}" -d app
 
-      - name: Find project root (package.json)
+      - id: find_root
+        name: Find project root (package.json)
         run: |
           set -e
-          ROOT="$(find app -maxdepth 12 -name package.json -print -quit | xargs -r dirname)"
+          ROOT="$(find app -maxdepth 12 -name package.json -print -quit | xargs -r dirname || true)"
           if [ -z "$ROOT" ]; then
             echo "ERROR: package.json not found inside zip."
             exit 1
           fi
-          echo "PROJECT_ROOT=$ROOT" >> "$GITHUB_ENV"
+          echo "project_root=$ROOT" >> $GITHUB_OUTPUT
           echo "Project root: $ROOT"
 
       - name: Install dependencies
-        working-directory: ${{ env.PROJECT_ROOT }}
+        working-directory: ${{ steps.find_root.outputs.project_root }}
         run: npm install --legacy-peer-deps
 
       - name: Install @angular/localize (match Angular version)
-        working-directory: ${{ env.PROJECT_ROOT }}
+        working-directory: ${{ steps.find_root.outputs.project_root }}
         run: |
           set -e
           CORE_VER=$(node -p "require('./package.json').dependencies?.['@angular/core'] || require('./package.json').devDependencies?.['@angular/core'] || ''")
@@ -74,7 +75,7 @@ jobs:
           npm install "@angular/localize@$CORE_VER" --legacy-peer-deps
 
       - name: Patch (wheel sharper/bigger + Mega animation+SFX+cry + Gen 9 trainers)
-        working-directory: ${{ env.PROJECT_ROOT }}
+        working-directory: ${{ steps.find_root.outputs.project_root }}
         run: |
           set -e
 
@@ -621,27 +622,29 @@ jobs:
           PY
 
       - name: Build (relative paths for GitHub Pages)
-        working-directory: ${{ env.PROJECT_ROOT }}
+        working-directory: ${{ steps.find_root.outputs.project_root }}
         env:
           NODE_OPTIONS: --max_old_space_size=4096
         run: npm run build -- --configuration production --base-href "./" --deploy-url "./"
 
-      - name: Locate index.html for Pages
+      - id: locate_index
+        name: Locate index.html for Pages
         run: |
           set -e
-          IDX="$(find "${{ env.PROJECT_ROOT }}/dist" -maxdepth 12 -type f -name index.html -print -quit)"
+          IDX="$(find "${{ steps.find_root.outputs.project_root }}/dist" -maxdepth 12 -type f -name index.html -print -quit || true)"
           if [ -z "$IDX" ]; then
             echo "ERROR: index.html not found in dist."
             exit 1
           fi
           PAGES_DIR="$(dirname "$IDX")"
-          echo "PAGES_PATH=$PAGES_DIR" >> "$GITHUB_ENV"
+          echo "pages_path=$PAGES_DIR" >> $GITHUB_OUTPUT
           touch "$PAGES_DIR/.nojekyll"
+          echo "Pages directory: $PAGES_DIR"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ${{ env.PAGES_PATH }}
+          path: ${{ steps.locate_index.outputs.pages_path }}
 
   deploy:
     needs: build
