@@ -1,0 +1,5 @@
+<h1 class="title">{{ 'game.main.roulette.egg.title' | translate }}</h1>
+<app-wheel  #wheel
+            [items]="eggPokemon"
+            (selectedItemEvent)="onItemSelected($event)">
+</app-wheel>

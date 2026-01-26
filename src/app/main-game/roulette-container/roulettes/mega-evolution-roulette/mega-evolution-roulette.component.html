@@ -1,0 +1,48 @@
+<h1 class="title">{{ wheelTitle | translate }}</h1>
+
+<p class="subtitle" *ngIf="mode === 'select-mega-form'">Escolhendo a forma Mega...</p>
+
+<div class="loading" *ngIf="isLoading">
+  Carregando Mega Evolutions...
+</div>
+
+<app-wheel
+  *ngIf="!isLoading"
+  [items]="wheelItems"
+  (selectedItemEvent)="onItemSelected($event)">
+</app-wheel>
+
+<ng-template #megaEvolutionModal let-modal>
+  <div class="modal-body">
+    <h2 class="popup-title">Mega Evolution!</h2>
+
+    <div class="evolution-panel">
+      <!-- Type-based particle effects container -->
+      <div class="particle-container" *ngIf="popupMegaTypes.length > 0">
+        <div 
+          *ngFor="let type of popupMegaTypes" 
+          [class]="'particles particles-' + type">
+        </div>
+      </div>
+
+      <div class="pokemon fade-out">
+        <img
+          class="sprite"
+          [src]="popupBeforePokemon ? (popupBeforePokemon.shiny ? popupBeforePokemon.sprite?.front_shiny : popupBeforePokemon.sprite?.front_default) : ''"
+          alt="Before">
+        <div class="name">{{ (popupBeforePokemon?.text ?? '') | translate }}</div>
+      </div>
+
+      <div class="arrow">➜</div>
+
+      <div class="pokemon fade-in">
+        <img class="sprite" [src]="popupAfterSpriteUrl" alt="After">
+        <div class="name">{{ popupAfterName | translate }}</div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" (click)="modal.close()">Continuar</button>
+    </div>
+  </div>
+</ng-template>

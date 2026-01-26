@@ -1,0 +1,11 @@
+.game-container {
+	width: 100%;
+}
+
+.map-container {
+	flex-shrink: 0;
+	/* Prevents it from shrinking */
+	background: #222;
+	/* Optional: Background for better visibility */
+	padding: 16px;
+}

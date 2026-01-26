@@ -1,0 +1,6 @@
+<h1 class="title">{{ 'game.main.roulette.adventure.title' | translate }}</h1>
+<p class="respin-reason">{{ respinReason }}</p>
+<app-wheel  #wheel
+            [items]="actions"
+            (selectedItemEvent)="onItemSelected($event)">
+</app-wheel>
