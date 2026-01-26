@@ -37,9 +37,9 @@ jobs:
       - name: Find project root (where package.json is)
         run: |
           set -e
-          ROOT="$(find app -maxdepth 6 -name package.json -print -quit | xargs -r dirname)"
+          ROOT="$(find app -maxdepth 12 -name package.json -print -quit | xargs -r dirname)"
           if [ -z "$ROOT" ]; then
-            echo "ERROR: package.json not found inside zip (within 6 levels)."
+            echo "ERROR: package.json not found inside zip."
             exit 1
           fi
           echo "PROJECT_ROOT=$ROOT" >> $GITHUB_ENV
@@ -54,92 +54,113 @@ jobs:
         working-directory: ${{ env.PROJECT_ROOT }}
         run: |
           set -e
-          CORE_VER=$(node -p "require('./package.json').dependencies['@angular/core'] || require('./package.json').devDependencies['@angular/core']")
+          CORE_VER=$(node -p "require('./package.json').dependencies?.['@angular/core'] || require('./package.json').devDependencies?.['@angular/core'] || ''")
+          if [ -z "$CORE_VER" ]; then
+            echo "ERROR: Could not detect @angular/core version from package.json"
+            exit 1
+          fi
           echo "Detected @angular/core version: $CORE_VER"
           npm install @angular/localize@$CORE_VER --legacy-peer-deps
 
-      - name: Patch Florian/Juliana URLs (avoid hotlink issues)
+      - name: Patch Gen 9 trainer images (Florian/Juliana)
         working-directory: ${{ env.PROJECT_ROOT }}
         run: |
           set -e
-          FILE="src/app/services/trainer-service/trainer-sprite-data.ts"
-          if [ ! -f "$FILE" ]; then
-            echo "WARN: trainer sprite file not found: $FILE"
-            exit 0
-          fi
+          python3 - <<'PY'
+          from pathlib import Path
 
+          f = Path("src/app/services/trainer-service/trainer-sprite-data.ts")
+          if not f.exists():
+            print("WARN: trainer-sprite-data.ts not found")
+            raise SystemExit(0)
+
+          txt = f.read_text(encoding="utf-8")
+
+          # Replace ONLY the Gen 9 URLs (Bulbagarden -> raw GitHub)
+          txt = txt.replace(
+            "https://archives.bulbagarden.net/media/upload/6/62/Spr_Masters_Florian_2.png",
+            "https://raw.githubusercontent.com/zeroxm/pokemon-roulette-trainer-sprites/refs/heads/main/sprites/Spr_Masters_Florian_2.png"
+          )
+          txt = txt.replace(
+            "https://archives.bulbagarden.net/media/upload/4/4a/Spr_Masters_Juliana.png",
+            "https://raw.githubusercontent.com/zeroxm/pokemon-roulette-trainer-sprites/refs/heads/main/sprites/Spr_Masters_Juliana.png"
+          )
+
+          f.write_text(txt, encoding="utf-8")
+          print("Patched:", f)
+          PY
+
+      - name: Patch wheel size for mobile only (keep desktop same)
+        working-directory: ${{ env.PROJECT_ROOT }}
+        run: |
+          set -e
           python3 - <<'PY'
           import re
           from pathlib import Path
 
-          file = Path("src/app/services/trainer-service/trainer-sprite-data.ts")
-          txt = file.read_text(encoding="utf-8")
+          ts = Path("src/app/wheel/wheel.component.ts")
+          if not ts.exists():
+            print("WARN: wheel.component.ts not found")
+            raise SystemExit(0)
 
-          # Force Gen 9 (id 9) to GitHub raw images
-          txt = re.sub(
-              r"(9\s*:\s*\{\s*male\s*:\s*')([^']*)(')",
-              r"\1https://raw.githubusercontent.com/zeroxm/pokemon-roulette-trainer-sprites/refs/heads/main/sprites/Spr_Masters_Florian_2.png\3",
-              txt,
-              flags=re.MULTILINE,
-          )
-          txt = re.sub(
-              r"(9\s*:\s*\{\s*male\s*:\s*'[^']*'\s*,\s*female\s*:\s*')([^']*)(')",
-              r"\1https://raw.githubusercontent.com/zeroxm/pokemon-roulette-trainer-sprites/refs/heads/main/sprites/Spr_Masters_Juliana.png\3",
-              txt,
-              flags=re.MULTILINE,
+          txt = ts.read_text(encoding="utf-8")
+
+          # Replace the single line that sets canvasHeight:
+          # this.canvasHeight = Math.min(window.innerHeight, window.innerWidth) * 0.50;
+          pattern = r"this\.canvasHeight\s*=\s*Math\.min\(window\.innerHeight,\s*window\.innerWidth\)\s*\*\s*0\.50\s*;"
+          replacement = (
+            "const minDim = Math.min(window.innerHeight, window.innerWidth);\n"
+            "    const isMobile = window.innerWidth <= 768;\n"
+            "    this.canvasHeight = minDim * (isMobile ? 0.78 : 0.50);"
           )
 
-          file.write_text(txt, encoding="utf-8")
-          print("Patched:", file)
+          if re.search(pattern, txt):
+            txt = re.sub(pattern, replacement, txt, count=1)
+            ts.write_text(txt, encoding="utf-8")
+            print("Patched wheel size in:", ts)
+          else:
+            print("WARN: canvasHeight line not found (pattern mismatch). No change.")
           PY
 
-      - name: Patch wheel CSS for mobile (names fit better)
+      - name: Patch wheel CSS for better mobile layout
         working-directory: ${{ env.PROJECT_ROOT }}
         run: |
           set -e
           CSS="src/app/wheel/wheel.component.css"
-          if [ ! -f "$CSS" ]; then
+          if [ -f "$CSS" ]; then
+            cat > "$CSS" <<'CSSFILE'
+            .wheel-container {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
+
+            /* Texto do resultado (abaixo da roleta) */
+            .wheel-container p {
+                font-size: clamp(1.05rem, 4.6vw, 1.5rem);
+                font-weight: bold;
+                text-align: center;
+                max-width: min(92vw, 520px);
+                padding: 0 0.75rem;
+                line-height: 1.2;
+                overflow-wrap: anywhere;
+                word-break: break-word;
+                margin: 0.5rem 0 0;
+            }
+
+            /* Centraliza no mobile (remove deslocamento lateral) */
+            .canvas-container {
+                display: flex;
+                flex-direction: row;
+                align-items: center;
+                justify-content: center;
+                margin-left: 0;
+            }
+            CSSFILE
+            echo "Patched CSS: $CSS"
+          else
             echo "WARN: wheel CSS not found: $CSS"
-            exit 0
           fi
-
-          cat > "$CSS" <<'CSSFILE'
-          .wheel-container {
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-          }
-
-          /* Selected result text */
-          .wheel-container p {
-              font-size: clamp(1.0rem, 4.5vw, 1.5rem);
-              font-weight: bold;
-              text-align: center;
-              max-width: min(92vw, 520px);
-              padding: 0 0.75rem;
-              line-height: 1.2;
-              overflow-wrap: anywhere;
-              word-break: break-word;
-          }
-
-          /* Wheel + pointer */
-          .canvas-container {
-              display: flex;
-              flex-direction: row;
-              align-items: center;
-              justify-content: center;
-              margin-left: 0; /* prevents overflow on mobile */
-          }
-
-          @media (max-width: 420px) {
-              .wheel-container p {
-                  max-width: 94vw;
-                  padding: 0 0.5rem;
-              }
-          }
-          CSSFILE
-
-          echo "Patched CSS: $CSS"
 
       - name: Build (relative paths for GitHub Pages)
         working-directory: ${{ env.PROJECT_ROOT }}
@@ -150,14 +171,14 @@ jobs:
       - name: Detect Pages output folder (find index.html)
         run: |
           set -e
-          IDX="$(find "${{ env.PROJECT_ROOT }}/dist" -maxdepth 8 -type f -name "index.html" -print -quit)"
+          IDX="$(find "${{ env.PROJECT_ROOT }}/dist" -maxdepth 12 -type f -name "index.html" -print -quit)"
           if [ -z "$IDX" ]; then
             echo "ERROR: index.html not found in dist."
             exit 1
           fi
           PAGES_PATH="$(dirname "$IDX")"
-          echo "Detected Pages path: $PAGES_PATH"
           echo "PAGES_PATH=$PAGES_PATH" >> $GITHUB_ENV
+          echo "Detected Pages path: $PAGES_PATH"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
