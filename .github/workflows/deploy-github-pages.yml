@@ -62,35 +62,7 @@ jobs:
           echo "Detected @angular/core version: $CORE_VER"
           npm install @angular/localize@$CORE_VER --legacy-peer-deps
 
-      - name: Patch Gen 9 trainer images (Florian/Juliana)
-        working-directory: ${{ env.PROJECT_ROOT }}
-        run: |
-          set -e
-          python3 - <<'PY'
-          from pathlib import Path
-
-          f = Path("src/app/services/trainer-service/trainer-sprite-data.ts")
-          if not f.exists():
-            print("WARN: trainer-sprite-data.ts not found")
-            raise SystemExit(0)
-
-          txt = f.read_text(encoding="utf-8")
-
-          # Replace ONLY the Gen 9 URLs (Bulbagarden -> raw GitHub)
-          txt = txt.replace(
-            "https://archives.bulbagarden.net/media/upload/6/62/Spr_Masters_Florian_2.png",
-            "https://raw.githubusercontent.com/zeroxm/pokemon-roulette-trainer-sprites/refs/heads/main/sprites/Spr_Masters_Florian_2.png"
-          )
-          txt = txt.replace(
-            "https://archives.bulbagarden.net/media/upload/4/4a/Spr_Masters_Juliana.png",
-            "https://raw.githubusercontent.com/zeroxm/pokemon-roulette-trainer-sprites/refs/heads/main/sprites/Spr_Masters_Juliana.png"
-          )
-
-          f.write_text(txt, encoding="utf-8")
-          print("Patched:", f)
-          PY
-
-      - name: Patch wheel size for mobile only (keep desktop same)
+      - name: Patch Gen 9 trainer images + bigger/HiDPI wheel on mobile
         working-directory: ${{ env.PROJECT_ROOT }}
         run: |
           set -e
@@ -98,69 +70,112 @@ jobs:
           import re
           from pathlib import Path
 
-          ts = Path("src/app/wheel/wheel.component.ts")
-          if not ts.exists():
-            print("WARN: wheel.component.ts not found")
-            raise SystemExit(0)
-
-          txt = ts.read_text(encoding="utf-8")
-
-          # Replace the single line that sets canvasHeight:
-          # this.canvasHeight = Math.min(window.innerHeight, window.innerWidth) * 0.50;
-          pattern = r"this\.canvasHeight\s*=\s*Math\.min\(window\.innerHeight,\s*window\.innerWidth\)\s*\*\s*0\.50\s*;"
-          replacement = (
-            "const minDim = Math.min(window.innerHeight, window.innerWidth);\n"
-            "    const isMobile = window.innerWidth <= 768;\n"
-            "    this.canvasHeight = minDim * (isMobile ? 0.78 : 0.50);"
-          )
-
-          if re.search(pattern, txt):
-            txt = re.sub(pattern, replacement, txt, count=1)
-            ts.write_text(txt, encoding="utf-8")
-            print("Patched wheel size in:", ts)
+          # --- 1) Fix Gen 9 Florian/Juliana images (avoid Bulbagarden hotlink blocking) ---
+          trainer = Path("src/app/services/trainer-service/trainer-sprite-data.ts")
+          if trainer.exists():
+              txt = trainer.read_text(encoding="utf-8")
+              txt = txt.replace(
+                  "https://archives.bulbagarden.net/media/upload/6/62/Spr_Masters_Florian_2.png",
+                  "https://raw.githubusercontent.com/zeroxm/pokemon-roulette-trainer-sprites/refs/heads/main/sprites/Spr_Masters_Florian_2.png",
+              )
+              txt = txt.replace(
+                  "https://archives.bulbagarden.net/media/upload/4/4a/Spr_Masters_Juliana.png",
+                  "https://raw.githubusercontent.com/zeroxm/pokemon-roulette-trainer-sprites/refs/heads/main/sprites/Spr_Masters_Juliana.png",
+              )
+              trainer.write_text(txt, encoding="utf-8")
+              print("Patched trainer sprites:", trainer)
           else:
-            print("WARN: canvasHeight line not found (pattern mismatch). No change.")
+              print("WARN: trainer sprite file not found:", trainer)
+
+          # --- 2) Make wheel bigger on mobile + more crisp (HiDPI) ---
+          wheel_ts = Path("src/app/wheel/wheel.component.ts")
+          if wheel_ts.exists():
+              txt = wheel_ts.read_text(encoding="utf-8")
+
+              # Bigger only on mobile (desktop stays 0.50). Mobile factor set to 0.72 (tamanho aceitável).
+              txt = re.sub(
+                  r"this\.canvasHeight\s*=\s*Math\.min\(window\.innerHeight,\s*window\.innerWidth\)\s*\*\s*0\.50\s*;",
+                  "const minDim = Math.min(window.innerHeight, window.innerWidth);\n"
+                  "    const isMobile = window.innerWidth <= 768;\n"
+                  "    this.canvasHeight = minDim * (isMobile ? 0.72 : 0.50);",
+                  txt,
+                  count=1
+              )
+
+              # Insert a HiDPI setup call after contexts are created
+              if "setupHiDpiCanvases" not in txt:
+                  marker = "this.pointerCtx = this.pointerCanvas.getContext('2d')!;"
+                  if marker in txt and "this.setupHiDpiCanvases();" not in txt:
+                      txt = txt.replace(marker, marker + "\n    this.setupHiDpiCanvases();", 1)
+
+                  # Add method before the final class closing brace
+                  method = """
+  private setupHiDpiCanvases(): void {
+    const dpr = window.devicePixelRatio || 1;
+
+    // Wheel canvas
+    this.wheelCanvas.width = Math.floor(this.wheelWidth * dpr);
+    this.wheelCanvas.height = Math.floor(this.canvasHeight * dpr);
+    this.wheelCanvas.style.width = `${this.wheelWidth}px`;
+    this.wheelCanvas.style.height = `${this.canvasHeight}px`;
+    this.wheelCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    // Pointer canvas
+    this.pointerCanvas.width = Math.floor(this.cursorWidth * dpr);
+    this.pointerCanvas.height = Math.floor(this.canvasHeight * dpr);
+    this.pointerCanvas.style.width = `${this.cursorWidth}px`;
+    this.pointerCanvas.style.height = `${this.canvasHeight}px`;
+    this.pointerCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+"""
+                  # Insert method before last "}" of file
+                  txt = txt.rstrip()
+                  last_brace = txt.rfind("}")
+                  if last_brace != -1:
+                      txt = txt[:last_brace] + method + "\n" + txt[last_brace:]
+
+              wheel_ts.write_text(txt, encoding="utf-8")
+              print("Patched wheel TS:", wheel_ts)
+          else:
+              print("WARN: wheel.component.ts not found:", wheel_ts)
+
+          # --- 3) Small CSS safety to keep mobile centered and text readable (no heredoc!) ---
+          wheel_css = Path("src/app/wheel/wheel.component.css")
+          if wheel_css.exists():
+              css = """
+.wheel-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Texto do resultado (abaixo da roleta) */
+.wheel-container p {
+  font-size: clamp(1.05rem, 4.6vw, 1.5rem);
+  font-weight: bold;
+  text-align: center;
+  max-width: min(92vw, 520px);
+  padding: 0 0.75rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  margin: 0.5rem 0 0;
+}
+
+/* Centraliza no mobile */
+.canvas-container {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  margin-left: 0;
+}
+"""
+              wheel_css.write_text(css.strip() + "\n", encoding="utf-8")
+              print("Patched wheel CSS:", wheel_css)
+          else:
+              print("WARN: wheel.component.css not found:", wheel_css)
           PY
-
-      - name: Patch wheel CSS for better mobile layout
-        working-directory: ${{ env.PROJECT_ROOT }}
-        run: |
-          set -e
-          CSS="src/app/wheel/wheel.component.css"
-          if [ -f "$CSS" ]; then
-            cat > "$CSS" <<'CSSFILE'
-            .wheel-container {
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-            }
-
-            /* Texto do resultado (abaixo da roleta) */
-            .wheel-container p {
-                font-size: clamp(1.05rem, 4.6vw, 1.5rem);
-                font-weight: bold;
-                text-align: center;
-                max-width: min(92vw, 520px);
-                padding: 0 0.75rem;
-                line-height: 1.2;
-                overflow-wrap: anywhere;
-                word-break: break-word;
-                margin: 0.5rem 0 0;
-            }
-
-            /* Centraliza no mobile (remove deslocamento lateral) */
-            .canvas-container {
-                display: flex;
-                flex-direction: row;
-                align-items: center;
-                justify-content: center;
-                margin-left: 0;
-            }
-            CSSFILE
-            echo "Patched CSS: $CSS"
-          else
-            echo "WARN: wheel CSS not found: $CSS"
-          fi
 
       - name: Build (relative paths for GitHub Pages)
         working-directory: ${{ env.PROJECT_ROOT }}
