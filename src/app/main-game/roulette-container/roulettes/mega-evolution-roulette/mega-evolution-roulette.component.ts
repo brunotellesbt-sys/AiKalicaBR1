@@ -1,5 +1,5 @@
 import { Component, EventEmitter, OnDestroy, OnInit, Output, TemplateRef, ViewChild } from '@angular/core';
-import { NgIf } from '@angular/common';
+import { NgIf, NgFor } from '@angular/common';
 import { map, Subscription, forkJoin } from 'rxjs';
 import { TranslatePipe } from '@ngx-translate/core';
 import { NgbModal, NgbModalRef } from '@ng-bootstrap/ng-bootstrap';
@@ -8,12 +8,13 @@ import { WheelComponent } from '../../../../wheel/wheel.component';
 import { PokemonItem } from '../../../../interfaces/pokemon-item';
 import { MegaEvolutionService, MegaForm } from '../../../../services/mega-evolution-service/mega-evolution.service';
 import { TrainerService } from '../../../../services/trainer-service/trainer.service';
+import { AudioService } from '../../../../services/audio-service/audio.service';
 
 type MegaRouletteMode = 'select-pokemon' | 'select-mega-form';
 
 @Component({
   selector: 'app-mega-evolution-roulette',
-  imports: [WheelComponent, TranslatePipe, NgIf],
+  imports: [WheelComponent, TranslatePipe, NgIf, NgFor],
   templateUrl: './mega-evolution-roulette.component.html',
   styleUrl: './mega-evolution-roulette.component.css'
 })
@@ -40,17 +41,24 @@ export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
   popupBeforePokemon: PokemonItem | null = null;
   popupAfterName = '';
   popupAfterSpriteUrl = '';
+  popupMegaTypes: string[] = [];
 
   private subs = new Subscription();
   private modalRef: NgbModalRef | null = null;
 
+  // Audio elements
+  megaEvolutionAudio!: HTMLAudioElement;
+
   constructor(
     private trainerService: TrainerService,
     private megaEvolutionService: MegaEvolutionService,
-    private modalService: NgbModal
+    private modalService: NgbModal,
+    private audioService: AudioService
   ) {}
 
   ngOnInit(): void {
+    // Initialize audio
+    this.megaEvolutionAudio = this.audioService.createAudio('./mega-evolution.mp3');
     const team = this.trainerService.getTeam();
 
     if (!team || team.length === 0) {
@@ -145,9 +153,22 @@ export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
   }
 
   private applyMegaEvolution(pokemon: PokemonItem, megaForm: MegaForm): void {
+    // Play mega evolution sound effect
+    this.audioService.playAudio(this.megaEvolutionAudio, 0.7);
+
     // Prepare popup before we mutate the Pokémon.
     this.popupBeforePokemon = pokemon;
     this.popupAfterName = megaForm.displayName;
+
+    // Fetch types for animation
+    const typesSub = this.megaEvolutionService.getPokemonTypes(megaForm.pokemonId).subscribe({
+      next: (types) => {
+        this.popupMegaTypes = types;
+      },
+      error: () => {
+        this.popupMegaTypes = [];
+      }
+    });
 
     const sub = this.megaEvolutionService.megaEvolveForBattle(pokemon, megaForm).subscribe({
       next: () => {
@@ -167,6 +188,7 @@ export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
     });
 
     this.subs.add(sub);
+    this.subs.add(typesSub);
   }
 
   private openMegaPopupAndProceed(): void {
@@ -177,6 +199,9 @@ export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
         keyboard: false,
       });
 
+      // Play the mega evolution cry from Pokemon Showdown
+      this.playMegaCry();
+
       // Auto-close after a short moment to keep the game flow fast.
       setTimeout(() => {
         try {
@@ -184,10 +209,31 @@ export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
         } finally {
           this.megaEvolutionFinished.emit();
         }
-      }, 1200);
+      }, 2500); // Increased to allow for animation
     } catch {
       // If modal fails (shouldn't), just proceed.
       this.megaEvolutionFinished.emit();
     }
+  }
+
+  private playMegaCry(): void {
+    if (!this.popupAfterName) return;
+    
+    // Convert display name to Pokemon Showdown format
+    // e.g., "Mega Charizard X" -> "charizard-mega-x"
+    const pokemonName = this.popupAfterName
+      .toLowerCase()
+      .replace('mega ', '')
+      .trim()
+      .replace(/\s+/g, '-');
+    
+    const cryUrl = `https://play.pokemonshowdown.com/audio/cries/${pokemonName}-mega.mp3`;
+    
+    const cryAudio = this.audioService.createAudio(cryUrl);
+    
+    // Play cry after a short delay (after the transformation)
+    setTimeout(() => {
+      this.audioService.playAudio(cryAudio, 0.6);
+    }, 800);
   }
 }

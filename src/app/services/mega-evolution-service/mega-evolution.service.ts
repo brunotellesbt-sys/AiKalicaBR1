@@ -12,6 +12,8 @@ export interface MegaForm {
   apiName: string;
   /** Display name (e.g. "Mega Charizard X"). */
   displayName: string;
+  /** Pokemon types (e.g. ["fire", "flying"]). */
+  types?: string[];
 }
 
 interface PokemonSpeciesResponse {
@@ -79,6 +81,7 @@ export class MegaEvolutionService {
                 pokemonId,
                 apiName,
                 displayName: this.formatMegaDisplayName(apiName),
+                types: [], // Will be populated when needed
               } as MegaForm;
             })
             .filter((m): m is MegaForm => m !== null)
@@ -132,6 +135,25 @@ export class MegaEvolutionService {
         // If something fails, revert backup just in case.
         this.revertCurrentMegaEvolution();
         return throwError(() => error);
+      })
+    );
+  }
+
+  /**
+   * Fetches the types for a given Pokémon (by ID).
+   */
+  getPokemonTypes(pokemonId: number): Observable<string[]> {
+    const url = `${this.apiBaseUrl}/pokemon/${pokemonId}`;
+    return this.http.get<any>(url).pipe(
+      map((response) => {
+        const types = (response?.types ?? [])
+          .map((t: any) => t?.type?.name)
+          .filter((name: string) => !!name);
+        return types;
+      }),
+      catchError((error) => {
+        console.error('Failed to fetch types for', pokemonId, error);
+        return of([] as string[]);
       })
     );
   }

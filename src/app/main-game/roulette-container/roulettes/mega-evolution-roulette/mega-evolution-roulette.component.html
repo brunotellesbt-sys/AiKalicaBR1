@@ -17,7 +17,15 @@
     <h2 class="popup-title">Mega Evolution!</h2>
 
     <div class="evolution-panel">
-      <div class="pokemon">
+      <!-- Type-based particle effects container -->
+      <div class="particle-container" *ngIf="popupMegaTypes.length > 0">
+        <div 
+          *ngFor="let type of popupMegaTypes" 
+          [class]="'particles particles-' + type">
+        </div>
+      </div>
+
+      <div class="pokemon fade-out">
         <img
           class="sprite"
           [src]="popupBeforePokemon ? (popupBeforePokemon.shiny ? popupBeforePokemon.sprite?.front_shiny : popupBeforePokemon.sprite?.front_default) : ''"
@@ -27,7 +35,7 @@
 
       <div class="arrow">➜</div>
 
-      <div class="pokemon">
+      <div class="pokemon fade-in">
         <img class="sprite" [src]="popupAfterSpriteUrl" alt="After">
         <div class="name">{{ popupAfterName | translate }}</div>
       </div>
