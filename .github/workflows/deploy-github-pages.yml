@@ -74,7 +74,7 @@ jobs:
           CORE_VER="${CORE_VER#~}"
           npm install @angular/localize@$CORE_VER --legacy-peer-deps
 
-      - name: Patch (wheel HiDPI + bigger + evolutions + Gen9 trainers + Mobile PC)
+      - name: Patch (wheel + evolutions + Gen9 trainers + Mobile PC + name fallback + mega animation)
         working-directory: ${{ env.PROJECT_ROOT }}
         run: |
           set -e
@@ -90,7 +90,6 @@ jobs:
           if wheel_ts.exists():
               txt = wheel_ts.read_text(encoding="utf-8")
 
-              # Bigger wheel on mobile (keep room for pointer/cursor)
               pat = (
                   r"this\.canvasHeight\s*=\s*Math\.min\(window\.innerHeight,\s*window\.innerWidth\)\s*\*\s*0\.50\s*;\s*\n"
                   r"\s*this\.wheelWidth\s*=\s*this\.canvasHeight\s*;\s*\n"
@@ -109,7 +108,7 @@ jobs:
               )
               txt = re.sub(pat, repl, txt, count=1)
 
-              # Ensure method exists (check signature, not substring)
+              # Ensure setupHiDpiCanvases method exists
               has_method = re.search(r"\bsetupHiDpiCanvases\s*\(\)\s*:\s*void\b", txt) is not None
               if not has_method:
                   method = textwrap.dedent("""
@@ -117,14 +116,12 @@ jobs:
                     private setupHiDpiCanvases(): void {
                       const dpr = window.devicePixelRatio || 1;
 
-                      // Wheel canvas: keep CSS size, increase internal resolution
                       this.wheelCanvas.style.width = `${this.wheelWidth}px`;
                       this.wheelCanvas.style.height = `${this.canvasHeight}px`;
                       this.wheelCanvas.width = Math.floor(this.wheelWidth * dpr);
                       this.wheelCanvas.height = Math.floor(this.canvasHeight * dpr);
                       this.wheelCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-                      // Pointer canvas
                       this.pointerCanvas.style.width = `${this.cursorWidth}px`;
                       this.pointerCanvas.style.height = `${this.canvasHeight}px`;
                       this.pointerCanvas.width = Math.floor(this.cursorWidth * dpr);
@@ -139,12 +136,10 @@ jobs:
                   else:
                       txt = txt + "\n" + method
 
-              # Ensure we call setupHiDpiCanvases() after grabbing pointerCtx
               marker = "this.pointerCtx = this.pointerCanvas.getContext('2d')!;"
               if marker in txt and "this.setupHiDpiCanvases();" not in txt:
                   txt = txt.replace(marker, marker + "\n    this.setupHiDpiCanvases();", 1)
 
-              # Draw wheel in CSS pixels (not DPR-scaled canvas.width/height)
               txt = txt.replace("const centerX = this.wheelCanvas.width / 2;", "const centerX = this.wheelWidth / 2;")
               txt = txt.replace("const centerY = this.wheelCanvas.height / 2;", "const centerY = this.canvasHeight / 2;")
               txt = txt.replace("const radius = (this.wheelCanvas.width / 2);", "const radius = (this.wheelWidth / 2);")
@@ -153,7 +148,6 @@ jobs:
                   "this.wheelCtx.clearRect(0, 0, this.wheelWidth, this.canvasHeight);"
               )
 
-              # Pointer: DPR-safe and clears before drawing (keeps arrow visible)
               dp_pat = r"drawPointer\(\): void \{[\s\S]*?\n\s*\}\n\n\s*spinWheel\(\): void \{"
               dp_repl = (
                   "drawPointer(): void {\n"
@@ -180,79 +174,84 @@ jobs:
               wheel_ts.write_text(txt, encoding="utf-8")
 
           # ============================================================
-          # 2) EVOLUTIONS: rules you requested
+          # 2) EVOLUTIONS: your requested rules
           # ============================================================
           evo_service = Path("src/app/services/evolution-service/evolution.service.ts")
           if evo_service.exists():
-              evo_service.write_text(
-                  "import { Injectable } from '@angular/core';\n"
-                  "import { PokemonItem } from '../../interfaces/pokemon-item';\n"
-                  "import { evolutionChain } from './evolution-chain';\n"
-                  "import { PokemonService } from '../pokemon-service/pokemon.service';\n\n"
-                  "@Injectable({\n"
-                  "  providedIn: 'root'\n"
-                  "})\n"
-                  "export class EvolutionService {\n\n"
-                  "  constructor(private pokemonService: PokemonService) {\n"
-                  "    this.nationalDexPokemon = this.pokemonService.getAllPokemon();\n"
-                  "  }\n\n"
-                  "  evolutionChain = evolutionChain;\n"
-                  "  nationalDexPokemon: PokemonItem[];\n\n"
-                  "  private isHisuianFormId(id: number): boolean {\n"
-                  "    return id >= 10229 && id <= 10247;\n"
-                  "  }\n\n"
-                  "  // Fix: [] is truthy, so require at least one valid option\n"
-                  "  canEvolve(pokemon: PokemonItem): boolean {\n"
-                  "    return this.getEvolutions(pokemon).length > 0;\n"
-                  "  }\n\n"
-                  "  getEvolutions(pokemon: PokemonItem): PokemonItem[] {\n"
-                  "    const chain = this.evolutionChain[pokemon.pokemonId];\n"
-                  "    if (!chain || chain.length === 0) return [];\n\n"
-                  "    const evolutions: PokemonItem[] = [];\n"
-                  "    for (const evolutionId of chain) {\n"
-                  "      const evolution = this.pokemonService.getPokemonById(evolutionId);\n"
-                  "      if (evolution) evolutions.push(evolution);\n"
-                  "    }\n\n"
-                  "    // Exception: Pikachu (normal) can evolve into Alolan Raichu\n"
-                  "    if (!pokemon.basePokemonId && pokemon.pokemonId === 25) {\n"
-                  "      return evolutions;\n"
-                  "    }\n\n"
-                  "    // Regional base forms follow their own chain\n"
-                  "    if (pokemon.basePokemonId) {\n"
-                  "      return evolutions;\n"
-                  "    }\n\n"
-                  "    // Non-regional base: block regional evolutions, except Hisui forms\n"
-                  "    return evolutions.filter(evo => !evo.basePokemonId || this.isHisuianFormId(evo.pokemonId));\n"
-                  "  }\n"
-                  "}\n",
-                  encoding="utf-8"
-              )
+              evo_service.write_text(textwrap.dedent("""
+              import { Injectable } from '@angular/core';
+              import { PokemonItem } from '../../interfaces/pokemon-item';
+              import { evolutionChain } from './evolution-chain';
+              import { PokemonService } from '../pokemon-service/pokemon.service';
+
+              @Injectable({
+                providedIn: 'root'
+              })
+              export class EvolutionService {
+
+                constructor(private pokemonService: PokemonService) {
+                  this.nationalDexPokemon = this.pokemonService.getAllPokemon();
+                }
+
+                evolutionChain = evolutionChain;
+                nationalDexPokemon: PokemonItem[];
+
+                private isHisuianFormId(id: number): boolean {
+                  return id >= 10229 && id <= 10247;
+                }
+
+                // Fix: [] is truthy, so require at least one valid evolution option
+                canEvolve(pokemon: PokemonItem): boolean {
+                  return this.getEvolutions(pokemon).length > 0;
+                }
+
+                getEvolutions(pokemon: PokemonItem): PokemonItem[] {
+                  const chain = this.evolutionChain[pokemon.pokemonId];
+                  if (!chain || chain.length === 0) return [];
+
+                  const evolutions: PokemonItem[] = [];
+                  for (const evolutionId of chain) {
+                    const evolution = this.pokemonService.getPokemonById(evolutionId);
+                    if (evolution) evolutions.push(evolution);
+                  }
+
+                  // Exception: Pikachu (normal) can evolve into Alolan Raichu too
+                  if (!pokemon.basePokemonId && pokemon.pokemonId === 25) {
+                    return evolutions;
+                  }
+
+                  // Regional base: follow its own chain
+                  if (pokemon.basePokemonId) {
+                    return evolutions;
+                  }
+
+                  // Non-regional base: block regional-form evolutions, except Hisui forms
+                  return evolutions.filter(evo => !evo.basePokemonId || this.isHisuianFormId(evo.pokemonId));
+                }
+              }
+              """).strip() + "\n", encoding="utf-8")
 
           # ============================================================
-          # 3) GEN 9 TRAINERS: fix Florian + Juliana (female wrong)
+          # 3) GEN 9 TRAINERS: Florian + Juliana correct
           # ============================================================
           trainer = Path("src/app/services/trainer-service/trainer-sprite-data.ts")
           if trainer.exists():
               t = trainer.read_text(encoding="utf-8")
+              florian = "https://play.pokemonshowdown.com/sprites/trainers/florian-s.png?v=4"
+              juliana = "https://play.pokemonshowdown.com/sprites/trainers/juliana-s.png?v=4"
 
-              old_florian = "https://archives.bulbagarden.net/media/upload/6/62/Spr_Masters_Florian_2.png"
-              old_juliana = "https://archives.bulbagarden.net/media/upload/4/4a/Spr_Masters_Juliana.png"
-
-              florian = "https://play.pokemonshowdown.com/sprites/trainers/florian-s.png?v=3"
-              juliana = "https://play.pokemonshowdown.com/sprites/trainers/juliana-s.png?v=3"
-
-              # Prefer direct replacements (safe for your file format)
-              t = t.replace(old_florian, florian)
-              t = t.replace(old_juliana, juliana)
-
-              # If Juliana line accidentally became Florian, force it
-              t = re.sub(
-                  r"(9\s*:\s*\{[\s\S]*?female\s*:\s*)(['\"]).*?\2",
-                  r"\1'" + juliana + r"'",
+              t, _ = re.subn(
+                  r"(9\s*:\s*\{[\s\S]*?male\s*:\s*)(['\"])[^'\"]*\2",
+                  r"\1\2" + florian + r"\2",
                   t,
                   count=1
               )
-
+              t, _ = re.subn(
+                  r"(9\s*:\s*\{[\s\S]*?female\s*:\s*)(['\"])[^'\"]*\2",
+                  r"\1\2" + juliana + r"\2",
+                  t,
+                  count=1
+              )
               trainer.write_text(t, encoding="utf-8")
 
           # ============================================================
@@ -265,14 +264,12 @@ jobs:
           if pc_ts.exists():
               s = pc_ts.read_text(encoding="utf-8")
 
-              # Make class implement OnDestroy
               s = s.replace(
                   "export class StoragePcComponent implements OnInit {",
                   "export class StoragePcComponent implements OnInit, OnDestroy {"
               )
 
-              # Insert mobile fields after infoModalMessage (if not present)
-              if "isMobile:" not in s and "resizeHandler" not in s:
+              if "isMobile:" not in s:
                   s = s.replace(
                       "    infoModalMessage = '';\n",
                       "    infoModalMessage = '';\n\n"
@@ -282,55 +279,43 @@ jobs:
                       "    };\n"
                   )
 
-              # In ngOnInit, add resize init + listener (if not present)
               if "window.addEventListener('resize', this.resizeHandler)" not in s:
                   s = s.replace(
-                      "    ngOnInit(): void {\n"
-                      "      this.darkMode = this.darkModeService.darkMode$;\n",
-                      "    ngOnInit(): void {\n"
-                      "      this.darkMode = this.darkModeService.darkMode$;\n"
+                      "ngOnInit(): void {\n      this.darkMode = this.darkModeService.darkMode$;\n",
+                      "ngOnInit(): void {\n      this.darkMode = this.darkModeService.darkMode$;\n"
                       "      this.resizeHandler();\n"
                       "      window.addEventListener('resize', this.resizeHandler);\n"
                   )
 
-              # Add ngOnDestroy if missing
-              if "ngOnDestroy()" not in s:
-                  insert_after = "      this.gameStateService.currentState.subscribe(state => {\n        this.currentGameState = state;\n      });\n    }\n"
-                  if insert_after in s:
-                      s = s.replace(
-                          insert_after,
-                          insert_after + "\n"
-                          "    ngOnDestroy(): void {\n"
-                          "      window.removeEventListener('resize', this.resizeHandler);\n"
-                          "    }\n\n"
-                      )
+              if "ngOnDestroy(): void" not in s:
+                  # insert before last class brace
+                  last = s.rfind("\n}")
+                  if last != -1:
+                      s = s[:last] + "\n\n  ngOnDestroy(): void {\n    window.removeEventListener('resize', this.resizeHandler);\n  }\n" + s[last:]
 
-              # Add tap-to-move method if missing
               if "onTapPokemon(" not in s:
-                  # Insert before getSprite (safe spot)
                   s = s.replace(
-                      "    getSprite(pokemon: PokemonItem): string {\n",
-                      "    onTapPokemon(pokemon: PokemonItem, source: 'team' | 'stored'): void {\n"
-                      "      if (!this.isMobile) return;\n"
-                      "      if (!this.trainerTeam || !this.storedPokemon) return;\n\n"
-                      "      if (source === 'stored') {\n"
-                      "        if (this.trainerTeam.length >= 6) return;\n"
-                      "        const idx = this.storedPokemon.indexOf(pokemon);\n"
-                      "        if (idx < 0) return;\n"
-                      "        this.storedPokemon.splice(idx, 1);\n"
-                      "        this.trainerTeam.push(pokemon);\n"
-                      "        this.trainerService.updateTeam();\n"
-                      "        return;\n"
-                      "      }\n\n"
-                      "      // source === 'team'\n"
-                      "      if (this.trainerTeam.length <= 1) return;\n"
-                      "      const idx = this.trainerTeam.indexOf(pokemon);\n"
+                      "getSprite(pokemon: PokemonItem): string {",
+                      "onTapPokemon(pokemon: PokemonItem, source: 'team' | 'stored'): void {\n"
+                      "    if (!this.isMobile) return;\n"
+                      "    if (!this.trainerTeam || !this.storedPokemon) return;\n\n"
+                      "    if (source === 'stored') {\n"
+                      "      if (this.trainerTeam.length >= 6) return;\n"
+                      "      const idx = this.storedPokemon.indexOf(pokemon);\n"
                       "      if (idx < 0) return;\n"
-                      "      this.trainerTeam.splice(idx, 1);\n"
-                      "      this.storedPokemon.unshift(pokemon);\n"
+                      "      this.storedPokemon.splice(idx, 1);\n"
+                      "      this.trainerTeam.push(pokemon);\n"
                       "      this.trainerService.updateTeam();\n"
+                      "      return;\n"
                       "    }\n\n"
-                      "    getSprite(pokemon: PokemonItem): string {\n"
+                      "    if (this.trainerTeam.length <= 1) return;\n"
+                      "    const idx = this.trainerTeam.indexOf(pokemon);\n"
+                      "    if (idx < 0) return;\n"
+                      "    this.trainerTeam.splice(idx, 1);\n"
+                      "    this.storedPokemon.unshift(pokemon);\n"
+                      "    this.trainerService.updateTeam();\n"
+                      "  }\n\n"
+                      "  getSprite(pokemon: PokemonItem): string {"
                   )
 
               pc_ts.write_text(s, encoding="utf-8")
@@ -338,7 +323,6 @@ jobs:
           if pc_html.exists():
               h = pc_html.read_text(encoding="utf-8")
 
-              # Add click handler to TEAM boxes
               team_target = "            <div  class=\"example-box shadow\"\n                  cdkDrag>"
               if team_target in h and "onTapPokemon(pokemon, 'team')" not in h:
                   h = h.replace(
@@ -346,7 +330,6 @@ jobs:
                       "            <div  class=\"example-box shadow\"\n                  cdkDrag\n                  (click)=\"onTapPokemon(pokemon, 'team')\">"
                   )
 
-              # Add click handler to STORED boxes
               stored_target = "        <div  class=\"example-box shadow\"\n              [cdkDragData]=\"pokemon\"\n              cdkDrag>"
               if stored_target in h and "onTapPokemon(pokemon, 'stored')" not in h:
                   h = h.replace(
@@ -358,7 +341,6 @@ jobs:
 
           if pc_css.exists():
               c = pc_css.read_text(encoding="utf-8")
-
               if "/* MOBILE_PC_PATCH */" not in c:
                   c += "\n\n/* MOBILE_PC_PATCH */\n"
                   c += (
@@ -369,10 +351,212 @@ jobs:
                       "  .example-list{gap:10px}\n"
                       "}\n"
                   )
-
               pc_css.write_text(c, encoding="utf-8")
 
-          print("Patch OK: wheel + evolutions + Gen9 trainers + Mobile PC.")
+          # ============================================================
+          # 5) GLOBAL TRANSLATION FALLBACK (fix pokemon.tapu-koko etc)
+          # ============================================================
+          app_cfg = Path("src/app/app.config.ts")
+          if app_cfg.exists():
+              cfg = app_cfg.read_text(encoding="utf-8")
+
+              if "missingTranslationHandler" not in cfg:
+                  cfg = re.sub(
+                      r"import\s*\{\s*TranslateLoader\s*,\s*TranslateModule\s*\}\s*from\s*'@ngx-translate/core';",
+                      "import {TranslateLoader, TranslateModule, MissingTranslationHandler, MissingTranslationHandlerParams} from '@ngx-translate/core';",
+                      cfg,
+                      count=1
+                  )
+
+                  if "class FallbackMissingTranslationHandler" not in cfg:
+                      insert_point = "new TranslateHttpLoader(http, 'i18n/', '.json');"
+                      handler = textwrap.dedent("""
+
+                      class FallbackMissingTranslationHandler implements MissingTranslationHandler {
+                        private titleize(slug: string): string {
+                          const specials: Record<string, string> = {
+                            'type-null': 'Type: Null',
+                            'tapu-koko': 'Tapu Koko',
+                            'tapu-lele': 'Tapu Lele',
+                            'tapu-bulu': 'Tapu Bulu',
+                            'tapu-fini': 'Tapu Fini',
+                          };
+                          if (specials[slug]) return specials[slug];
+
+                          // Basic nice formatting
+                          let s = slug.replace(/-/g, ' ');
+                          s = s.replace(/\\b\\w/g, (c) => c.toUpperCase());
+                          return s;
+                        }
+
+                        handle(params: MissingTranslationHandlerParams) {
+                          const key = params.key || '';
+                          if (key.startsWith('pokemon.')) {
+                            const slug = key.substring('pokemon.'.length);
+                            return this.titleize(slug);
+                          }
+                          return key;
+                        }
+                      }
+                      """).rstrip() + "\n"
+
+                      if insert_point in cfg:
+                          cfg = cfg.replace(insert_point, insert_point + handler, 1)
+
+                  cfg = cfg.replace(
+                      "deps: [HttpClient]\n      },\n      defaultLanguage: 'en'",
+                      "deps: [HttpClient]\n      },\n      missingTranslationHandler: { provide: MissingTranslationHandler, useClass: FallbackMissingTranslationHandler },\n      defaultLanguage: 'en'",
+                      1
+                  )
+
+                  app_cfg.write_text(cfg, encoding="utf-8")
+
+          # ============================================================
+          # 6) MEGA EVOLUTION: fix before/after + add transformation animation
+          # ============================================================
+          mega_ts = Path("src/app/main-game/roulette-container/roulettes/mega-evolution-roulette/mega-evolution-roulette.component.ts")
+          mega_html = Path("src/app/main-game/roulette-container/roulettes/mega-evolution-roulette/mega-evolution-roulette.component.html")
+          mega_css = Path("src/app/main-game/roulette-container/roulettes/mega-evolution-roulette/mega-evolution-roulette.component.css")
+
+          if mega_ts.exists():
+              t = mega_ts.read_text(encoding="utf-8")
+
+              # Add new fields (and avoid "mega -> mega" bug)
+              if "popupBeforeSpriteUrl" not in t:
+                  t = t.replace(
+                      "  /** Data for the popup. */\n  popupBeforePokemon: PokemonItem | null = null;\n  popupAfterName = '';\n  popupAfterSpriteUrl = '';",
+                      "  /** Data for the popup. */\n"
+                      "  popupBeforePokemon: PokemonItem | null = null;\n"
+                      "  popupBeforeName = '';\n"
+                      "  popupBeforeSpriteUrl = '';\n"
+                      "  popupAfterName = '';\n"
+                      "  popupAfterSpriteUrl = '';\n"
+                      "  isMegaAnimating = false;"
+                  )
+
+              # Patch applyMegaEvolution to capture BEFORE (strings), then mutate to mega
+              if "this.popupBeforeName =" not in t:
+                  t = t.replace(
+                      "  private applyMegaEvolution(pokemon: PokemonItem, megaForm: MegaForm): void {\n    // Prepare popup before we mutate the Pokémon.\n    this.popupBeforePokemon = pokemon;\n    this.popupAfterName = megaForm.displayName;\n\n    const sub = this.megaEvolutionService.megaEvolveForBattle(pokemon, megaForm).subscribe({",
+                      "  private applyMegaEvolution(pokemon: PokemonItem, megaForm: MegaForm): void {\n"
+                      "    // Capture BEFORE values (do NOT rely on object reference, it will be mutated)\n"
+                      "    this.popupBeforePokemon = pokemon;\n"
+                      "    this.popupBeforeName = pokemon.text;\n"
+                      "    const beforeSprite = pokemon.sprite;\n"
+                      "    this.popupBeforeSpriteUrl = pokemon.shiny\n"
+                      "      ? (beforeSprite?.front_shiny || beforeSprite?.front_default || '')\n"
+                      "      : (beforeSprite?.front_default || '');\n"
+                      "    this.popupAfterName = megaForm.displayName;\n\n"
+                      "    const sub = this.megaEvolutionService.megaEvolveForBattle(pokemon, megaForm).subscribe({"
+                  )
+
+              # Replace openMegaPopupAndProceed with animation-safe version (emit once)
+              t = re.sub(
+                  r"private openMegaPopupAndProceed\(\): void \{[\s\S]*?\n\s*\}\n\}",
+                  textwrap.dedent("""
+                  private openMegaPopupAndProceed(): void {
+                    try {
+                      this.isMegaAnimating = true;
+
+                      this.modalRef = this.modalService.open(this.megaEvolutionModal, {
+                        centered: true,
+                        backdrop: 'static',
+                        keyboard: false,
+                      });
+
+                      const done = () => {
+                        this.isMegaAnimating = false;
+                        this.megaEvolutionFinished.emit();
+                      };
+
+                      setTimeout(() => {
+                        try { this.modalRef?.close(); } catch {}
+                      }, 1200);
+
+                      this.modalRef.result.then(done).catch(done);
+                    } catch {
+                      this.isMegaAnimating = false;
+                      this.megaEvolutionFinished.emit();
+                    }
+                  }
+                  }
+                  """).rstrip(),
+                  t,
+                  count=1
+              )
+
+              mega_ts.write_text(t + "\n", encoding="utf-8")
+
+          if mega_html.exists():
+              h = mega_html.read_text(encoding="utf-8")
+              # Replace the modal panel block to use BEFORE strings + animation class
+              h = re.sub(
+                  r"<div class=\"evolution-panel\">[\s\S]*?</div>\s*</div>\s*<div class=\"actions\">",
+                  textwrap.dedent("""
+                  <div class="evolution-panel" [class.animating]="isMegaAnimating">
+                    <div class="pokemon before">
+                      <img class="sprite before-sprite" [src]="popupBeforeSpriteUrl" alt="Before">
+                      <div class="name">{{ popupBeforeName | translate }}</div>
+                    </div>
+
+                    <div class="arrow">➜</div>
+
+                    <div class="pokemon after">
+                      <img class="sprite after-sprite" [src]="popupAfterSpriteUrl" alt="After">
+                      <div class="name">{{ popupAfterName | translate }}</div>
+                    </div>
+                  </div>
+                  </div>
+                  <div class="actions">
+                  """).strip(),
+                  h,
+                  count=1
+              )
+              mega_html.write_text(h, encoding="utf-8")
+
+          if mega_css.exists():
+              c = mega_css.read_text(encoding="utf-8")
+              if "/* MEGA_ANIM_PATCH */" not in c:
+                  c += "\n\n/* MEGA_ANIM_PATCH */\n"
+                  c += textwrap.dedent("""
+                  .evolution-panel.animating .before-sprite {
+                    animation: megaBefore 1.2s ease-in-out forwards;
+                  }
+
+                  .after-sprite {
+                    opacity: 0;
+                    transform: scale(0.85);
+                  }
+
+                  .evolution-panel.animating .after-sprite {
+                    animation: megaAfter 1.2s ease-in-out forwards;
+                    animation-delay: 0.35s;
+                  }
+
+                  .evolution-panel.animating .arrow {
+                    animation: megaArrow 1.2s ease-in-out infinite;
+                  }
+
+                  @keyframes megaBefore {
+                    0%   { opacity: 1; transform: scale(1); filter: none; }
+                    55%  { opacity: 0.15; transform: scale(1.35); filter: brightness(1.6) drop-shadow(0 0 10px rgba(255,255,255,0.7)); }
+                    100% { opacity: 0; transform: scale(0.75); filter: none; }
+                  }
+
+                  @keyframes megaAfter {
+                    0%   { opacity: 0; transform: scale(0.75); filter: brightness(1.1) drop-shadow(0 0 0 rgba(0,0,0,0)); }
+                    60%  { opacity: 1; transform: scale(1.2); filter: brightness(1.4) drop-shadow(0 0 12px rgba(255,255,255,0.75)); }
+                    100% { opacity: 1; transform: scale(1); filter: none; }
+                  }
+
+                  @keyframes megaArrow {
+                    0%, 100% { transform: scale(1); opacity: 0.85; }
+                    50%      { transform: scale(1.15); opacity: 1; }
+                  }
+                  """).strip() + "\n"
+              mega_css.write_text(c, encoding="utf-8")
+
+          print("Patch OK: wheel + evolutions + Gen9 trainers + Mobile PC + fallback names + mega animation.")
           PY
 
       - name: Build (relative paths for GitHub Pages)
