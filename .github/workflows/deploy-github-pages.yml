@@ -1,10 +1,10 @@
 name: Deploy to GitHub Pages (from zip)
 
-"on":
+on:
   push:
     branches:
       - main
-  workflow_dispatch: {}
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,10 +15,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 18
@@ -28,9 +28,10 @@ jobs:
           rm -rf app
           mkdir -p app
           unzip -q pokemon-roulette-source.zip -d app
+          echo "Top-level of app:"
           ls -la app
 
-      - name: Find project root
+      - name: Find project root (package.json)
         run: |
           set -e
           ROOT="$(find app -maxdepth 12 -name package.json -print -quit | xargs -r dirname)"
@@ -40,6 +41,7 @@ jobs:
           fi
           echo "PROJECT_ROOT=$ROOT" >> $GITHUB_ENV
           echo "Found project root: $ROOT"
+          ls -la "$ROOT"
 
       - name: Install dependencies
         working-directory: ${{ env.PROJECT_ROOT }}
@@ -50,10 +52,14 @@ jobs:
         run: |
           set -e
           CORE_VER=$(node -p "require('./package.json').dependencies?.['@angular/core'] || require('./package.json').devDependencies?.['@angular/core'] || ''")
+          if [ -z "$CORE_VER" ]; then
+            echo "ERROR: Could not detect @angular/core version from package.json"
+            exit 1
+          fi
           echo "Detected @angular/core version: $CORE_VER"
           npm install @angular/localize@$CORE_VER --legacy-peer-deps
 
-      - name: Patch Gen 9 trainer images + mobile wheel bigger + HiDPI
+      - name: Patch (Gen 9 images + bigger & sharper wheel on mobile)
         working-directory: ${{ env.PROJECT_ROOT }}
         run: |
           set -e
@@ -61,26 +67,29 @@ jobs:
           import re
           from pathlib import Path
 
-          # 1) Fix Gen 9 images (Florian/Juliana)
+          # 1) Fix Gen 9 Florian/Juliana images (avoid Bulbagarden blocking)
           trainer = Path("src/app/services/trainer-service/trainer-sprite-data.ts")
           if trainer.exists():
               txt = trainer.read_text(encoding="utf-8")
               txt = txt.replace(
                   "https://archives.bulbagarden.net/media/upload/6/62/Spr_Masters_Florian_2.png",
-                  "https://raw.githubusercontent.com/zeroxm/pokemon-roulette-trainer-sprites/refs/heads/main/sprites/Spr_Masters_Florian_2.png",
+                  "https://raw.githubusercontent.com/zeroxm/pokemon-roulette-trainer-sprites/refs/heads/main/sprites/Spr_Masters_Florian_2.png"
               )
               txt = txt.replace(
                   "https://archives.bulbagarden.net/media/upload/4/4a/Spr_Masters_Juliana.png",
-                  "https://raw.githubusercontent.com/zeroxm/pokemon-roulette-trainer-sprites/refs/heads/main/sprites/Spr_Masters_Juliana.png",
+                  "https://raw.githubusercontent.com/zeroxm/pokemon-roulette-trainer-sprites/refs/heads/main/sprites/Spr_Masters_Juliana.png"
               )
               trainer.write_text(txt, encoding="utf-8")
+              print("Patched trainer sprites:", trainer)
+          else:
+              print("WARN: trainer-sprite-data.ts not found")
 
-          # 2) Mobile wheel bigger + crisp (HiDPI)
+          # 2) Bigger wheel on mobile + HiDPI for sharpness (desktop unchanged)
           wheel_ts = Path("src/app/wheel/wheel.component.ts")
           if wheel_ts.exists():
               txt = wheel_ts.read_text(encoding="utf-8")
 
-              # mobile factor 0.72 / desktop 0.50
+              # Make the wheel bigger only on mobile
               txt = re.sub(
                   r"this\.canvasHeight\s*=\s*Math\.min\(window\.innerHeight,\s*window\.innerWidth\)\s*\*\s*0\.50\s*;",
                   "const minDim = Math.min(window.innerHeight, window.innerWidth);\n"
@@ -90,7 +99,7 @@ jobs:
                   count=1
               )
 
-              # Add HiDPI helper if missing
+              # Add HiDPI method once
               if "setupHiDpiCanvases" not in txt:
                   marker = "this.pointerCtx = this.pointerCanvas.getContext('2d')!;"
                   if marker in txt and "this.setupHiDpiCanvases();" not in txt:
@@ -118,33 +127,42 @@ jobs:
                       txt = txt[:last] + method + "\n" + txt[last:]
 
               wheel_ts.write_text(txt, encoding="utf-8")
+              print("Patched wheel TS:", wheel_ts)
+          else:
+              print("WARN: wheel.component.ts not found")
 
-          # 3) Simple CSS overwrite (no heredoc)
+          # 3) Small CSS for result text on mobile (no heredoc)
           wheel_css = Path("src/app/wheel/wheel.component.css")
           if wheel_css.exists():
-              css = """
-.wheel-container{display:flex;flex-direction:column;align-items:center}
-.wheel-container p{font-size:clamp(1.05rem,4.6vw,1.5rem);font-weight:700;text-align:center;max-width:min(92vw,520px);padding:0 .75rem;line-height:1.2;overflow-wrap:anywhere;word-break:break-word;margin:.5rem 0 0}
-.canvas-container{display:flex;flex-direction:row;align-items:center;justify-content:center;margin-left:0}
-"""
-              wheel_css.write_text(css.strip()+"\n", encoding="utf-8")
+              css = (
+                  ".wheel-container{display:flex;flex-direction:column;align-items:center}\n"
+                  ".wheel-container p{font-size:clamp(1.05rem,4.6vw,1.5rem);font-weight:700;text-align:center;"
+                  "max-width:min(92vw,520px);padding:0 .75rem;line-height:1.2;overflow-wrap:anywhere;word-break:break-word;"
+                  "margin:.5rem 0 0}\n"
+                  ".canvas-container{display:flex;flex-direction:row;align-items:center;justify-content:center;margin-left:0}\n"
+              )
+              wheel_css.write_text(css, encoding="utf-8")
+              print("Patched wheel CSS:", wheel_css)
+          else:
+              print("WARN: wheel.component.css not found")
           PY
 
-      - name: Build (relative paths for Pages)
+      - name: Build (relative paths for GitHub Pages)
         working-directory: ${{ env.PROJECT_ROOT }}
         env:
           NODE_OPTIONS: --max_old_space_size=4096
         run: npm run build -- --configuration production --base-href "./" --deploy-url "./"
 
-      - name: Detect Pages folder
+      - name: Locate index.html for Pages
         run: |
           set -e
-          IDX="$(find "${{ env.PROJECT_ROOT }}/dist" -maxdepth 12 -type f -name "index.html" -print -quit)"
+          IDX="$(find "${{ env.PROJECT_ROOT }}/dist" -maxdepth 12 -type f -name index.html -print -quit)"
           if [ -z "$IDX" ]; then
             echo "ERROR: index.html not found in dist."
             exit 1
           fi
           echo "PAGES_PATH=$(dirname "$IDX")" >> $GITHUB_ENV
+          echo "Pages path: $(dirname "$IDX")"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
