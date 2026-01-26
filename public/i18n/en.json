@@ -219,7 +219,7 @@
         },
         "gym": {
           "against": "Battle against Gym Leader",
-          "defeated": "Defeated?",
+          "defeated": "Gym Leader Defeated?",
           "go": "Let's Go!",
           "used": "Used a"
         },

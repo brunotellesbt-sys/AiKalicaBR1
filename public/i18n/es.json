@@ -218,7 +218,7 @@
         },
         "gym": {
           "against": "Combate contra el Líder de Gimnasio",
-          "defeated": "Derrotado?",
+          "defeated": "¿Líder de Gimnasio Derrotado?",
           "go": "¡Vamos!",
           "used": "Usó un(a)"
         },

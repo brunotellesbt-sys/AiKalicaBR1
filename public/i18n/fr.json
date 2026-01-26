@@ -218,7 +218,7 @@
         },
         "gym": {
           "against": "Combat contre le Champion d'Arène",
-          "defeated": "Vaincu ?",
+          "defeated": "Champion d'Arène Vaincu ?",
           "go": "C'est parti !",
           "used": "A utilisé un(e)"
         },

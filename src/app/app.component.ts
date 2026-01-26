@@ -13,16 +13,14 @@ export class AppComponent {
   title = 'pokemon-roulette';
 
   constructor(private translate: TranslateService) {
-    // English-only build
-    this.translate.addLangs(['en']);
+    // Set up supported languages
+    this.translate.addLangs(['en', 'pt', 'es', 'fr']);
     this.translate.setDefaultLang('en');
     this.translate.use('en');
   }
 
   changeLang(lang: string) {
-    // Keep method for template compatibility; ignore non-English.
-    if (lang === 'en') {
-      this.translate.use('en');
-    }
+    // Support all languages
+    this.translate.use(lang);
   }
 }
