@@ -1,18 +1,15 @@
 name: Deploy to GitHub Pages (from zip)
 
-on:
+"on":
   push:
-    branches: ["main"]
-  workflow_dispatch:
+    branches:
+      - main
+  workflow_dispatch: {}
 
 permissions:
   contents: read
   pages: write
   id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: true
 
 jobs:
   build:
@@ -31,10 +28,9 @@ jobs:
           rm -rf app
           mkdir -p app
           unzip -q pokemon-roulette-source.zip -d app
-          echo "=== app content (top level) ==="
           ls -la app
 
-      - name: Find project root (where package.json is)
+      - name: Find project root
         run: |
           set -e
           ROOT="$(find app -maxdepth 12 -name package.json -print -quit | xargs -r dirname)"
@@ -44,7 +40,6 @@ jobs:
           fi
           echo "PROJECT_ROOT=$ROOT" >> $GITHUB_ENV
           echo "Found project root: $ROOT"
-          ls -la "$ROOT"
 
       - name: Install dependencies
         working-directory: ${{ env.PROJECT_ROOT }}
@@ -55,14 +50,10 @@ jobs:
         run: |
           set -e
           CORE_VER=$(node -p "require('./package.json').dependencies?.['@angular/core'] || require('./package.json').devDependencies?.['@angular/core'] || ''")
-          if [ -z "$CORE_VER" ]; then
-            echo "ERROR: Could not detect @angular/core version from package.json"
-            exit 1
-          fi
           echo "Detected @angular/core version: $CORE_VER"
           npm install @angular/localize@$CORE_VER --legacy-peer-deps
 
-      - name: Patch Gen 9 trainer images + bigger/HiDPI wheel on mobile
+      - name: Patch Gen 9 trainer images + mobile wheel bigger + HiDPI
         working-directory: ${{ env.PROJECT_ROOT }}
         run: |
           set -e
@@ -70,7 +61,7 @@ jobs:
           import re
           from pathlib import Path
 
-          # --- 1) Fix Gen 9 Florian/Juliana images (avoid Bulbagarden hotlink blocking) ---
+          # 1) Fix Gen 9 images (Florian/Juliana)
           trainer = Path("src/app/services/trainer-service/trainer-sprite-data.ts")
           if trainer.exists():
               txt = trainer.read_text(encoding="utf-8")
@@ -83,16 +74,13 @@ jobs:
                   "https://raw.githubusercontent.com/zeroxm/pokemon-roulette-trainer-sprites/refs/heads/main/sprites/Spr_Masters_Juliana.png",
               )
               trainer.write_text(txt, encoding="utf-8")
-              print("Patched trainer sprites:", trainer)
-          else:
-              print("WARN: trainer sprite file not found:", trainer)
 
-          # --- 2) Make wheel bigger on mobile + more crisp (HiDPI) ---
+          # 2) Mobile wheel bigger + crisp (HiDPI)
           wheel_ts = Path("src/app/wheel/wheel.component.ts")
           if wheel_ts.exists():
               txt = wheel_ts.read_text(encoding="utf-8")
 
-              # Bigger only on mobile (desktop stays 0.50). Mobile factor set to 0.72 (tamanho aceitável).
+              # mobile factor 0.72 / desktop 0.50
               txt = re.sub(
                   r"this\.canvasHeight\s*=\s*Math\.min\(window\.innerHeight,\s*window\.innerWidth\)\s*\*\s*0\.50\s*;",
                   "const minDim = Math.min(window.innerHeight, window.innerWidth);\n"
@@ -102,25 +90,22 @@ jobs:
                   count=1
               )
 
-              # Insert a HiDPI setup call after contexts are created
+              # Add HiDPI helper if missing
               if "setupHiDpiCanvases" not in txt:
                   marker = "this.pointerCtx = this.pointerCanvas.getContext('2d')!;"
                   if marker in txt and "this.setupHiDpiCanvases();" not in txt:
                       txt = txt.replace(marker, marker + "\n    this.setupHiDpiCanvases();", 1)
 
-                  # Add method before the final class closing brace
                   method = """
   private setupHiDpiCanvases(): void {
     const dpr = window.devicePixelRatio || 1;
 
-    // Wheel canvas
     this.wheelCanvas.width = Math.floor(this.wheelWidth * dpr);
     this.wheelCanvas.height = Math.floor(this.canvasHeight * dpr);
     this.wheelCanvas.style.width = `${this.wheelWidth}px`;
     this.wheelCanvas.style.height = `${this.canvasHeight}px`;
     this.wheelCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    // Pointer canvas
     this.pointerCanvas.width = Math.floor(this.cursorWidth * dpr);
     this.pointerCanvas.height = Math.floor(this.canvasHeight * dpr);
     this.pointerCanvas.style.width = `${this.cursorWidth}px`;
@@ -128,62 +113,30 @@ jobs:
     this.pointerCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 """
-                  # Insert method before last "}" of file
-                  txt = txt.rstrip()
-                  last_brace = txt.rfind("}")
-                  if last_brace != -1:
-                      txt = txt[:last_brace] + method + "\n" + txt[last_brace:]
+                  last = txt.rfind("}")
+                  if last != -1:
+                      txt = txt[:last] + method + "\n" + txt[last:]
 
               wheel_ts.write_text(txt, encoding="utf-8")
-              print("Patched wheel TS:", wheel_ts)
-          else:
-              print("WARN: wheel.component.ts not found:", wheel_ts)
 
-          # --- 3) Small CSS safety to keep mobile centered and text readable (no heredoc!) ---
+          # 3) Simple CSS overwrite (no heredoc)
           wheel_css = Path("src/app/wheel/wheel.component.css")
           if wheel_css.exists():
               css = """
-.wheel-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-/* Texto do resultado (abaixo da roleta) */
-.wheel-container p {
-  font-size: clamp(1.05rem, 4.6vw, 1.5rem);
-  font-weight: bold;
-  text-align: center;
-  max-width: min(92vw, 520px);
-  padding: 0 0.75rem;
-  line-height: 1.2;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  margin: 0.5rem 0 0;
-}
-
-/* Centraliza no mobile */
-.canvas-container {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  margin-left: 0;
-}
+.wheel-container{display:flex;flex-direction:column;align-items:center}
+.wheel-container p{font-size:clamp(1.05rem,4.6vw,1.5rem);font-weight:700;text-align:center;max-width:min(92vw,520px);padding:0 .75rem;line-height:1.2;overflow-wrap:anywhere;word-break:break-word;margin:.5rem 0 0}
+.canvas-container{display:flex;flex-direction:row;align-items:center;justify-content:center;margin-left:0}
 """
-              wheel_css.write_text(css.strip() + "\n", encoding="utf-8")
-              print("Patched wheel CSS:", wheel_css)
-          else:
-              print("WARN: wheel.component.css not found:", wheel_css)
+              wheel_css.write_text(css.strip()+"\n", encoding="utf-8")
           PY
 
-      - name: Build (relative paths for GitHub Pages)
+      - name: Build (relative paths for Pages)
         working-directory: ${{ env.PROJECT_ROOT }}
         env:
           NODE_OPTIONS: --max_old_space_size=4096
         run: npm run build -- --configuration production --base-href "./" --deploy-url "./"
 
-      - name: Detect Pages output folder (find index.html)
+      - name: Detect Pages folder
         run: |
           set -e
           IDX="$(find "${{ env.PROJECT_ROOT }}/dist" -maxdepth 12 -type f -name "index.html" -print -quit)"
@@ -191,9 +144,7 @@ jobs:
             echo "ERROR: index.html not found in dist."
             exit 1
           fi
-          PAGES_PATH="$(dirname "$IDX")"
-          echo "PAGES_PATH=$PAGES_PATH" >> $GITHUB_ENV
-          echo "Detected Pages path: $PAGES_PATH"
+          echo "PAGES_PATH=$(dirname "$IDX")" >> $GITHUB_ENV
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
@@ -205,8 +156,6 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Deploy to GitHub Pages
-        id: deployment
         uses: actions/deploy-pages@v4
