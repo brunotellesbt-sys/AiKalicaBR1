@@ -74,7 +74,7 @@ jobs:
           CORE_VER="${CORE_VER#~}"
           npm install @angular/localize@$CORE_VER --legacy-peer-deps
 
-      - name: Patch (wheel HiDPI + bigger + evolutions + Gen9 trainer fix)
+      - name: Patch (wheel HiDPI + bigger + evolutions + Gen9 trainers + Mobile PC)
         working-directory: ${{ env.PROJECT_ROOT }}
         run: |
           set -e
@@ -229,35 +229,150 @@ jobs:
               )
 
           # ============================================================
-          # 3) GEN 9 TRAINERS: force Florian + Juliana (fix female sprite)
+          # 3) GEN 9 TRAINERS: fix Florian + Juliana (female wrong)
           # ============================================================
           trainer = Path("src/app/services/trainer-service/trainer-sprite-data.ts")
           if trainer.exists():
               t = trainer.read_text(encoding="utf-8")
 
+              old_florian = "https://archives.bulbagarden.net/media/upload/6/62/Spr_Masters_Florian_2.png"
+              old_juliana = "https://archives.bulbagarden.net/media/upload/4/4a/Spr_Masters_Juliana.png"
+
               florian = "https://play.pokemonshowdown.com/sprites/trainers/florian-s.png?v=3"
               juliana = "https://play.pokemonshowdown.com/sprites/trainers/juliana-s.png?v=3"
 
-              t, n1 = re.subn(
-                  r"(9\s*:\s*\{[\s\S]*?male\s*:\s*)(['\"])[^'\"]*\2",
-                  r"\1\2" + florian + r"\2",
-                  t,
-                  count=1
-              )
-              t, n2 = re.subn(
-                  r"(9\s*:\s*\{[\s\S]*?female\s*:\s*)(['\"])[^'\"]*\2",
-                  r"\1\2" + juliana + r"\2",
-                  t,
-                  count=1
-              )
+              # Prefer direct replacements (safe for your file format)
+              t = t.replace(old_florian, florian)
+              t = t.replace(old_juliana, juliana)
 
-              # If female didn't match due to formatting, hard-force a safe fallback:
-              if n2 == 0:
-                  t = re.sub(r"(female\s*:\s*)(['\"]).*?\2", r"\1'" + juliana + r"'", t, count=1)
+              # If Juliana line accidentally became Florian, force it
+              t = re.sub(
+                  r"(9\s*:\s*\{[\s\S]*?female\s*:\s*)(['\"]).*?\2",
+                  r"\1'" + juliana + r"'",
+                  t,
+                  count=1
+              )
 
               trainer.write_text(t, encoding="utf-8")
 
-          print("Patch OK: wheel + evolutions + Gen9 trainers.")
+          # ============================================================
+          # 4) MOBILE PC: always accessible + tap-to-move on mobile
+          # ============================================================
+          pc_ts = Path("src/app/trainer-team/storage-pc/storage-pc.component.ts")
+          pc_html = Path("src/app/trainer-team/storage-pc/storage-pc.component.html")
+          pc_css = Path("src/app/trainer-team/storage-pc/storage-pc.component.css")
+
+          if pc_ts.exists():
+              s = pc_ts.read_text(encoding="utf-8")
+
+              # Make class implement OnDestroy
+              s = s.replace(
+                  "export class StoragePcComponent implements OnInit {",
+                  "export class StoragePcComponent implements OnInit, OnDestroy {"
+              )
+
+              # Insert mobile fields after infoModalMessage (if not present)
+              if "isMobile:" not in s and "resizeHandler" not in s:
+                  s = s.replace(
+                      "    infoModalMessage = '';\n",
+                      "    infoModalMessage = '';\n\n"
+                      "    isMobile: boolean = false;\n"
+                      "    private readonly resizeHandler = () => {\n"
+                      "      this.isMobile = window.innerWidth <= 768;\n"
+                      "    };\n"
+                  )
+
+              # In ngOnInit, add resize init + listener (if not present)
+              if "window.addEventListener('resize', this.resizeHandler)" not in s:
+                  s = s.replace(
+                      "    ngOnInit(): void {\n"
+                      "      this.darkMode = this.darkModeService.darkMode$;\n",
+                      "    ngOnInit(): void {\n"
+                      "      this.darkMode = this.darkModeService.darkMode$;\n"
+                      "      this.resizeHandler();\n"
+                      "      window.addEventListener('resize', this.resizeHandler);\n"
+                  )
+
+              # Add ngOnDestroy if missing
+              if "ngOnDestroy()" not in s:
+                  insert_after = "      this.gameStateService.currentState.subscribe(state => {\n        this.currentGameState = state;\n      });\n    }\n"
+                  if insert_after in s:
+                      s = s.replace(
+                          insert_after,
+                          insert_after + "\n"
+                          "    ngOnDestroy(): void {\n"
+                          "      window.removeEventListener('resize', this.resizeHandler);\n"
+                          "    }\n\n"
+                      )
+
+              # Add tap-to-move method if missing
+              if "onTapPokemon(" not in s:
+                  # Insert before getSprite (safe spot)
+                  s = s.replace(
+                      "    getSprite(pokemon: PokemonItem): string {\n",
+                      "    onTapPokemon(pokemon: PokemonItem, source: 'team' | 'stored'): void {\n"
+                      "      if (!this.isMobile) return;\n"
+                      "      if (!this.trainerTeam || !this.storedPokemon) return;\n\n"
+                      "      if (source === 'stored') {\n"
+                      "        if (this.trainerTeam.length >= 6) return;\n"
+                      "        const idx = this.storedPokemon.indexOf(pokemon);\n"
+                      "        if (idx < 0) return;\n"
+                      "        this.storedPokemon.splice(idx, 1);\n"
+                      "        this.trainerTeam.push(pokemon);\n"
+                      "        this.trainerService.updateTeam();\n"
+                      "        return;\n"
+                      "      }\n\n"
+                      "      // source === 'team'\n"
+                      "      if (this.trainerTeam.length <= 1) return;\n"
+                      "      const idx = this.trainerTeam.indexOf(pokemon);\n"
+                      "      if (idx < 0) return;\n"
+                      "      this.trainerTeam.splice(idx, 1);\n"
+                      "      this.storedPokemon.unshift(pokemon);\n"
+                      "      this.trainerService.updateTeam();\n"
+                      "    }\n\n"
+                      "    getSprite(pokemon: PokemonItem): string {\n"
+                  )
+
+              pc_ts.write_text(s, encoding="utf-8")
+
+          if pc_html.exists():
+              h = pc_html.read_text(encoding="utf-8")
+
+              # Add click handler to TEAM boxes
+              team_target = "            <div  class=\"example-box shadow\"\n                  cdkDrag>"
+              if team_target in h and "onTapPokemon(pokemon, 'team')" not in h:
+                  h = h.replace(
+                      team_target,
+                      "            <div  class=\"example-box shadow\"\n                  cdkDrag\n                  (click)=\"onTapPokemon(pokemon, 'team')\">"
+                  )
+
+              # Add click handler to STORED boxes
+              stored_target = "        <div  class=\"example-box shadow\"\n              [cdkDragData]=\"pokemon\"\n              cdkDrag>"
+              if stored_target in h and "onTapPokemon(pokemon, 'stored')" not in h:
+                  h = h.replace(
+                      stored_target,
+                      "        <div  class=\"example-box shadow\"\n              [cdkDragData]=\"pokemon\"\n              cdkDrag\n              (click)=\"onTapPokemon(pokemon, 'stored')\">"
+                  )
+
+              pc_html.write_text(h, encoding="utf-8")
+
+          if pc_css.exists():
+              c = pc_css.read_text(encoding="utf-8")
+
+              if "/* MOBILE_PC_PATCH */" not in c:
+                  c += "\n\n/* MOBILE_PC_PATCH */\n"
+                  c += (
+                      ".modal-body{max-height:80vh;overflow-y:auto}\n"
+                      "@media (max-width: 768px){\n"
+                      "  :host > button.btn{position:fixed;right:12px;bottom:12px;z-index:1049;padding:12px 14px;border-width:2px}\n"
+                      "  .example-box{width:22%;padding:6px}\n"
+                      "  .example-list{gap:10px}\n"
+                      "}\n"
+                  )
+
+              pc_css.write_text(c, encoding="utf-8")
+
+          print("Patch OK: wheel + evolutions + Gen9 trainers + Mobile PC.")
           PY
 
       - name: Build (relative paths for GitHub Pages)
