@@ -1,215 +1,192 @@
-name: Deploy to GitHub Pages (from zip)
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Paldea - Escolha do Treinador</title>
+  <style>
+    :root{
+      --bg:#202427;
+      --panel:#2a2f33;
+      --line:#5f676f;
+      --text:#e9eef4;
+      --muted:#c7d0da;
+      --glow: rgba(255,255,255,.18);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      min-height:100vh;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      background: var(--bg);
+      color: var(--text);
+      display:flex;
+      justify-content:center;
+      padding:18px 12px;
+    }
+    .wrap{
+      width:min(560px, 100%);
+    }
+    .topbar{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      margin-bottom:12px;
+    }
+    .btn{
+      border:1px solid var(--line);
+      background: #1f66ff;
+      color:white;
+      padding:10px 14px;
+      border-radius:10px;
+      font-weight:700;
+      cursor:pointer;
+    }
+    .btn.secondary{
+      background:#3a4046;
+    }
+    .title{
+      text-align:center;
+      margin:18px 0 12px;
+      font-size:42px;
+      letter-spacing:1px;
+      text-shadow: 0 0 12px var(--glow);
+      line-height:1.1;
+    }
+    .subtitle{
+      text-align:center;
+      margin-top:-2px;
+      font-size:28px;
+      color:var(--muted);
+      text-shadow: 0 0 10px var(--glow);
+      line-height:1.2;
+    }
+    .cards{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:18px;
+      margin:18px 0 14px;
+    }
+    .card{
+      background: var(--panel);
+      border: 2px solid rgba(255,255,255,.15);
+      border-radius:16px;
+      padding:18px 12px 14px;
+      box-shadow: 0 0 0 3px rgba(255,255,255,.06), 0 18px 40px rgba(0,0,0,.35);
+      cursor:pointer;
+      transition: transform .08s ease, box-shadow .12s ease, border-color .12s ease;
+      user-select:none;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      min-height:250px;
+    }
+    .card:hover{
+      transform: translateY(-2px);
+      border-color: rgba(255,255,255,.28);
+      box-shadow: 0 0 0 3px rgba(255,255,255,.08), 0 22px 48px rgba(0,0,0,.45);
+    }
+    .sprite{
+      width:120px;
+      height:120px;
+      image-rendering: pixelated;
+      filter: drop-shadow(0 10px 16px rgba(0,0,0,.35));
+    }
+    .label{
+      margin-top:14px;
+      font-size:34px;
+      color:#fff;
+      text-decoration: underline;
+      text-underline-offset: 6px;
+      text-shadow: 0 0 10px rgba(255,255,255,.14);
+    }
+    .hint{
+      margin-top:10px;
+      text-align:center;
+      color: rgba(233,238,244,.75);
+      font-size:14px;
+    }
+    .selected{
+      outline: 3px solid rgba(31,102,255,.7);
+      box-shadow: 0 0 0 4px rgba(31,102,255,.25), 0 22px 48px rgba(0,0,0,.45);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <button class="btn" id="restartBtn">Restart</button>
+      <button class="btn secondary" id="langBtn">English</button>
+    </div>
 
-on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+    <div class="title">Welcome to Paldea!</div>
+    <div class="subtitle">Are you a boy or a girl?</div>
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+    <div class="cards">
+      <div class="card" id="boyCard" role="button" aria-label="Boy">
+        <img class="sprite" id="boySprite" alt="Florian (Boy)" />
+        <div class="label">Boy</div>
+      </div>
 
-concurrency:
-  group: pages
-  cancel-in-progress: true
+      <div class="card" id="girlCard" role="button" aria-label="Girl">
+        <img class="sprite" id="girlSprite" alt="Juliana (Girl)" />
+        <div class="label">Girl</div>
+      </div>
+    </div>
 
-env:
-  ZIP_FILE: pokemon-roulette-source.zip
+    <div class="hint" id="status">Selecione um personagem.</div>
+  </div>
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+  <script>
+    // ✅ Sprites corretas Gen 9 (Paldea)
+    // Dica: o "?v=..." ajuda a quebrar cache do GitHub Pages/navegador.
+    const SPRITES = {
+      boy:  "https://play.pokemonshowdown.com/sprites/trainers/florian-s.png?v=2",
+      girl: "https://play.pokemonshowdown.com/sprites/trainers/juliana-s.png?v=2"
+    };
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
+    // Carrega imagens
+    const boySprite  = document.getElementById("boySprite");
+    const girlSprite = document.getElementById("girlSprite");
+    boySprite.src  = SPRITES.boy;
+    girlSprite.src = SPRITES.girl;
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
+    const boyCard  = document.getElementById("boyCard");
+    const girlCard = document.getElementById("girlCard");
+    const statusEl = document.getElementById("status");
 
-      - name: Unzip source
-        run: |
-          set -e
-          if [ ! -f "${{ env.ZIP_FILE }}" ]; then
-            echo "ERROR: zip '${{ env.ZIP_FILE }}' not found."
-            ls -la *.zip || true
-            exit 1
-          fi
-          rm -rf app
-          mkdir -p app
-          unzip -q "${{ env.ZIP_FILE }}" -d app
-          ls -la app
+    function setSelected(which){
+      boyCard.classList.toggle("selected", which === "boy");
+      girlCard.classList.toggle("selected", which === "girl");
 
-      - name: Find project root (package.json)
-        run: |
-          set -e
-          ROOT="$(find app -maxdepth 12 -name package.json -print -quit | xargs -r dirname)"
-          if [ -z "$ROOT" ]; then
-            echo "ERROR: package.json not found inside zip."
-            exit 1
-          fi
-          echo "PROJECT_ROOT=$ROOT" >> $GITHUB_ENV
-          ls -la "$ROOT"
+      if(which === "boy")  statusEl.textContent = "Selecionado: Florian (Boy)";
+      if(which === "girl") statusEl.textContent = "Selecionado: Juliana (Girl)";
+    }
 
-      - name: Install dependencies
-        working-directory: ${{ env.PROJECT_ROOT }}
-        run: npm install --legacy-peer-deps
+    boyCard.addEventListener("click", () => setSelected("boy"));
+    girlCard.addEventListener("click", () => setSelected("girl"));
 
-      - name: Install @angular/localize (match Angular version)
-        working-directory: ${{ env.PROJECT_ROOT }}
-        run: |
-          set -e
-          CORE_VER=$(node -p "require('./package.json').dependencies?.['@angular/core'] || require('./package.json').devDependencies?.['@angular/core'] || ''")
-          if [ -z "$CORE_VER" ]; then
-            echo "ERROR: Could not detect @angular/core version from package.json"
-            exit 1
-          fi
-          CORE_VER="${CORE_VER#^}"
-          CORE_VER="${CORE_VER#~}"
-          npm install @angular/localize@$CORE_VER --legacy-peer-deps
+    // Botões de exemplo
+    document.getElementById("restartBtn").addEventListener("click", () => {
+      setSelected(null);
+      statusEl.textContent = "Reiniciado. Selecione um personagem.";
+    });
 
-      - name: Patch (Gen 9 images + bigger & sharper wheel on mobile)
-        working-directory: ${{ env.PROJECT_ROOT }}
-        run: |
-          set -e
-          python3 - <<'PY'
-          import re
-          from pathlib import Path
+    document.getElementById("langBtn").addEventListener("click", () => {
+      // só demonstração: alterna texto
+      const isEN = document.documentElement.lang === "en";
+      document.documentElement.lang = isEN ? "pt-BR" : "en";
 
-          trainer = Path("src/app/services/trainer-service/trainer-sprite-data.ts")
-          if trainer.exists():
-              txt = trainer.read_text(encoding="utf-8")
-              txt = txt.replace(
-                  "https://archives.bulbagarden.net/media/upload/6/62/Spr_Masters_Florian_2.png",
-                  "https://raw.githubusercontent.com/zeroxm/pokemon-roulette-trainer-sprites/main/sprites/Spr_Masters_Florian_2.png"
-              )
-              txt = txt.replace(
-                  "https://archives.bulbagarden.net/media/upload/4/4a/Spr_Masters_Juliana.png",
-                  "https://raw.githubusercontent.com/zeroxm/pokemon-roulette-trainer-sprites/main/sprites/Spr_Masters_Juliana.png"
-              )
-              trainer.write_text(txt, encoding="utf-8")
+      document.querySelector(".title").textContent =
+        isEN ? "Welcome to Paldea!" : "Bem-vindo(a) a Paldea!";
 
-          wheel_ts = Path("src/app/wheel/wheel.component.ts")
-          if wheel_ts.exists():
-              txt = wheel_ts.read_text(encoding="utf-8")
+      document.querySelector(".subtitle").textContent =
+        isEN ? "Are you a boy or a girl?" : "Você é um menino ou uma menina?";
 
-              txt = re.sub(
-                  r"this\.canvasHeight\s*=\s*Math\.min\(window\.innerHeight,\s*window\.innerWidth\)\s*\*\s*0\.50\s*;",
-                  "const minDim = Math.min(window.innerHeight, window.innerWidth);\n"
-                  "    const isMobile = window.innerWidth <= 768;\n"
-                  "    this.canvasHeight = minDim * (isMobile ? 0.72 : 0.50);",
-                  txt,
-                  count=1
-              )
-
-              txt = txt.replace("const centerX = this.wheelCanvas.width / 2;", "const centerX = this.wheelWidth / 2;")
-              txt = txt.replace("const centerY = this.wheelCanvas.height / 2;", "const centerY = this.canvasHeight / 2;")
-              txt = txt.replace("const radius = (this.wheelCanvas.width / 2);", "const radius = (this.wheelWidth / 2);")
-              txt = txt.replace(
-                  "this.wheelCtx.clearRect(0, 0, this.wheelCanvas.width, this.wheelCanvas.height);",
-                  "this.wheelCtx.clearRect(0, 0, this.wheelWidth, this.canvasHeight);"
-              )
-
-              txt = re.sub(
-                  r"\n\s*drawPointer\(\): void \{[\s\S]*?\n\s*\}\n\n\s*spinWheel\(",
-                  "\n  drawPointer(): void {\n"
-                  "    const midY = this.canvasHeight / 2;\n"
-                  "    const xRight = this.cursorWidth - 2;\n"
-                  "    const tipX = 2;\n\n"
-                  "    this.pointerCtx.save();\n"
-                  "    this.pointerCtx.lineWidth = 2;\n"
-                  "    this.pointerCtx.strokeStyle = this.pointerStrokeColor;\n"
-                  "    this.pointerCtx.fillStyle = this.pointerFillColor;\n"
-                  "    this.pointerCtx.beginPath();\n"
-                  "    this.pointerCtx.moveTo(xRight, midY - 20);\n"
-                  "    this.pointerCtx.lineTo(xRight, midY + 20);\n"
-                  "    this.pointerCtx.lineTo(tipX, midY);\n"
-                  "    this.pointerCtx.closePath();\n"
-                  "    this.pointerCtx.stroke();\n"
-                  "    this.pointerCtx.fill();\n"
-                  "    this.pointerCtx.restore();\n"
-                  "  }\n\n"
-                  "  spinWheel(",
-                  txt,
-                  count=1
-              )
-
-              if "setupHiDpiCanvases" not in txt:
-                  marker = "this.pointerCtx = this.pointerCanvas.getContext('2d')!;"
-                  if marker in txt and "this.setupHiDpiCanvases();" not in txt:
-                      txt = txt.replace(marker, marker + "\n    this.setupHiDpiCanvases();", 1)
-
-                  method = """
-            private setupHiDpiCanvases(): void {
-              const dpr = window.devicePixelRatio || 1;
-
-              this.wheelCanvas.width = Math.floor(this.wheelWidth * dpr);
-              this.wheelCanvas.height = Math.floor(this.canvasHeight * dpr);
-              this.wheelCanvas.style.width = `${this.wheelWidth}px`;
-              this.wheelCanvas.style.height = `${this.canvasHeight}px`;
-              this.wheelCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-              this.pointerCanvas.width = Math.floor(this.cursorWidth * dpr);
-              this.pointerCanvas.height = Math.floor(this.canvasHeight * dpr);
-              this.pointerCanvas.style.width = `${this.cursorWidth}px`;
-              this.pointerCanvas.style.height = `${this.canvasHeight}px`;
-              this.pointerCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            }
-          """
-                  last = txt.rfind("}")
-                  if last != -1:
-                      txt = txt[:last] + method + "\n" + txt[last:]
-
-              wheel_ts.write_text(txt, encoding="utf-8")
-
-          wheel_css = Path("src/app/wheel/wheel.component.css")
-          if wheel_css.exists():
-              css = (
-                  ".wheel-container{display:flex;flex-direction:column;align-items:center}\n"
-                  ".wheel-container p{font-size:clamp(1.05rem,4.6vw,1.5rem);font-weight:700;text-align:center;"
-                  "max-width:min(92vw,520px);padding:0 .75rem;line-height:1.2;overflow-wrap:anywhere;word-break:break-word;"
-                  "margin:.5rem 0 0}\n"
-                  ".canvas-container{display:flex;flex-direction:row;align-items:center;justify-content:center;margin-left:0}\n"
-              )
-              wheel_css.write_text(css, encoding="utf-8")
-          PY
-
-      - name: Build (relative paths for GitHub Pages)
-        working-directory: ${{ env.PROJECT_ROOT }}
-        env:
-          NODE_OPTIONS: --max_old_space_size=4096
-        run: npm run build -- --configuration production --base-href "./" --deploy-url "./"
-
-      - name: Locate index.html for Pages
-        run: |
-          set -e
-          IDX="$(find "${{ env.PROJECT_ROOT }}/dist" -maxdepth 12 -type f -name index.html -print -quit)"
-          if [ -z "$IDX" ]; then
-            echo "ERROR: index.html not found in dist."
-            exit 1
-          fi
-          PAGES_DIR="$(dirname "$IDX")"
-          echo "PAGES_PATH=$PAGES_DIR" >> $GITHUB_ENV
-          touch "$PAGES_DIR/.nojekyll"
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ${{ env.PAGES_PATH }}
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      statusEl.textContent = isEN ? "Selecione um personagem." : "Select a character.";
+      document.getElementById("langBtn").textContent = isEN ? "English" : "Português";
+    });
+  </script>
+</body>
+</html>
