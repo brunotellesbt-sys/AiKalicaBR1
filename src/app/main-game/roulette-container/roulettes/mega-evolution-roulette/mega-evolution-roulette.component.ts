@@ -41,6 +41,7 @@ export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
   popupBeforePokemon: PokemonItem | null = null;
   popupAfterName = '';
   popupAfterSpriteUrl = '';
+  popupAnimationColor = ''; // Color for type-based animation effects
 
   private subs = new Subscription();
   private modalRef: NgbModalRef | null = null;
@@ -150,6 +151,8 @@ export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
     // Prepare popup before we mutate the Pokémon.
     this.popupBeforePokemon = pokemon;
     this.popupAfterName = megaForm.displayName;
+    // Set animation color based on the Pokemon's type (fillStyle)
+    this.popupAnimationColor = pokemon.fillStyle || '#FFD700'; // Default to gold if no fillStyle
 
     const sub = this.megaEvolutionService.megaEvolveForBattle(pokemon, megaForm).subscribe({
       next: () => {

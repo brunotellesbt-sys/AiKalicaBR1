@@ -34,13 +34,37 @@
   object-fit: contain;
 }
 
+.mega-glow {
+  animation: megaPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes megaPulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
 .arrow {
   font-size: 2rem;
+  animation: arrowBounce 1s ease-in-out infinite;
+}
+
+@keyframes arrowBounce {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(5px);
+  }
 }
 
 .name {
   text-align: center;
   margin-top: 0.25rem;
+  font-weight: 600;
 }
 
 .actions {
