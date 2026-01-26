@@ -21,7 +21,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Setup Node (more compatible)
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 18
@@ -46,7 +46,7 @@ jobs:
           echo "Found project root: $ROOT"
           ls -la "$ROOT"
 
-      - name: Install dependencies (handle old peer deps)
+      - name: Install dependencies
         working-directory: ${{ env.PROJECT_ROOT }}
         run: npm install --legacy-peer-deps
 
@@ -62,6 +62,82 @@ jobs:
           echo "Detected @angular/core version: $CORE_VER"
           npm install @angular/localize@$CORE_VER --legacy-peer-deps
 
+      - name: Patch Florian/Juliana + mobile roulette text
+        working-directory: ${{ env.PROJECT_ROOT }}
+        run: |
+          set -e
+          python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+
+          root = Path(os.getcwd())
+
+          # 1) Force Gen 9 trainer images (Florian/Juliana)
+          trainer_file = root / "src/app/services/trainer-service/trainer-sprite-data.ts"
+          if trainer_file.exists():
+              txt = trainer_file.read_text(encoding="utf-8")
+              # Replace ONLY gen 9 URLs (robust regex)
+              txt = re.sub(
+                  r"(9:\s*\{\s*male:\s*')([^']*)(')",
+                  r"\1https://raw.githubusercontent.com/zeroxm/pokemon-roulette-trainer-sprites/refs/heads/main/sprites/Spr_Masters_Florian_2.png\3",
+                  txt,
+                  flags=re.MULTILINE
+              )
+              txt = re.sub(
+                  r"(9:\s*\{\s*male:\s*'[^']*',\s*female:\s*')([^']*)(')",
+                  r"\1https://raw.githubusercontent.com/zeroxm/pokemon-roulette-trainer-sprites/refs/heads/main/sprites/Spr_Masters_Juliana.png\3",
+                  txt,
+                  flags=re.MULTILINE
+              )
+              trainer_file.write_text(txt, encoding="utf-8")
+              print("Patched:", trainer_file)
+          else:
+              print("WARN: trainer file not found at", trainer_file)
+
+          # 2) Fix wheel layout on mobile (names not fitting)
+          wheel_css = root / "src/app/wheel/wheel.component.css"
+          fixed_css = """.wheel-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* The selected segment text */
+.wheel-container p {
+    font-size: clamp(1.0rem, 4.5vw, 1.5rem);
+    font-weight: bold;
+    text-align: center;
+    max-width: min(92vw, 520px);
+    padding: 0 0.75rem;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+/* Wheel + pointer canvases */
+.canvas-container {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    margin-left: 0; /* was 40px, caused overflow/misalignment on mobile */
+}
+
+/* On very small screens, keep everything nicely centered */
+@media (max-width: 420px) {
+    .wheel-container p {
+        max-width: 94vw;
+        padding: 0 0.5rem;
+    }
+}
+"""
+          if wheel_css.exists():
+              wheel_css.write_text(fixed_css, encoding="utf-8")
+              print("Patched:", wheel_css)
+          else:
+              print("WARN: wheel css not found at", wheel_css)
+          PY
+
       - name: Build (relative paths for GitHub Pages)
         working-directory: ${{ env.PROJECT_ROOT }}
         env:
@@ -71,19 +147,15 @@ jobs:
       - name: Detect Pages output folder (find index.html)
         run: |
           set -e
-          echo "=== dist index.html (debug) ==="
-          find "${{ env.PROJECT_ROOT }}/dist" -maxdepth 6 -type f -name "index.html" -print || true
           IDX="$(find "${{ env.PROJECT_ROOT }}/dist" -maxdepth 8 -type f -name "index.html" -print -quit)"
           if [ -z "$IDX" ]; then
             echo "ERROR: Could not find index.html inside dist after build."
-            echo "Listing dist:"
             ls -la "${{ env.PROJECT_ROOT }}/dist" || true
             exit 1
           fi
           PAGES_PATH="$(dirname "$IDX")"
           echo "Detected Pages path: $PAGES_PATH"
           echo "PAGES_PATH=$PAGES_PATH" >> $GITHUB_ENV
-          ls -la "$PAGES_PATH"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
