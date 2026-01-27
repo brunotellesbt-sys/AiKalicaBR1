@@ -3,6 +3,7 @@ import { NgIf, CommonModule } from '@angular/common';
 import { map, Subscription, forkJoin } from 'rxjs';
 import { TranslatePipe } from '@ngx-translate/core';
 import { NgbModal, NgbModalRef } from '@ng-bootstrap/ng-bootstrap';
+import { HttpClient } from '@angular/common/http';
 
 import { WheelComponent } from '../../../../wheel/wheel.component';
 import { PokemonItem } from '../../../../interfaces/pokemon-item';
@@ -42,7 +43,7 @@ export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
   popupAfterName = '';
   popupAfterSpriteUrl = '';
   popupAnimationColor = ''; // Color for type-based animation effects
-  popupTypeEffect = ''; // Type-specific effect (fire, water, electric, etc.)
+  popupTypeEffects: string[] = []; // Type-specific effects (can have 1 or 2 types)
   particleArray = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]; // 10 particles for each type effect
 
   private subs = new Subscription();
@@ -52,7 +53,8 @@ export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
     private trainerService: TrainerService,
     private megaEvolutionService: MegaEvolutionService,
     private modalService: NgbModal,
-    private audioService: AudioService
+    private audioService: AudioService,
+    private http: HttpClient
   ) {}
 
   ngOnInit(): void {
@@ -155,8 +157,6 @@ export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
     this.popupAfterName = megaForm.displayName;
     // Set animation color based on the Pokemon's type (fillStyle)
     this.popupAnimationColor = pokemon.fillStyle || '#FFD700'; // Default to gold if no fillStyle
-    // Determine type-specific effect based on fillStyle/color
-    this.popupTypeEffect = this.getTypeEffectFromColor(pokemon.fillStyle || '');
 
     const sub = this.megaEvolutionService.megaEvolveForBattle(pokemon, megaForm).subscribe({
       next: () => {
@@ -167,7 +167,18 @@ export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
           ? (sprite?.front_shiny || sprite?.front_default || '')
           : (sprite?.front_default || '');
 
-        this.openMegaPopupAndProceed();
+        // Fetch real Pokemon types from PokeAPI
+        this.fetchPokemonTypes(megaForm.pokemonId).subscribe({
+          next: (types) => {
+            this.popupTypeEffects = types;
+            this.openMegaPopupAndProceed();
+          },
+          error: () => {
+            // Fallback to normal effect if API fails
+            this.popupTypeEffects = ['normal'];
+            this.openMegaPopupAndProceed();
+          }
+        });
       },
       error: () => {
         // If it fails, proceed without Mega.
@@ -249,68 +260,26 @@ export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Determines the type-specific visual effect based on Pokemon's fillStyle color.
-   * Maps colors to Pokemon types and returns the appropriate effect class.
+   * Fetches the real Pokemon types from PokeAPI.
+   * Returns an array of type names (e.g., ['fire', 'flying']).
+   * Supports Pokemon with 1 or 2 types.
    */
-  private getTypeEffectFromColor(fillStyle: string): string {
-    const color = fillStyle.toLowerCase();
+  private fetchPokemonTypes(pokemonId: number) {
+    const apiUrl = `https://pokeapi.co/api/v2/pokemon/${pokemonId}`;
     
-    // Water types - blue colors
-    if (color.includes('blue') || color === 'cyan' || color === 'aqua') {
-      return 'water';
-    }
-    
-    // Fire types - red/orange colors
-    if (color.includes('red') || color === 'orange' || color === 'orangered' || color === 'crimson') {
-      return 'fire';
-    }
-    
-    // Electric types - yellow colors
-    if (color === 'yellow' || color === 'gold' || color === 'goldenrod') {
-      return 'electric';
-    }
-    
-    // Grass types - green colors
-    if (color.includes('green') || color === 'lime' || color === 'forestgreen') {
-      return 'grass';
-    }
-    
-    // Psychic/Poison types - purple/pink colors
-    if (color === 'purple' || color === 'violet' || color === 'magenta' || color === 'pink') {
-      return 'psychic';
-    }
-    
-    // Ice types - light blue/white
-    if (color === 'lightblue' || color === 'skyblue' || color === 'white' || color === 'snow') {
-      return 'ice';
-    }
-    
-    // Rock/Ground types - brown/tan colors
-    if (color === 'brown' || color === 'tan' || color === 'sienna' || color === 'peru') {
-      return 'rock';
-    }
-    
-    // Dark types - black/gray
-    if (color === 'black' || color.includes('gray') || color === 'darkgray' || color === 'dimgray') {
-      return 'dark';
-    }
-    
-    // Steel types - silver/gray
-    if (color === 'silver' || color === 'gray' || color === 'slategray') {
-      return 'steel';
-    }
-    
-    // Fairy types - light pink
-    if (color === 'lightpink' || color === 'hotpink' || color === 'lavender') {
-      return 'fairy';
-    }
-    
-    // Dragon types - indigo/purple-blue
-    if (color === 'indigo' || color === 'darkviolet' || color === 'blueviolet') {
-      return 'dragon';
-    }
-    
-    // Default to normal/neutral effect
-    return 'normal';
+    return this.http.get<any>(apiUrl).pipe(
+      map((data) => {
+        // Extract types from the API response
+        // PokeAPI returns types in format: { type: { name: 'fire' } }
+        const types = (data.types || [])
+          .map((t: any) => t.type?.name)
+          .filter((name: string) => name); // Filter out undefined/null
+        
+        console.log(`Pokemon #${pokemonId} types:`, types);
+        
+        // Return types array (1 or 2 types)
+        return types.length > 0 ? types : ['normal'];
+      })
+    );
   }
 }

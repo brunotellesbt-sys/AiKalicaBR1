@@ -13,11 +13,11 @@
 </app-wheel>
 
 <ng-template #megaEvolutionModal let-modal>
-  <div class="modal-body" [style.box-shadow]="'0 0 30px ' + popupAnimationColor" [class]="'type-effect-' + popupTypeEffect">
+  <div class="modal-body" [style.box-shadow]="'0 0 30px ' + popupAnimationColor">
     <h2 class="popup-title">Mega Evolution!</h2>
 
-    <!-- Type-specific particle effects -->
-    <div class="particle-container" [class]="'particles-' + popupTypeEffect">
+    <!-- Type-specific particle effects - Support for dual types -->
+    <div class="particle-container" *ngFor="let typeEffect of popupTypeEffects" [class]="'particles-' + typeEffect">
       <div class="particle" *ngFor="let i of particleArray"></div>
     </div>
 
