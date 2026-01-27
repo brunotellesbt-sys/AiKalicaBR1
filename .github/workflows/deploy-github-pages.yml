@@ -74,182 +74,324 @@ jobs:
           CORE_VER="${CORE_VER#~}"
           npm install @angular/localize@$CORE_VER --legacy-peer-deps
 
-      - name: Patch (wheel bigger & sharper + mega evo animation & cries + Gen 9 trainers)
+      - name: Patch (wheel + evolutions + Gen9 trainers + Mobile PC + name fallback + mega animation)
         working-directory: ${{ env.PROJECT_ROOT }}
         run: |
           set -e
-
-          # --- Gen 9 trainer sprites: bundle locally (no hotlink) ---
-          mkdir -p src/assets/trainers
-          curl -L --retry 3 --fail "https://archives.bulbagarden.net/media/upload/6/62/Spr_Masters_Florian_2.png" -o "src/assets/trainers/Spr_Masters_Florian_2.png"
-          curl -L --retry 3 --fail "https://archives.bulbagarden.net/media/upload/4/4a/Spr_Masters_Juliana.png" -o "src/assets/trainers/Spr_Masters_Juliana.png"
-
           python3 - <<'PY'
           import re
+          import textwrap
           from pathlib import Path
 
-          def safe_write(path: Path, text: str):
-              path.parent.mkdir(parents=True, exist_ok=True)
-              path.write_text(text, encoding="utf-8")
-
-          def replace_method_ts(src: str, name: str, new_block: str) -> str:
-              m = re.search(rf"(\n\s*(public|private|protected)?\s*(async\s+)?{re.escape(name)}\s*\([^)]*\)\s*(?::\s*[^\n]+)?\s*\{{)", src)
-              if not m:
-                  return src
-              start = m.start(1)
-              brace_pos = src.find("{", m.end(1)-1)
-              if brace_pos == -1:
-                  return src
-              depth = 0
-              end = None
-              for i in range(brace_pos, len(src)):
-                  if src[i] == "{":
-                      depth += 1
-                  elif src[i] == "}":
-                      depth -= 1
-                      if depth == 0:
-                          end = i+1
-                          break
-              if end is None:
-                  return src
-              return src[:start] + "\n  " + new_block.strip("\n") + "\n" + src[end:]
-
-          # ----------------------------
-          # Trainer sprites (Gen 9)
-          # ----------------------------
-          trainer = Path("src/app/services/trainer-service/trainer-sprite-data.ts")
-          if trainer.exists():
-              txt = trainer.read_text(encoding="utf-8")
-              txt = txt.replace(
-                  "https://archives.bulbagarden.net/media/upload/6/62/Spr_Masters_Florian_2.png",
-                  "assets/trainers/Spr_Masters_Florian_2.png"
-              )
-              txt = txt.replace(
-                  "https://archives.bulbagarden.net/media/upload/4/4a/Spr_Masters_Juliana.png",
-                  "assets/trainers/Spr_Masters_Juliana.png"
-              )
-              safe_write(trainer, txt)
-
-          # ----------------------------
-          # Wheel: bigger on mobile + HiDPI sharp + pointer stable
-          # ----------------------------
+          # ============================================================
+          # 1) WHEEL: bigger on mobile + HiDPI sharp (no missing method)
+          # ============================================================
           wheel_ts = Path("src/app/wheel/wheel.component.ts")
-          wheel_html = Path("src/app/wheel/wheel.component.html")
-          wheel_css = Path("src/app/wheel/wheel.component.css")
-
           if wheel_ts.exists():
-              w = wheel_ts.read_text(encoding="utf-8")
+              txt = wheel_ts.read_text(encoding="utf-8")
 
-              # Fix TS2564 by giving defaults
-              w = re.sub(r"\bcanvasHeight:\s*number\s*;", "canvasHeight: number = 0;", w)
-              w = re.sub(r"\bwheelWidth:\s*number\s*;", "wheelWidth: number = 0;", w)
-              w = re.sub(r"\bcursorWidth:\s*number\s*;", "cursorWidth: number = 0;", w)
-              w = re.sub(r"\bfontSize:\s*number\s*;", "fontSize: number = 0;", w)
-
-              # Replace constructor calc to a method call (safe now because defaults exist)
-              w = re.sub(
-                  r"this\.canvasHeight\s*=\s*Math\.min\(window\.innerHeight,\s*window\.innerWidth\)\s*\*\s*0\.55\s*;\s*"
-                  r"this\.wheelWidth\s*=\s*this\.canvasHeight\s*;\s*"
-                  r"this\.cursorWidth\s*=\s*40\s*;\s*"
-                  r"this\.fontSize\s*=\s*this\.wheelWidth\s*/\s*24\s*;",
-                  "this.updateDimensions();",
-                  w,
-                  count=1
+              pat = (
+                  r"this\.canvasHeight\s*=\s*Math\.min\(window\.innerHeight,\s*window\.innerWidth\)\s*\*\s*0\.50\s*;\s*\n"
+                  r"\s*this\.wheelWidth\s*=\s*this\.canvasHeight\s*;\s*\n"
+                  r"\s*this\.cursorWidth\s*=\s*40\s*;\s*\n"
+                  r"\s*this\.fontSize\s*=\s*this\.wheelWidth\s*/\s*24\s*;"
               )
+              repl = (
+                  "this.cursorWidth = 40;\n"
+                  "    const minDim = Math.min(window.innerHeight, window.innerWidth);\n"
+                  "    const isMobile = window.innerWidth <= 768;\n"
+                  "    const target = minDim * (isMobile ? 0.86 : 0.50);\n"
+                  "    const maxWheel = Math.max(120, window.innerWidth - this.cursorWidth - 16);\n"
+                  "    this.wheelWidth = Math.min(target, maxWheel);\n"
+                  "    this.canvasHeight = this.wheelWidth;\n"
+                  "    this.fontSize = this.wheelWidth / 24;"
+              )
+              txt = re.sub(pat, repl, txt, count=1)
 
-              if "private updateDimensions" not in w:
-                  insert = """
-  private updateDimensions(): void {
-    const minDim = Math.min(window.innerHeight, window.innerWidth);
-    const isMobile = window.innerWidth <= 768;
+              has_method = re.search(r"\bsetupHiDpiCanvases\s*\(\)\s*:\s*void\b", txt) is not None
+              if not has_method:
+                  method = textwrap.dedent("""
+                  
+                    private setupHiDpiCanvases(): void {
+                      const dpr = window.devicePixelRatio || 1;
 
-    this.canvasHeight = Math.round(minDim * (isMobile ? 0.78 : 0.55));
-    this.wheelWidth = this.canvasHeight;
-    this.cursorWidth = isMobile ? 48 : 40;
-    this.fontSize = this.wheelWidth / 24;
-  }
+                      this.wheelCanvas.style.width = `${this.wheelWidth}px`;
+                      this.wheelCanvas.style.height = `${this.canvasHeight}px`;
+                      this.wheelCanvas.width = Math.floor(this.wheelWidth * dpr);
+                      this.wheelCanvas.height = Math.floor(this.canvasHeight * dpr);
+                      this.wheelCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  private setupHiDpiCanvases(): void {
-    const dpr = window.devicePixelRatio || 1;
+                      this.pointerCanvas.style.width = `${this.cursorWidth}px`;
+                      this.pointerCanvas.style.height = `${this.canvasHeight}px`;
+                      this.pointerCanvas.width = Math.floor(this.cursorWidth * dpr);
+                      this.pointerCanvas.height = Math.floor(this.canvasHeight * dpr);
+                      this.pointerCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                    }
+                  """).rstrip() + "\n"
+                  last_brace = txt.rfind("\n}")
+                  if last_brace != -1:
+                      txt = txt[:last_brace] + "\n" + method + txt[last_brace:]
 
-    this.wheelCanvas.width = Math.floor(this.wheelWidth * dpr);
-    this.wheelCanvas.height = Math.floor(this.canvasHeight * dpr);
-    this.wheelCanvas.style.width = `${this.wheelWidth}px`;
-    this.wheelCanvas.style.height = `${this.canvasHeight}px`;
-    this.wheelCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+              marker = "this.pointerCtx = this.pointerCanvas.getContext('2d')!;"
+              if marker in txt and "this.setupHiDpiCanvases();" not in txt:
+                  txt = txt.replace(marker, marker + "\n    this.setupHiDpiCanvases();", 1)
 
-    this.pointerCanvas.width = Math.floor(this.cursorWidth * dpr);
-    this.pointerCanvas.height = Math.floor(this.canvasHeight * dpr);
-    this.pointerCanvas.style.width = `${this.cursorWidth}px`;
-    this.pointerCanvas.style.height = `${this.canvasHeight}px`;
-    this.pointerCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  }
-"""
-                  w = w[:w.rfind("}")] + insert + "\n}"
-
-              # Make drawWheel use CSS dims
-              w = w.replace("const centerX = this.wheelCanvas.width / 2;", "const centerX = this.wheelWidth / 2;")
-              w = w.replace("const centerY = this.wheelCanvas.height / 2;", "const centerY = this.canvasHeight / 2;")
-              w = w.replace("const radius = (this.wheelCanvas.width / 2);", "const radius = (this.wheelWidth / 2);")
-              w = w.replace(
+              txt = txt.replace("const centerX = this.wheelCanvas.width / 2;", "const centerX = this.wheelWidth / 2;")
+              txt = txt.replace("const centerY = this.wheelCanvas.height / 2;", "const centerY = this.canvasHeight / 2;")
+              txt = txt.replace("const radius = (this.wheelCanvas.width / 2);", "const radius = (this.wheelWidth / 2);")
+              txt = txt.replace(
                   "this.wheelCtx.clearRect(0, 0, this.wheelCanvas.width, this.wheelCanvas.height);",
                   "this.wheelCtx.clearRect(0, 0, this.wheelWidth, this.canvasHeight);"
               )
 
-              # Ensure pointer doesn't disappear
-              w = re.sub(
-                  r"drawPointer\(\): void \{[\s\S]*?\n\s*\}",
+              dp_pat = r"drawPointer\(\): void \{[\s\S]*?\n\s*\}\n\n\s*spinWheel\(\): void \{"
+              dp_repl = (
                   "drawPointer(): void {\n"
-                  "    const midY = this.canvasHeight / 2;\n"
-                  "    const xRight = this.cursorWidth - 2;\n"
-                  "    const tipX = 2;\n\n"
+                  "    const w = this.cursorWidth;\n"
+                  "    const h = this.canvasHeight;\n"
+                  "    this.pointerCtx.clearRect(0, 0, w, h);\n"
                   "    this.pointerCtx.save();\n"
-                  "    this.pointerCtx.clearRect(0, 0, this.cursorWidth, this.canvasHeight);\n"
                   "    this.pointerCtx.lineWidth = 2;\n"
                   "    this.pointerCtx.strokeStyle = this.pointerStrokeColor;\n"
                   "    this.pointerCtx.fillStyle = this.pointerFillColor;\n"
                   "    this.pointerCtx.beginPath();\n"
-                  "    this.pointerCtx.moveTo(xRight, midY - 20);\n"
-                  "    this.pointerCtx.lineTo(xRight, midY + 20);\n"
-                  "    this.pointerCtx.lineTo(tipX, midY);\n"
+                  "    this.pointerCtx.moveTo(w - 2, (h / 2) - 20);\n"
+                  "    this.pointerCtx.lineTo(w - 2, (h / 2) + 20);\n"
+                  "    this.pointerCtx.lineTo(0, h / 2);\n"
                   "    this.pointerCtx.closePath();\n"
                   "    this.pointerCtx.stroke();\n"
                   "    this.pointerCtx.fill();\n"
                   "    this.pointerCtx.restore();\n"
-                  "  }",
-                  w,
+                  "  }\n\n"
+                  "  spinWheel(): void {"
+              )
+              txt = re.sub(dp_pat, dp_repl, txt, count=1)
+
+              wheel_ts.write_text(txt, encoding="utf-8")
+
+          # ============================================================
+          # 2) EVOLUTIONS: your requested rules
+          # ============================================================
+          evo_service = Path("src/app/services/evolution-service/evolution.service.ts")
+          if evo_service.exists():
+              evo_service.write_text(
+                  "import { Injectable } from '@angular/core';\n"
+                  "import { PokemonItem } from '../../interfaces/pokemon-item';\n"
+                  "import { evolutionChain } from './evolution-chain';\n"
+                  "import { PokemonService } from '../pokemon-service/pokemon.service';\n\n"
+                  "@Injectable({\n"
+                  "  providedIn: 'root'\n"
+                  "})\n"
+                  "export class EvolutionService {\n\n"
+                  "  constructor(private pokemonService: PokemonService) {\n"
+                  "    this.nationalDexPokemon = this.pokemonService.getAllPokemon();\n"
+                  "  }\n\n"
+                  "  evolutionChain = evolutionChain;\n"
+                  "  nationalDexPokemon: PokemonItem[];\n\n"
+                  "  private isHisuianFormId(id: number): boolean {\n"
+                  "    return id >= 10229 && id <= 10247;\n"
+                  "  }\n\n"
+                  "  canEvolve(pokemon: PokemonItem): boolean {\n"
+                  "    return this.getEvolutions(pokemon).length > 0;\n"
+                  "  }\n\n"
+                  "  getEvolutions(pokemon: PokemonItem): PokemonItem[] {\n"
+                  "    const chain = this.evolutionChain[pokemon.pokemonId];\n"
+                  "    if (!chain || chain.length === 0) return [];\n\n"
+                  "    const evolutions: PokemonItem[] = [];\n"
+                  "    for (const evolutionId of chain) {\n"
+                  "      const evolution = this.pokemonService.getPokemonById(evolutionId);\n"
+                  "      if (evolution) evolutions.push(evolution);\n"
+                  "    }\n\n"
+                  "    // Exception: Pikachu normal can evolve into Alolan Raichu\n"
+                  "    if (!pokemon.basePokemonId && pokemon.pokemonId === 25) {\n"
+                  "      return evolutions;\n"
+                  "    }\n\n"
+                  "    // Regional base forms follow their own chain\n"
+                  "    if (pokemon.basePokemonId) {\n"
+                  "      return evolutions;\n"
+                  "    }\n\n"
+                  "    // Non-regional base: block regional-form evolutions, except Hisui forms\n"
+                  "    return evolutions.filter(evo => !evo.basePokemonId || this.isHisuianFormId(evo.pokemonId));\n"
+                  "  }\n"
+                  "}\n",
+                  encoding="utf-8"
+              )
+
+          # ============================================================
+          # 3) GEN 9 TRAINERS: Florian + Juliana correct
+          # ============================================================
+          trainer = Path("src/app/services/trainer-service/trainer-sprite-data.ts")
+          if trainer.exists():
+              t = trainer.read_text(encoding="utf-8")
+              florian = "https://play.pokemonshowdown.com/sprites/trainers/florian-s.png?v=5"
+              juliana = "https://play.pokemonshowdown.com/sprites/trainers/juliana-s.png?v=5"
+
+              t, _ = re.subn(
+                  r"(9\s*:\s*\{[\s\S]*?male\s*:\s*)(['\"])[^'\"]*\2",
+                  r"\1\2" + florian + r"\2",
+                  t,
                   count=1
               )
-
-              # Call setupHiDpiCanvases after ctx creation
-              marker = "this.pointerCtx = this.pointerCanvas.getContext('2d')!;"
-              if marker in w and "this.setupHiDpiCanvases()" not in w:
-                  w = w.replace(marker, marker + "\n    this.setupHiDpiCanvases();", 1)
-
-              safe_write(wheel_ts, w)
-
-          # Wheel template: use style width/height so TS controls internal DPI
-          if wheel_html.exists():
-              h = wheel_html.read_text(encoding="utf-8")
-              h = re.sub(r"\[width\]=\"wheelWidth\"\s*\[height\]=\"canvasHeight\"", "[style.width.px]=\"wheelWidth\" [style.height.px]=\"canvasHeight\"", h)
-              h = re.sub(r"\[width\]=\"cursorWidth\"\s*\[height\]=\"canvasHeight\"", "[style.width.px]=\"cursorWidth\" [style.height.px]=\"canvasHeight\"", h)
-              safe_write(wheel_html, h)
-
-          # Wheel CSS: centered & readable on mobile
-          if wheel_css.exists():
-              safe_write(
-                  wheel_css,
-                  ".wheel-container{display:flex;flex-direction:column;align-items:center;width:100%}\n"
-                  ".wheel-container p{font-size:clamp(1.05rem,4.6vw,1.5rem);font-weight:700;text-align:center;"
-                  "max-width:min(92vw,520px);padding:0 .75rem;line-height:1.2;overflow-wrap:anywhere;word-break:break-word;"
-                  "margin:.5rem 0 0}\n"
-                  ".canvas-container{display:flex;flex-direction:row;align-items:center;justify-content:center;margin-left:0;width:100%}\n"
-                  "#wheel{touch-action:manipulation}\n"
+              t, _ = re.subn(
+                  r"(9\s*:\s*\{[\s\S]*?female\s*:\s*)(['\"])[^'\"]*\2",
+                  r"\1\2" + juliana + r"\2",
+                  t,
+                  count=1
               )
+              trainer.write_text(t, encoding="utf-8")
 
-          # ----------------------------
-          # Mega Evolution roulette: fix mega->mega + transform animation + SFX + Showdown cries
-          # ----------------------------
+          # ============================================================
+          # 4) MOBILE PC: always accessible + tap-to-move on mobile
+          # ============================================================
+          pc_ts = Path("src/app/trainer-team/storage-pc/storage-pc.component.ts")
+          pc_html = Path("src/app/trainer-team/storage-pc/storage-pc.component.html")
+          pc_css = Path("src/app/trainer-team/storage-pc/storage-pc.component.css")
+
+          if pc_ts.exists():
+              s = pc_ts.read_text(encoding="utf-8")
+
+              if "isMobile:" not in s:
+                  s = s.replace(
+                      "    infoModalMessage = '';\n",
+                      "    infoModalMessage = '';\n\n"
+                      "    isMobile: boolean = false;\n"
+                      "    private readonly resizeHandler = () => {\n"
+                      "      this.isMobile = window.innerWidth <= 768;\n"
+                      "    };\n"
+                  )
+
+              if "window.addEventListener('resize', this.resizeHandler);" not in s:
+                  s = s.replace(
+                      "    ngOnInit(): void {\n      this.darkMode = this.darkModeService.darkMode$;\n",
+                      "    ngOnInit(): void {\n      this.darkMode = this.darkModeService.darkMode$;\n"
+                      "      this.resizeHandler();\n"
+                      "      window.addEventListener('resize', this.resizeHandler);\n"
+                  )
+
+              if "window.removeEventListener('resize', this.resizeHandler);" not in s:
+                  last = s.rfind("\n}")
+                  if last != -1:
+                      s = s[:last] + "\n\n  ngOnDestroy(): void {\n    window.removeEventListener('resize', this.resizeHandler);\n  }\n" + s[last:]
+
+              if "onTapPokemon(" not in s:
+                  s = s.replace(
+                      "  getSprite(pokemon: PokemonItem): string {",
+                      "  onTapPokemon(pokemon: PokemonItem, source: 'team' | 'stored'): void {\n"
+                      "    if (!this.isMobile) return;\n"
+                      "    if (!this.trainerTeam || !this.storedPokemon) return;\n\n"
+                      "    if (source === 'stored') {\n"
+                      "      if (this.trainerTeam.length >= 6) return;\n"
+                      "      const idx = this.storedPokemon.indexOf(pokemon);\n"
+                      "      if (idx < 0) return;\n"
+                      "      this.storedPokemon.splice(idx, 1);\n"
+                      "      this.trainerTeam.push(pokemon);\n"
+                      "      this.trainerService.updateTeam();\n"
+                      "      return;\n"
+                      "    }\n\n"
+                      "    if (this.trainerTeam.length <= 1) return;\n"
+                      "    const idx = this.trainerTeam.indexOf(pokemon);\n"
+                      "    if (idx < 0) return;\n"
+                      "    this.trainerTeam.splice(idx, 1);\n"
+                      "    this.storedPokemon.unshift(pokemon);\n"
+                      "    this.trainerService.updateTeam();\n"
+                      "  }\n\n"
+                      "  getSprite(pokemon: PokemonItem): string {"
+                  )
+
+              pc_ts.write_text(s, encoding="utf-8")
+
+          if pc_html.exists():
+              h = pc_html.read_text(encoding="utf-8")
+
+              team_target = "            <div  class=\"example-box shadow\"\n                  cdkDrag>"
+              if team_target in h and "onTapPokemon(pokemon, 'team')" not in h:
+                  h = h.replace(
+                      team_target,
+                      "            <div  class=\"example-box shadow\"\n                  cdkDrag\n                  (click)=\"onTapPokemon(pokemon, 'team')\">"
+                  )
+
+              stored_target = "        <div  class=\"example-box shadow\"\n              [cdkDragData]=\"pokemon\"\n              cdkDrag>"
+              if stored_target in h and "onTapPokemon(pokemon, 'stored')" not in h:
+                  h = h.replace(
+                      stored_target,
+                      "        <div  class=\"example-box shadow\"\n              [cdkDragData]=\"pokemon\"\n              cdkDrag\n              (click)=\"onTapPokemon(pokemon, 'stored')\">"
+                  )
+
+              pc_html.write_text(h, encoding="utf-8")
+
+          if pc_css.exists():
+              c = pc_css.read_text(encoding="utf-8")
+              if "/* MOBILE_PC_PATCH */" not in c:
+                  c += "\n\n/* MOBILE_PC_PATCH */\n"
+                  c += (
+                      ".modal-body{max-height:80vh;overflow-y:auto}\n"
+                      "@media (max-width: 768px){\n"
+                      "  :host > button.btn{position:fixed;right:12px;bottom:12px;z-index:1049;padding:12px 14px;border-width:2px}\n"
+                      "  .example-box{width:22%;padding:6px}\n"
+                      "  .example-list{gap:10px}\n"
+                      "}\n"
+                  )
+              pc_css.write_text(c, encoding="utf-8")
+
+          # ============================================================
+          # 5) GLOBAL NAME FALLBACK: fix pokemon.tapu-koko, pokemon.type-null, etc
+          # ============================================================
+          app_cfg = Path("src/app/app.config.ts")
+          if app_cfg.exists():
+              cfg = app_cfg.read_text(encoding="utf-8")
+
+              if "MissingTranslationHandler" not in cfg:
+                  cfg = cfg.replace(
+                      "import {TranslateLoader, TranslateModule} from '@ngx-translate/core';",
+                      "import { TranslateLoader, TranslateModule, MissingTranslationHandler, MissingTranslationHandlerParams } from '@ngx-translate/core';"
+                  )
+
+              if "class FallbackMissingTranslationHandler" not in cfg:
+                  insert_after = "new TranslateHttpLoader(http, 'i18n/', '.json');\n\n"
+                  handler = textwrap.dedent("""
+                  class FallbackMissingTranslationHandler implements MissingTranslationHandler {
+                    private titleize(slug: string): string {
+                      const specials: Record<string, string> = {
+                        'type-null': 'Type: Null',
+                        'tapu-koko': 'Tapu Koko',
+                        'tapu-lele': 'Tapu Lele',
+                        'tapu-bulu': 'Tapu Bulu',
+                        'tapu-fini': 'Tapu Fini',
+                        'ho-oh': 'Ho-Oh',
+                      };
+                      if (specials[slug]) return specials[slug];
+
+                      let s = slug.replace(/-/g, ' ');
+                      s = s.replace(/\\b\\w/g, (c) => c.toUpperCase());
+                      return s;
+                    }
+
+                    handle(params: MissingTranslationHandlerParams) {
+                      const key = params.key || '';
+                      if (key.startsWith('pokemon.')) {
+                        const slug = key.substring('pokemon.'.length);
+                        return this.titleize(slug);
+                      }
+                      return key;
+                    }
+                  }
+                  """).rstrip() + "\n\n"
+
+                  if insert_after in cfg:
+                      cfg = cfg.replace(insert_after, insert_after + handler, 1)
+
+              if "missingTranslationHandler:" not in cfg:
+                  cfg = cfg.replace(
+                      "deps: [HttpClient]\n      },\n      defaultLanguage: 'en'",
+                      "deps: [HttpClient]\n      },\n      missingTranslationHandler: { provide: MissingTranslationHandler, useClass: FallbackMissingTranslationHandler },\n      defaultLanguage: 'en'",
+                      1
+                  )
+
+              app_cfg.write_text(cfg, encoding="utf-8")
+
+          # ============================================================
+          # 6) MEGA EVOLUTION: real transform animation + fix mega->mega
+          # ============================================================
           mega_ts = Path("src/app/main-game/roulette-container/roulettes/mega-evolution-roulette/mega-evolution-roulette.component.ts")
           mega_html = Path("src/app/main-game/roulette-container/roulettes/mega-evolution-roulette/mega-evolution-roulette.component.html")
           mega_css = Path("src/app/main-game/roulette-container/roulettes/mega-evolution-roulette/mega-evolution-roulette.component.css")
@@ -257,308 +399,126 @@ jobs:
           if mega_ts.exists():
               t = mega_ts.read_text(encoding="utf-8")
 
-              # Replace the "before pokemon reference" with snapshot fields
+              # Expand popup fields
               t = t.replace(
-                  "popupBeforePokemon?: PokemonItem;",
-                  "popupBeforeName = '';\n  popupBeforeSpriteUrl = '';\n  popupAfterApiName = '';\n"
+                  "  /** Data for the popup. */\n  popupBeforePokemon: PokemonItem | null = null;\n  popupAfterName = '';\n  popupAfterSpriteUrl = '';",
+                  "  /** Data for the popup. */\n"
+                  "  popupBeforePokemon: PokemonItem | null = null;\n"
+                  "  popupBeforeName = '';\n"
+                  "  popupBeforeSpriteUrl = '';\n"
+                  "  popupAfterName = '';\n"
+                  "  popupAfterSpriteUrl = '';\n"
+                  "  isMegaAnimating = false;"
               )
 
-              # Add animation/audio fields (idempotent)
-              if "isMegaAnimating" not in t:
+              # Capture BEFORE sprite/name before mutation
+              if "this.popupBeforeName =" not in t:
                   t = t.replace(
-                      "popupAfterName = '';\n  popupAfterSpriteUrl = '';\n",
-                      "popupAfterName = '';\n  popupAfterSpriteUrl = '';\n\n"
-                      "  // Animation + VFX\n  isMegaAnimating = false;\n  typeClass = 'type-normal';\n\n"
-                      "  // Audio\n  private timers: number[] = [];\n  private cryAudio?: HTMLAudioElement;\n  private audioCtx?: AudioContext;\n\n"
-                      "  private static showdownDexPromise: Promise<Record<string, { types?: string[] }>> | null = null;\n"
+                      "    // Prepare popup before we mutate the Pokémon.\n    this.popupBeforePokemon = pokemon;\n    this.popupAfterName = megaForm.displayName;\n",
+                      "    // Prepare popup BEFORE we mutate the Pokémon.\n"
+                      "    this.popupBeforePokemon = pokemon;\n"
+                      "    this.popupBeforeName = pokemon.text;\n"
+                      "    const beforeSprite = pokemon.sprite;\n"
+                      "    this.popupBeforeSpriteUrl = pokemon.shiny\n"
+                      "      ? (beforeSprite?.front_shiny || beforeSprite?.front_default || '')\n"
+                      "      : (beforeSprite?.front_default || '');\n"
+                      "    this.popupAfterName = megaForm.displayName;\n"
                   )
 
-              # Patch applyMegaEvolution safely
-              t = replace_method_ts(t, "applyMegaEvolution", """
-private applyMegaEvolution(pokemon: PokemonItem, megaForm: MegaForm): void {
-  // Snapshot BEFORE (megaEvolveForBattle mutates the same object)
-  this.popupBeforeName = pokemon.text;
-  const beforeSprite = pokemon.sprite;
-  this.popupBeforeSpriteUrl = pokemon.shiny
-    ? (beforeSprite?.front_shiny || beforeSprite?.front_default || '')
-    : (beforeSprite?.front_default || '');
+              # Toggle animation flag when opening modal
+              if "this.isMegaAnimating = true;" not in t:
+                  t = t.replace(
+                      "      this.modalRef = this.modalService.open(this.megaEvolutionModal, {",
+                      "      this.isMegaAnimating = true;\n"
+                      "      this.modalRef = this.modalService.open(this.megaEvolutionModal, {"
+                  )
 
-  this.popupAfterName = megaForm.displayName;
-  this.popupAfterApiName = megaForm.apiName;
+              t = t.replace(
+                  "        } finally {\n          this.megaEvolutionFinished.emit();\n        }\n      }, 1200);",
+                  "        } finally {\n"
+                  "          this.isMegaAnimating = false;\n"
+                  "          this.megaEvolutionFinished.emit();\n"
+                  "        }\n"
+                  "      }, 1200);"
+              )
 
-  const sub = this.megaEvolutionService.megaEvolveForBattle(pokemon, megaForm).subscribe({
-    next: () => {
-      const sprite = pokemon.sprite;
-      this.popupAfterSpriteUrl = pokemon.shiny
-        ? (sprite?.front_shiny || sprite?.front_default || '')
-        : (sprite?.front_default || '');
+              t = t.replace(
+                  "    } catch {\n      // If modal fails (shouldn't), just proceed.\n      this.megaEvolutionFinished.emit();\n    }",
+                  "    } catch {\n"
+                  "      this.isMegaAnimating = false;\n"
+                  "      // If modal fails (shouldn't), just proceed.\n"
+                  "      this.megaEvolutionFinished.emit();\n"
+                  "    }"
+              )
 
-      this.setTypeClassFromShowdown(this.popupAfterApiName);
-      this.openMegaPopupAndProceed();
-    },
-    error: () => this.megaEvolutionFinished.emit()
-  });
+              mega_ts.write_text(t, encoding="utf-8")
 
-  this.subs.add(sub);
-}
-""")
-
-              # Patch openMegaPopupAndProceed safely
-              t = replace_method_ts(t, "openMegaPopupAndProceed", """
-private openMegaPopupAndProceed(): void {
-  const ref = this.modalService.open(this.megaPopup, {
-    centered: true,
-    backdrop: 'static',
-    keyboard: false
-  });
-
-  this.isMegaAnimating = true;
-  this.playMegaEvolutionSfx();
-
-  this.timers.push(window.setTimeout(() => {
-    this.playCryForMega(this.popupAfterApiName, this.popupAfterName);
-  }, 900));
-
-  this.timers.push(window.setTimeout(() => {
-    try { ref.close(); } catch {}
-  }, 2200));
-
-  ref.result.then(
-    () => this.megaEvolutionFinished.emit(),
-    () => this.megaEvolutionFinished.emit()
-  ).finally(() => {
-    this.isMegaAnimating = false;
-    this.stopCry();
-    this.clearTimers();
-  });
-}
-""")
-
-              # Patch ngOnDestroy cleanup
-              t = replace_method_ts(t, "ngOnDestroy", """
-ngOnDestroy(): void {
-  this.subs.unsubscribe();
-  this.stopCry();
-  this.clearTimers();
-  try { this.audioCtx?.close(); } catch {}
-}
-""")
-
-              # Add helper methods if missing
-              if "playMegaEvolutionSfx" not in t:
-                  helpers = """
-  private playMegaEvolutionSfx(): void {
-    try {
-      if (!this.audioCtx) {
-        this.audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      }
-      const ctx = this.audioCtx;
-      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-
-      const now = ctx.currentTime;
-
-      const osc = ctx.createOscillator();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(220, now);
-      osc.frequency.exponentialRampToValueAtTime(1200, now + 0.55);
-
-      const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(0.16, now + 0.08);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.75);
-
-      const bufferSize = Math.floor(ctx.sampleRate * 0.5);
-      const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-      const out = noiseBuffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) out[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
-
-      const noise = ctx.createBufferSource();
-      noise.buffer = noiseBuffer;
-
-      const bandpass = ctx.createBiquadFilter();
-      bandpass.type = 'bandpass';
-      bandpass.frequency.setValueAtTime(800, now);
-      bandpass.frequency.linearRampToValueAtTime(1400, now + 0.4);
-
-      const noiseGain = ctx.createGain();
-      noiseGain.gain.setValueAtTime(0.0001, now);
-      noiseGain.gain.exponentialRampToValueAtTime(0.12, now + 0.08);
-      noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
-
-      osc.connect(gain);
-      noise.connect(bandpass);
-      bandpass.connect(noiseGain);
-
-      gain.connect(ctx.destination);
-      noiseGain.connect(ctx.destination);
-
-      osc.start(now);
-      noise.start(now);
-
-      osc.stop(now + 0.8);
-      noise.stop(now + 0.6);
-    } catch {}
-  }
-
-  private playCryForMega(apiName: string, fallbackName: string): void {
-    const id = this.toShowdownCryId(apiName || fallbackName);
-    const url = `https://play.pokemonshowdown.com/audio/cries/${id}.mp3`;
-
-    this.stopCry();
-
-    const audio = new Audio();
-    audio.preload = 'auto';
-    audio.src = url;
-    audio.volume = 0.9;
-
-    audio.onerror = () => {
-      const base = id.split('-mega')[0];
-      if (base && base !== id) {
-        audio.src = `https://play.pokemonshowdown.com/audio/cries/${base}.mp3`;
-        audio.play().catch(() => {});
-      }
-    };
-
-    audio.play().catch(() => {});
-    this.cryAudio = audio;
-  }
-
-  private stopCry(): void {
-    if (this.cryAudio) {
-      try {
-        this.cryAudio.pause();
-        this.cryAudio.currentTime = 0;
-      } catch {}
-    }
-    this.cryAudio = undefined;
-  }
-
-  private clearTimers(): void {
-    this.timers.forEach(t => clearTimeout(t));
-    this.timers = [];
-  }
-
-  private toShowdownCryId(nameOrApi: string): string {
-    let s = (nameOrApi || '').trim().toLowerCase();
-    s = s.replace(/\\s+/g, '-');
-    s = s.replace(/[^a-z0-9\\-]/g, '');
-    // Showdown uses megax/megay
-    s = s.replace(/-mega-x\\b/g, '-megax').replace(/-mega-y\\b/g, '-megay');
-    return s;
-  }
-
-  private async setTypeClassFromShowdown(nameOrApi: string): Promise<void> {
-    try {
-      const dex = await this.getShowdownDex();
-      const toId = (x: string) => (x || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
-      const key = toId(this.toShowdownCryId(nameOrApi));
-      const entry = dex[key];
-      const t = entry?.types?.[0] || 'Normal';
-      this.typeClass = `type-${t.toLowerCase()}`;
-    } catch {
-      this.typeClass = 'type-normal';
-    }
-  }
-
-  private async getShowdownDex(): Promise<Record<string, { types?: string[] }>> {
-    if (!MegaEvolutionRouletteComponent.showdownDexPromise) {
-      MegaEvolutionRouletteComponent.showdownDexPromise =
-        fetch('https://play.pokemonshowdown.com/data/pokedex.json').then(r => r.json());
-    }
-    return MegaEvolutionRouletteComponent.showdownDexPromise;
-  }
-"""
-                  t = t[:t.rfind("}")] + helpers + "\n}"
-
-              safe_write(mega_ts, t)
-
-          # Update Mega HTML (no *ngIf to avoid module/import issues)
           if mega_html.exists():
-              safe_write(mega_html, """<div class="container">
-  <h2>{{ 'megaEvolution.title' | translate }}</h2>
-  <p class="subtitle">{{ 'megaEvolution.instructions' | translate }}</p>
+              h = mega_html.read_text(encoding="utf-8")
 
-  <app-wheel
-    [items]="wheelItems"
-    (selectedItemEvent)="onPokemonSelected($event)">
-  </app-wheel>
+              # Replace ONLY the evolution-panel block safely (no extra </div>)
+              panel_pat = r"<div class=\"evolution-panel\">[\s\S]*?</div>\s*\n\s*<div class=\"actions\">"
+              panel_repl = (
+                  "<div class=\"evolution-panel\" [class.animating]=\"isMegaAnimating\">\n"
+                  "  <div class=\"pokemon before\">\n"
+                  "    <img class=\"sprite before-sprite\" [src]=\"popupBeforeSpriteUrl\" alt=\"Before\">\n"
+                  "    <div class=\"name\">{{ popupBeforeName | translate }}</div>\n"
+                  "  </div>\n\n"
+                  "  <div class=\"arrow\">➜</div>\n\n"
+                  "  <div class=\"pokemon after\">\n"
+                  "    <img class=\"sprite after-sprite\" [src]=\"popupAfterSpriteUrl\" alt=\"After\">\n"
+                  "    <div class=\"name\">{{ popupAfterName | translate }}</div>\n"
+                  "  </div>\n"
+                  "</div>\n\n"
+                  "<div class=\"actions\">"
+              )
+              h2, n = re.subn(panel_pat, panel_repl, h, count=1)
+              if n == 1:
+                  mega_html.write_text(h2, encoding="utf-8")
 
-  <ng-template #megaPopup let-modal>
-    <div class="mega-evolution-container" [ngClass]="(darkMode$ | async) ? 'dark-mode' : ''">
-      <p>{{ popupMessage | translate }}</p>
-
-      <div class="evo-wrap" [ngClass]="[typeClass, isMegaAnimating ? 'animating' : '']">
-        <div class="particles" aria-hidden="true"></div>
-
-        <div class="evolution-stage">
-          <img class="sprite sprite-before" [src]="popupBeforeSpriteUrl" [alt]="popupBeforeName" />
-          <img class="sprite sprite-after" [src]="popupAfterSpriteUrl" [alt]="popupAfterName" />
-        </div>
-
-        <div class="name-row">
-          <div class="name">{{ popupBeforeName }}</div>
-          <div class="arrow" aria-hidden="true">→</div>
-          <div class="name">{{ popupAfterName }}</div>
-        </div>
-      </div>
-
-      <p class="mega-evolution-message">
-        {{ popupBeforeName }} mega-evoluiu para {{ popupAfterName }}!
-      </p>
-
-      <button class="btn btn-primary" (click)="modal.close()">
-        {{ 'ok' | translate }}
-      </button>
-    </div>
-  </ng-template>
-</div>
-""")
-
-          # Update Mega CSS (append if not already present)
           if mega_css.exists():
-              css = mega_css.read_text(encoding="utf-8")
-              if ".evo-wrap" not in css:
-                  css += """
+              c = mega_css.read_text(encoding="utf-8")
+              if "/* MEGA_ANIM_PATCH */" not in c:
+                  c += "\n\n/* MEGA_ANIM_PATCH */\n"
+                  c += textwrap.dedent("""
+                  .evolution-panel.animating .before-sprite {
+                    animation: megaBefore 1.2s ease-in-out forwards;
+                  }
 
-/* New transformation visuals */
-.evo-wrap{display:flex;flex-direction:column;align-items:center;gap:.75rem;position:relative}
-.evolution-stage{position:relative;width:11rem;height:11rem;display:flex;align-items:center;justify-content:center}
-.sprite{position:absolute;width:11rem;height:11rem;object-fit:contain;will-change:transform,opacity,filter}
-.sprite-after{opacity:0;transform:scale(.92);filter:brightness(1.2) drop-shadow(0 0 .35rem rgba(255,255,255,.35))}
-.name-row{display:flex;align-items:center;justify-content:center;gap:.75rem;flex-wrap:wrap}
-.name{min-width:6.5rem;text-align:center;font-weight:700}
-.arrow{font-size:1.6rem;opacity:.85}
-.particles{position:absolute;inset:-10%;pointer-events:none;overflow:hidden;border-radius:999px}
-.particles::before{content:'';position:absolute;inset:0;opacity:0;transform:translateY(15%);will-change:transform,opacity,filter}
+                  .after-sprite {
+                    opacity: 0;
+                    transform: scale(0.85);
+                  }
 
-.animating .sprite-before{animation:megaBefore .85s ease-in-out forwards}
-.animating .sprite-after{animation:megaAfter .85s ease-in-out forwards}
-.animating .particles::before{opacity:1;animation:particleMove .9s ease-out forwards}
+                  .evolution-panel.animating .after-sprite {
+                    animation: megaAfter 1.2s ease-in-out forwards;
+                    animation-delay: 0.35s;
+                  }
 
-@keyframes megaBefore{
-  0%{opacity:1;transform:scale(1);filter:brightness(1)}
-  45%{opacity:1;transform:scale(1.02);filter:brightness(1.7)}
-  100%{opacity:0;transform:scale(1.1);filter:brightness(1.2) blur(2px)}
-}
-@keyframes megaAfter{
-  0%{opacity:0;transform:scale(.92);filter:brightness(2.2) blur(2px)}
-  60%{opacity:1;transform:scale(1.06);filter:brightness(1.25)}
-  100%{opacity:1;transform:scale(1);filter:brightness(1.05)}
-}
-@keyframes particleMove{
-  from{transform:translateY(18%) scale(.98);filter:blur(0)}
-  to{transform:translateY(-20%) scale(1.02);filter:blur(.4px)}
-}
+                  .evolution-panel.animating .arrow {
+                    animation: megaArrow 1.2s ease-in-out infinite;
+                  }
 
-/* Type VFX (light) */
-.type-water .particles::before{background-image:radial-gradient(circle at 15% 80%, rgba(200,240,255,.95) 0 2px, transparent 3px),radial-gradient(circle at 45% 90%, rgba(200,240,255,.95) 0 3px, transparent 4px),radial-gradient(circle at 75% 85%, rgba(200,240,255,.95) 0 2px, transparent 3px);background-size:24px 24px}
-.type-fire .particles::before{background-image:radial-gradient(circle at 20% 80%, rgba(255,190,120,.95) 0 2px, transparent 3px),radial-gradient(circle at 55% 90%, rgba(255,150,90,.9) 0 3px, transparent 4px),radial-gradient(circle at 80% 85%, rgba(255,210,140,.9) 0 2px, transparent 3px);background-size:22px 22px}
-.type-electric .particles::before{background-image:linear-gradient(135deg, transparent 45%, rgba(255,255,160,.85) 46%, rgba(255,255,160,.85) 54%, transparent 55%),linear-gradient(45deg, transparent 45%, rgba(255,255,160,.75) 46%, rgba(255,255,160,.75) 54%, transparent 55%);background-size:28px 28px;mix-blend-mode:screen}
-.type-grass .particles::before{background-image:radial-gradient(circle at 25% 85%, rgba(170,255,180,.85) 0 2px, transparent 3px),radial-gradient(circle at 60% 90%, rgba(170,255,180,.8) 0 3px, transparent 4px),radial-gradient(circle at 80% 75%, rgba(170,255,180,.75) 0 2px, transparent 3px);background-size:26px 26px}
-.type-normal .particles::before{background-image:radial-gradient(circle at 25% 85%, rgba(255,255,255,.5) 0 2px, transparent 3px),radial-gradient(circle at 60% 90%, rgba(255,255,255,.45) 0 3px, transparent 4px);background-size:26px 26px}
-"""
-                  safe_write(mega_css, css)
+                  @keyframes megaBefore {
+                    0%   { opacity: 1; transform: scale(1); filter: none; }
+                    55%  { opacity: 0.15; transform: scale(1.35); filter: brightness(1.6) drop-shadow(0 0 10px rgba(255,255,255,0.7)); }
+                    100% { opacity: 0; transform: scale(0.75); filter: none; }
+                  }
 
+                  @keyframes megaAfter {
+                    0%   { opacity: 0; transform: scale(0.75); filter: brightness(1.1) drop-shadow(0 0 0 rgba(0,0,0,0)); }
+                    60%  { opacity: 1; transform: scale(1.2); filter: brightness(1.4) drop-shadow(0 0 12px rgba(255,255,255,0.75)); }
+                    100% { opacity: 1; transform: scale(1); filter: none; }
+                  }
+
+                  @keyframes megaArrow {
+                    0%, 100% { transform: scale(1); opacity: 0.85; }
+                    50%      { transform: scale(1.15); opacity: 1; }
+                  }
+                  """).strip() + "\n"
+              mega_css.write_text(c, encoding="utf-8")
+
+          print("Patch OK: wheel + evolutions + Gen9 trainers + Mobile PC + fallback names + mega animation.")
           PY
 
       - name: Build (relative paths for GitHub Pages)
@@ -594,3 +554,4 @@ ngOnDestroy(): void {
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
