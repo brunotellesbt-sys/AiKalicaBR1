@@ -7,19 +7,20 @@
 </button>
 
 <div *ngIf="isOpen" class="pokedex-panel mt-2">
-  <div class="d-flex gap-2 align-items-center mb-2">
+  <div class="pokedex-controls mb-2">
     <input
-      class="form-control"
+      class="form-control pokedex-search"
       type="text"
       placeholder="Buscar por nome ou número (ex: 25, Pikachu)"
       [(ngModel)]="search"
       (ngModelChange)="onSearchChange()" />
 
-    <button type="button" class="btn btn-outline-secondary" (click)="prevPage()" [disabled]="pageIndex === 0">◀</button>
-    <button type="button" class="btn btn-outline-secondary" (click)="nextPage()" [disabled]="(pageIndex + 1) * pageSize >= filteredRows().length">▶</button>
+    <div class="pokedex-pagination">
+      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="prevPage()" [disabled]="pageIndex === 0">◀</button>
+      <span class="pokedex-page-label">{{ pageLabel() }}</span>
+      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="nextPage()" [disabled]="(pageIndex + 1) * pageSize >= filteredRows().length">▶</button>
+    </div>
   </div>
-
-  <div class="small text-muted mb-2">{{ pageLabel() }}</div>
 
   <div class="pokedex-list">
     <div class="pokedex-row" *ngFor="let row of visibleRows">
@@ -28,13 +29,15 @@
         <div class="pokedex-title">
           <span class="pokedex-id">#{{ row.id }}</span>
           <span class="pokedex-name">{{ row.name }}</span>
-          <span class="pokedex-power">Power: {{ row.power }}</span>
         </div>
-        <div class="pokedex-sub">
-          <span *ngIf="row.heightM !== undefined && row.weightKg !== undefined">
-            Altura: {{ row.heightM }} m · Peso: {{ row.weightKg }} kg
+        <div class="pokedex-stats">
+          <span class="pokedex-power">
+            <strong>Poder:</strong> {{ row.power }}
           </span>
-          <span *ngIf="row.loading" class="ms-2">(carregando…)</span>
+          <span *ngIf="row.heightM !== undefined && row.weightKg !== undefined" class="pokedex-measures">
+            <strong>Altura:</strong> {{ row.heightM }}m · <strong>Peso:</strong> {{ row.weightKg }}kg
+          </span>
+          <span *ngIf="row.loading" class="pokedex-loading">(carregando…)</span>
         </div>
         <div class="pokedex-desc" *ngIf="row.descriptionPt">{{ row.descriptionPt }}</div>
       </div>
