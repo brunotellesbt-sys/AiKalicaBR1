@@ -12,13 +12,27 @@
 .popup-title {
   text-align: center;
   margin-bottom: 1rem;
+  font-size: 1.8rem;
+  font-weight: bold;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  animation: titlePulse 1s ease-in-out infinite;
+}
+
+@keyframes titlePulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
 }
 
 .evolution-panel {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
+  gap: 2rem;
+  padding: 1rem;
 }
 
 .pokemon {
@@ -29,46 +43,120 @@
 }
 
 .sprite {
-  width: 8rem;
-  height: 8rem;
+  width: 9rem;
+  height: 9rem;
   object-fit: contain;
+  transition: all 0.3s ease;
 }
 
 .mega-glow {
-  animation: megaPulse 1.5s ease-in-out infinite;
+  animation: megaPulse 1.2s ease-in-out infinite, megaRotate 3s linear infinite;
+  filter: brightness(1.2);
 }
 
 @keyframes megaPulse {
   0%, 100% {
-    transform: scale(1);
+    transform: scale(1) rotate(0deg);
   }
   50% {
-    transform: scale(1.05);
+    transform: scale(1.1) rotate(2deg);
+  }
+}
+
+@keyframes megaRotate {
+  0% {
+    filter: hue-rotate(0deg);
+  }
+  100% {
+    filter: hue-rotate(360deg);
   }
 }
 
 .arrow {
-  font-size: 2rem;
-  animation: arrowBounce 1s ease-in-out infinite;
+  font-size: 3rem;
+  font-weight: bold;
+  animation: arrowBounce 0.8s ease-in-out infinite;
+  text-shadow: 0 0 10px currentColor;
 }
 
 @keyframes arrowBounce {
   0%, 100% {
-    transform: translateX(0);
+    transform: translateX(0) scale(1);
   }
   50% {
-    transform: translateX(5px);
+    transform: translateX(8px) scale(1.2);
   }
 }
 
 .name {
   text-align: center;
-  margin-top: 0.25rem;
-  font-weight: 600;
+  margin-top: 0.5rem;
+  font-weight: 700;
+  font-size: 1.1rem;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .actions {
   display: flex;
   justify-content: center;
-  margin-top: 1rem;
+  margin-top: 1.5rem;
+}
+
+/* Modal body enhancements */
+.modal-body {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  transition: box-shadow 0.3s ease;
+  animation: modalGlow 2s ease-in-out infinite;
+}
+
+@keyframes modalGlow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(255, 215, 0, 0.6);
+  }
+}
+
+/* Add sparkle effect */
+.evolution-panel::before {
+  content: '✨';
+  position: absolute;
+  font-size: 2rem;
+  animation: sparkle1 2s ease-in-out infinite;
+  top: 10%;
+  left: 10%;
+}
+
+.evolution-panel::after {
+  content: '✨';
+  position: absolute;
+  font-size: 2rem;
+  animation: sparkle2 2.5s ease-in-out infinite;
+  bottom: 10%;
+  right: 10%;
+}
+
+@keyframes sparkle1 {
+  0%, 100% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.5);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-10px, -10px) scale(1);
+  }
+}
+
+@keyframes sparkle2 {
+  0%, 100% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.5);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(10px, 10px) scale(1);
+  }
 }

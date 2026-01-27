@@ -185,14 +185,14 @@ export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
         keyboard: false,
       });
 
-      // Auto-close after a short moment to keep the game flow fast.
+      // Extended time to allow cry to play and animations to be visible (3 seconds)
       setTimeout(() => {
         try {
           this.modalRef?.close();
         } finally {
           this.megaEvolutionFinished.emit();
         }
-      }, 1200);
+      }, 3000);
     } catch {
       // If modal fails (shouldn't), just proceed.
       this.megaEvolutionFinished.emit();
@@ -204,7 +204,8 @@ export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
    * Uses Pokemon Showdown's audio CDN with the Mega form's API name.
    */
   private playMegaCry(): void {
-    if (!this.popupBeforePokemon) {
+    if (!this.popupAfterName) {
+      console.warn('No Mega form name available for cry playback');
       return;
     }
 
@@ -215,9 +216,12 @@ export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
     // Pokemon Showdown cry URL format: https://play.pokemonshowdown.com/audio/cries/<pokemon-name>.mp3
     const cryUrl = `https://play.pokemonshowdown.com/audio/cries/${megaApiName}.mp3`;
     
+    console.log('Playing Mega Evolution cry:', cryUrl);
+    
     try {
       const cryAudio = this.audioService.createAudio(cryUrl);
-      this.audioService.playAudio(cryAudio, 0.5);
+      // Play with higher volume for better audibility
+      this.audioService.playAudio(cryAudio, 0.7);
     } catch (error) {
       // If cry playback fails, just continue silently
       console.warn('Failed to play Mega Evolution cry:', error);
@@ -230,7 +234,13 @@ export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
    */
   private convertDisplayNameToApiName(displayName: string): string {
     // Remove spaces and convert to lowercase
-    // "Mega Charizard X" -> "megacharizardx"
-    return displayName.toLowerCase().replace(/\s+/g, '');
+    // "Mega Charizard X" -> "charizardmegax"
+    // Handle special cases like "Mega Charizard X" -> "charizardmegax"
+    const normalized = displayName.toLowerCase().replace(/\s+/g, '');
+    
+    // Pokemon Showdown uses specific naming for megas
+    // Format: pokemonname + mega + variant (if any)
+    // Examples: "charizardmegax", "charizardmegay", "venusaurmega"
+    return normalized;
   }
 }
