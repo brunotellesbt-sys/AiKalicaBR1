@@ -1,0 +1,186 @@
+.loading { text-align: center; margin-top: 1rem; }
+.subtitle { text-align: center; opacity: 0.9; margin-bottom: 0.75rem; }
+.popup-title { text-align: center; margin-bottom: 1rem; font-size: 1.8rem; font-weight: bold; text-shadow: 0 2px 4px rgba(0,0,0,0.3); animation: titlePulse 1s ease-in-out infinite; }
+@keyframes titlePulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+.evolution-panel { display: flex; align-items: center; justify-content: center; gap: 2rem; padding: 1rem; position: relative; z-index: 10; }
+.pokemon { display: flex; flex-direction: column; align-items: center; width: 10rem; }
+.sprite { width: 9rem; height: 9rem; object-fit: contain; transition: all 0.3s ease; }
+.mega-glow { animation: megaPulse 1.2s ease-in-out infinite; filter: brightness(1.2); }
+@keyframes megaPulse { 0%, 100% { transform: scale(1) rotate(0deg); } 50% { transform: scale(1.1) rotate(2deg); } }
+.arrow { font-size: 3rem; font-weight: bold; animation: arrowBounce 0.8s ease-in-out infinite; text-shadow: 0 0 10px currentColor; z-index: 15; }
+@keyframes arrowBounce { 0%, 100% { transform: translateX(0) scale(1); } 50% { transform: translateX(8px) scale(1.2); } }
+.name { text-align: center; margin-top: 0.5rem; font-weight: 700; font-size: 1.1rem; text-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+.actions { display: flex; justify-content: center; margin-top: 1.5rem; position: relative; z-index: 10; }
+.modal-body { position: relative; overflow: hidden; border-radius: 8px; transition: box-shadow 0.3s ease; }
+.particle-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+.particle { position: absolute; border-radius: 50%; opacity: 0; }
+
+/* WATER TYPE - Bolhas (Bubbles) - 10 particles */
+.particles-water .particle { background: radial-gradient(circle, rgba(100,200,255,0.8), rgba(50,150,255,0.3)); animation: bubbleFloat 3s ease-in-out infinite; box-shadow: inset 0 0 10px rgba(255,255,255,0.5); }
+.particles-water .particle:nth-child(1) { width: 30px; height: 30px; left: 10%; animation-delay: 0s; }
+.particles-water .particle:nth-child(2) { width: 20px; height: 20px; left: 25%; animation-delay: 0.5s; }
+.particles-water .particle:nth-child(3) { width: 25px; height: 25px; left: 40%; animation-delay: 1s; }
+.particles-water .particle:nth-child(4) { width: 35px; height: 35px; left: 60%; animation-delay: 1.5s; }
+.particles-water .particle:nth-child(5) { width: 22px; height: 22px; left: 75%; animation-delay: 2s; }
+.particles-water .particle:nth-child(6) { width: 28px; height: 28px; left: 85%; animation-delay: 0.3s; }
+.particles-water .particle:nth-child(7) { width: 18px; height: 18px; left: 15%; animation-delay: 1.2s; }
+.particles-water .particle:nth-child(8) { width: 32px; height: 32px; left: 50%; animation-delay: 1.8s; }
+.particles-water .particle:nth-child(9) { width: 24px; height: 24px; left: 70%; animation-delay: 0.8s; }
+.particles-water .particle:nth-child(10) { width: 26px; height: 26px; left: 90%; animation-delay: 2.2s; }
+@keyframes bubbleFloat { 0% { bottom: -10%; opacity: 0; } 10%, 80% { opacity: 0.8; } 100% { bottom: 110%; opacity: 0; } }
+
+/* FIRE TYPE - Chamas (Flames) - 10 particles */
+.particles-fire .particle { background: radial-gradient(circle, rgba(255,150,0,0.9), rgba(255,50,0,0.3)); border-radius: 50% 50% 0 0; animation: fireRise 2s ease-in-out infinite; filter: blur(2px); }
+.particles-fire .particle:nth-child(1) { width: 40px; height: 60px; left: 15%; animation-delay: 0s; }
+.particles-fire .particle:nth-child(2) { width: 30px; height: 50px; left: 30%; animation-delay: 0.3s; }
+.particles-fire .particle:nth-child(3) { width: 35px; height: 55px; left: 50%; animation-delay: 0.6s; }
+.particles-fire .particle:nth-child(4) { width: 45px; height: 65px; left: 70%; animation-delay: 0.9s; }
+.particles-fire .particle:nth-child(5) { width: 32px; height: 52px; left: 85%; animation-delay: 1.2s; }
+.particles-fire .particle:nth-child(6) { width: 38px; height: 58px; left: 10%; animation-delay: 0.4s; }
+.particles-fire .particle:nth-child(7) { width: 28px; height: 48px; left: 40%; animation-delay: 0.7s; }
+.particles-fire .particle:nth-child(8) { width: 42px; height: 62px; left: 60%; animation-delay: 1s; }
+.particles-fire .particle:nth-child(9) { width: 34px; height: 54px; left: 80%; animation-delay: 0.2s; }
+.particles-fire .particle:nth-child(10) { width: 36px; height: 56px; left: 25%; animation-delay: 0.8s; }
+@keyframes fireRise { 0% { bottom: -10%; opacity: 0; transform: scale(1) translateX(0); } 10% { opacity: 0.9; } 50% { transform: scale(1.2) translateX(10px); } 100% { bottom: 110%; opacity: 0; transform: scale(0.5) translateX(-10px); } }
+
+/* ELECTRIC TYPE - Raios (Lightning) - 10 particles */
+.particles-electric .particle { width: 3px; height: 80px; background: linear-gradient(to bottom, #ff0, #fa0, transparent); border-radius: 0; animation: lightning 1.5s ease-in-out infinite; box-shadow: 0 0 15px #ff0; }
+.particles-electric .particle:nth-child(1) { left: 10%; animation-delay: 0s; }
+.particles-electric .particle:nth-child(2) { left: 25%; animation-delay: 0.2s; }
+.particles-electric .particle:nth-child(3) { left: 40%; animation-delay: 0.4s; }
+.particles-electric .particle:nth-child(4) { left: 55%; animation-delay: 0.6s; }
+.particles-electric .particle:nth-child(5) { left: 70%; animation-delay: 0.8s; }
+.particles-electric .particle:nth-child(6) { left: 85%; animation-delay: 1s; }
+.particles-electric .particle:nth-child(7) { left: 15%; animation-delay: 0.3s; }
+.particles-electric .particle:nth-child(8) { left: 50%; animation-delay: 0.5s; }
+.particles-electric .particle:nth-child(9) { left: 75%; animation-delay: 0.7s; }
+.particles-electric .particle:nth-child(10) { left: 90%; animation-delay: 0.9s; }
+@keyframes lightning { 0%, 10%, 20%, 100% { opacity: 0; top: -10%; } 5%, 15% { opacity: 1; top: 0; } 25% { opacity: 0; top: 100%; } }
+
+/* GRASS TYPE - Folhas (Leaves) - 10 particles */
+.particles-grass .particle { width: 25px; height: 15px; background: linear-gradient(135deg, #90EE90, #228B22); border-radius: 0 100% 0 100%; animation: leafFall 4s ease-in-out infinite; }
+.particles-grass .particle:nth-child(1) { left: 10%; animation-delay: 0s; }
+.particles-grass .particle:nth-child(2) { left: 20%; animation-delay: 0.5s; }
+.particles-grass .particle:nth-child(3) { left: 35%; animation-delay: 1s; }
+.particles-grass .particle:nth-child(4) { left: 50%; animation-delay: 1.5s; }
+.particles-grass .particle:nth-child(5) { left: 65%; animation-delay: 2s; }
+.particles-grass .particle:nth-child(6) { left: 75%; animation-delay: 2.5s; }
+.particles-grass .particle:nth-child(7) { left: 85%; animation-delay: 0.3s; }
+.particles-grass .particle:nth-child(8) { left: 40%; animation-delay: 1.2s; }
+.particles-grass .particle:nth-child(9) { left: 60%; animation-delay: 1.8s; }
+.particles-grass .particle:nth-child(10) { left: 90%; animation-delay: 3s; }
+@keyframes leafFall { 0% { top: -10%; opacity: 0; transform: rotate(0deg); } 10% { opacity: 1; } 100% { top: 110%; opacity: 0; transform: rotate(360deg) translateX(30px); } }
+
+/* PSYCHIC TYPE - Estrelas/Energia (Stars/Energy) - 10 particles */
+.particles-psychic .particle { width: 20px; height: 20px; background: radial-gradient(circle, rgba(255,100,255,0.9), rgba(200,50,200,0.3)); animation: psychicSpin 3s linear infinite; clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+.particles-psychic .particle:nth-child(odd) { animation-direction: normal; }
+.particles-psychic .particle:nth-child(even) { animation-direction: reverse; }
+.particles-psychic .particle:nth-child(1) { left: 15%; top: 20%; animation-delay: 0s; }
+.particles-psychic .particle:nth-child(2) { left: 30%; top: 40%; animation-delay: 0.3s; }
+.particles-psychic .particle:nth-child(3) { left: 50%; top: 15%; animation-delay: 0.6s; }
+.particles-psychic .particle:nth-child(4) { left: 70%; top: 35%; animation-delay: 0.9s; }
+.particles-psychic .particle:nth-child(5) { left: 85%; top: 25%; animation-delay: 1.2s; }
+.particles-psychic .particle:nth-child(6) { left: 10%; top: 60%; animation-delay: 1.5s; }
+.particles-psychic .particle:nth-child(7) { left: 40%; top: 70%; animation-delay: 1.8s; }
+.particles-psychic .particle:nth-child(8) { left: 60%; top: 55%; animation-delay: 2.1s; }
+.particles-psychic .particle:nth-child(9) { left: 80%; top: 65%; animation-delay: 2.4s; }
+.particles-psychic .particle:nth-child(10) { left: 25%; top: 80%; animation-delay: 2.7s; }
+@keyframes psychicSpin { 0% { opacity: 0; transform: scale(0) rotate(0deg); } 50% { opacity: 1; transform: scale(1.5) rotate(180deg); } 100% { opacity: 0; transform: scale(0) rotate(360deg); } }
+
+/* ICE TYPE - Cristais de gelo (Ice crystals) - 10 particles */
+.particles-ice .particle { width: 0; height: 0; border-left: 15px solid transparent; border-right: 15px solid transparent; border-bottom: 25px solid rgba(173,216,230,0.8); animation: iceFall 3s linear infinite; background: transparent; }
+.particles-ice .particle:nth-child(1) { left: 10%; animation-delay: 0s; }
+.particles-ice .particle:nth-child(2) { left: 20%; animation-delay: 0.4s; }
+.particles-ice .particle:nth-child(3) { left: 30%; animation-delay: 0.8s; }
+.particles-ice .particle:nth-child(4) { left: 45%; animation-delay: 1.2s; }
+.particles-ice .particle:nth-child(5) { left: 55%; animation-delay: 1.6s; }
+.particles-ice .particle:nth-child(6) { left: 65%; animation-delay: 2s; }
+.particles-ice .particle:nth-child(7) { left: 75%; animation-delay: 0.2s; }
+.particles-ice .particle:nth-child(8) { left: 85%; animation-delay: 0.6s; }
+.particles-ice .particle:nth-child(9) { left: 35%; animation-delay: 1s; }
+.particles-ice .particle:nth-child(10) { left: 90%; animation-delay: 1.4s; }
+@keyframes iceFall { 0% { top: -10%; opacity: 0; transform: rotate(0deg); } 10% { opacity: 0.9; } 100% { top: 110%; opacity: 0; transform: rotate(180deg); } }
+
+/* ROCK TYPE - Pedras (Rocks) - 10 particles */
+.particles-rock .particle { width: 25px; height: 25px; background: linear-gradient(135deg, #8B4513, #654321); border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%; animation: rockFall 2.5s ease-in infinite; }
+.particles-rock .particle:nth-child(1) { left: 15%; animation-delay: 0s; }
+.particles-rock .particle:nth-child(2) { left: 30%; animation-delay: 0.3s; }
+.particles-rock .particle:nth-child(3) { left: 45%; animation-delay: 0.6s; }
+.particles-rock .particle:nth-child(4) { left: 60%; animation-delay: 0.9s; }
+.particles-rock .particle:nth-child(5) { left: 75%; animation-delay: 1.2s; }
+.particles-rock .particle:nth-child(6) { left: 10%; animation-delay: 0.4s; }
+.particles-rock .particle:nth-child(7) { left: 40%; animation-delay: 0.7s; }
+.particles-rock .particle:nth-child(8) { left: 55%; animation-delay: 1s; }
+.particles-rock .particle:nth-child(9) { left: 70%; animation-delay: 0.2s; }
+.particles-rock .particle:nth-child(10) { left: 85%; animation-delay: 0.5s; }
+@keyframes rockFall { 0% { top: -10%; opacity: 0; transform: rotate(0deg); } 10% { opacity: 1; } 100% { top: 110%; opacity: 0; transform: rotate(720deg); } }
+
+/* NORMAL/DEFAULT TYPE - Estrelas douradas (Golden stars) - 10 particles */
+.particles-normal .particle { width: 15px; height: 15px; background: gold; animation: starTwinkle 2s ease-in-out infinite; clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+.particles-normal .particle:nth-child(1) { left: 10%; top: 15%; animation-delay: 0s; }
+.particles-normal .particle:nth-child(2) { left: 25%; top: 30%; animation-delay: 0.2s; }
+.particles-normal .particle:nth-child(3) { left: 45%; top: 20%; animation-delay: 0.4s; }
+.particles-normal .particle:nth-child(4) { left: 60%; top: 40%; animation-delay: 0.6s; }
+.particles-normal .particle:nth-child(5) { left: 80%; top: 25%; animation-delay: 0.8s; }
+.particles-normal .particle:nth-child(6) { left: 15%; top: 65%; animation-delay: 1s; }
+.particles-normal .particle:nth-child(7) { left: 35%; top: 75%; animation-delay: 1.2s; }
+.particles-normal .particle:nth-child(8) { left: 55%; top: 70%; animation-delay: 1.4s; }
+.particles-normal .particle:nth-child(9) { left: 75%; top: 60%; animation-delay: 1.6s; }
+.particles-normal .particle:nth-child(10) { left: 90%; top: 80%; animation-delay: 1.8s; }
+@keyframes starTwinkle { 0%, 100% { opacity: 0; transform: scale(0) rotate(0deg); } 50% { opacity: 1; transform: scale(1.5) rotate(180deg); } }
+
+/* DARK TYPE - Sombras (Shadows) - 10 particles */
+.particles-dark .particle { width: 40px; height: 40px; background: radial-gradient(circle, rgba(50,50,50,0.8), transparent); animation: shadowPulse 2s ease-in-out infinite; filter: blur(5px); }
+.particles-dark .particle:nth-child(1) { left: 10%; top: 20%; animation-delay: 0s; }
+.particles-dark .particle:nth-child(2) { left: 30%; top: 40%; animation-delay: 0.2s; }
+.particles-dark .particle:nth-child(3) { left: 50%; top: 15%; animation-delay: 0.4s; }
+.particles-dark .particle:nth-child(4) { left: 70%; top: 35%; animation-delay: 0.6s; }
+.particles-dark .particle:nth-child(5) { left: 85%; top: 25%; animation-delay: 0.8s; }
+.particles-dark .particle:nth-child(6) { left: 15%; top: 60%; animation-delay: 1s; }
+.particles-dark .particle:nth-child(7) { left: 40%; top: 70%; animation-delay: 1.2s; }
+.particles-dark .particle:nth-child(8) { left: 60%; top: 55%; animation-delay: 1.4s; }
+.particles-dark .particle:nth-child(9) { left: 80%; top: 65%; animation-delay: 1.6s; }
+.particles-dark .particle:nth-child(10) { left: 25%; top: 80%; animation-delay: 1.8s; }
+@keyframes shadowPulse { 0%, 100% { opacity: 0; transform: scale(0.5); } 50% { opacity: 0.8; transform: scale(2); } }
+
+/* STEEL TYPE - Brilhos metálicos (Metallic glints) - 10 particles */
+.particles-steel .particle { width: 3px; height: 30px; background: linear-gradient(to bottom, #C0C0C0, #808080, transparent); animation: metalGlint 1.5s linear infinite; box-shadow: 0 0 10px #C0C0C0; }
+.particles-steel .particle:nth-child(1) { left: 10%; animation-delay: 0s; }
+.particles-steel .particle:nth-child(2) { left: 25%; animation-delay: 0.15s; }
+.particles-steel .particle:nth-child(3) { left: 40%; animation-delay: 0.3s; }
+.particles-steel .particle:nth-child(4) { left: 55%; animation-delay: 0.45s; }
+.particles-steel .particle:nth-child(5) { left: 70%; animation-delay: 0.6s; }
+.particles-steel .particle:nth-child(6) { left: 85%; animation-delay: 0.75s; }
+.particles-steel .particle:nth-child(7) { left: 15%; animation-delay: 0.9s; }
+.particles-steel .particle:nth-child(8) { left: 50%; animation-delay: 1.05s; }
+.particles-steel .particle:nth-child(9) { left: 75%; animation-delay: 1.2s; }
+.particles-steel .particle:nth-child(10) { left: 90%; animation-delay: 1.35s; }
+@keyframes metalGlint { 0% { top: -10%; opacity: 0; } 50% { opacity: 1; } 100% { top: 110%; opacity: 0; } }
+
+/* FAIRY TYPE - Corações e brilhos (Hearts and sparkles) - 10 particles */
+.particles-fairy .particle { width: 20px; height: 20px; background: radial-gradient(circle, rgba(255,192,203,0.9), rgba(255,105,180,0.3)); animation: fairyFloat 3s ease-in-out infinite; }
+.particles-fairy .particle:nth-child(1) { left: 10%; top: 20%; animation-delay: 0s; }
+.particles-fairy .particle:nth-child(2) { left: 25%; top: 40%; animation-delay: 0.3s; }
+.particles-fairy .particle:nth-child(3) { left: 45%; top: 15%; animation-delay: 0.6s; }
+.particles-fairy .particle:nth-child(4) { left: 60%; top: 35%; animation-delay: 0.9s; }
+.particles-fairy .particle:nth-child(5) { left: 80%; top: 25%; animation-delay: 1.2s; }
+.particles-fairy .particle:nth-child(6) { left: 15%; top: 65%; animation-delay: 1.5s; }
+.particles-fairy .particle:nth-child(7) { left: 35%; top: 75%; animation-delay: 1.8s; }
+.particles-fairy .particle:nth-child(8) { left: 55%; top: 70%; animation-delay: 2.1s; }
+.particles-fairy .particle:nth-child(9) { left: 75%; top: 60%; animation-delay: 2.4s; }
+.particles-fairy .particle:nth-child(10) { left: 90%; top: 80%; animation-delay: 2.7s; }
+@keyframes fairyFloat { 0%, 100% { opacity: 0; transform: translateY(0) scale(0); } 50% { opacity: 1; transform: translateY(-20px) scale(1.2); } }
+
+/* DRAGON TYPE - Chamas místicas (Mystic flames) - 10 particles */
+.particles-dragon .particle { width: 35px; height: 50px; background: radial-gradient(ellipse, rgba(138,43,226,0.8), rgba(75,0,130,0.3)); border-radius: 50% 50% 0 0; animation: dragonFlame 2.5s ease-in-out infinite; filter: blur(2px); }
+.particles-dragon .particle:nth-child(1) { left: 12%; animation-delay: 0s; }
+.particles-dragon .particle:nth-child(2) { left: 28%; animation-delay: 0.3s; }
+.particles-dragon .particle:nth-child(3) { left: 45%; animation-delay: 0.6s; }
+.particles-dragon .particle:nth-child(4) { left: 62%; animation-delay: 0.9s; }
+.particles-dragon .particle:nth-child(5) { left: 78%; animation-delay: 1.2s; }
+.particles-dragon .particle:nth-child(6) { left: 15%; animation-delay: 0.4s; }
+.particles-dragon .particle:nth-child(7) { left: 38%; animation-delay: 0.7s; }
+.particles-dragon .particle:nth-child(8) { left: 55%; animation-delay: 1s; }
+.particles-dragon .particle:nth-child(9) { left: 72%; animation-delay: 0.2s; }
+.particles-dragon .particle:nth-child(10) { left: 88%; animation-delay: 0.8s; }
+@keyframes dragonFlame { 0% { bottom: -10%; opacity: 0; transform: scale(1) rotate(0deg); } 10% { opacity: 0.9; } 50% { transform: scale(1.3) rotate(10deg); } 100% { bottom: 110%; opacity: 0; transform: scale(0.5) rotate(-10deg); } }

@@ -1,0 +1,254 @@
+import { Component, EventEmitter, OnDestroy, OnInit, Output, TemplateRef, ViewChild } from '@angular/core';
+import { NgIf, CommonModule } from '@angular/common';
+import { map, Subscription, forkJoin } from 'rxjs';
+import { TranslatePipe } from '@ngx-translate/core';
+import { NgbModal, NgbModalRef } from '@ng-bootstrap/ng-bootstrap';
+
+import { WheelComponent } from '../../../../wheel/wheel.component';
+import { PokemonItem } from '../../../../interfaces/pokemon-item';
+import { MegaEvolutionService, MegaForm } from '../../../../services/mega-evolution-service/mega-evolution.service';
+import { TrainerService } from '../../../../services/trainer-service/trainer.service';
+import { AudioService } from '../../../../services/audio-service/audio.service';
+import { getPokemonTypes } from '../../../../services/pokemon-service/pokemon-types-data';
+
+type MegaRouletteMode = 'select-pokemon' | 'select-mega-form';
+
+@Component({
+  selector: 'app-mega-evolution-roulette',
+  imports: [WheelComponent, TranslatePipe, NgIf, CommonModule],
+  templateUrl: './mega-evolution-roulette.component.html',
+  styleUrl: './mega-evolution-roulette.component.css'
+})
+export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
+  @Output() megaEvolutionFinished = new EventEmitter<void>();
+
+  @ViewChild('megaEvolutionModal') megaEvolutionModal!: TemplateRef<any>;
+
+  mode: MegaRouletteMode = 'select-pokemon';
+  wheelTitle = 'Mega Evolution';
+
+  isLoading = true;
+
+  /** Candidates: team Pokémon that can Mega Evolve and their available Mega forms. */
+  private megaCandidates: Array<{ pokemon: PokemonItem; megaForms: MegaForm[] }> = [];
+
+  /** Current wheel items (either Pokémon or Mega forms). */
+  wheelItems: any[] = [];
+
+  /** When selecting a Mega form, this is the Pokémon chosen in the previous wheel. */
+  private selectedPokemonForMega: PokemonItem | null = null;
+
+  /** Data for the popup. */
+  popupBeforePokemon: PokemonItem | null = null;
+  popupAfterName = '';
+  popupAfterSpriteUrl = '';
+  popupAnimationColor = ''; // Color for type-based animation effects
+  popupTypeEffects: string[] = []; // Type-specific effects (can have 1 or 2 types)
+  particleArray = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]; // 10 particles for each type effect
+
+  private subs = new Subscription();
+  private modalRef: NgbModalRef | null = null;
+
+  constructor(
+    private trainerService: TrainerService,
+    private megaEvolutionService: MegaEvolutionService,
+    private modalService: NgbModal,
+    private audioService: AudioService
+  ) {}
+
+  ngOnInit(): void {
+    const team = this.trainerService.getTeam();
+
+    if (!team || team.length === 0) {
+      // Nothing to do; proceed directly.
+      this.isLoading = false;
+      this.megaEvolutionFinished.emit();
+      return;
+    }
+
+    // Fetch Mega forms for each Pokémon in the team.
+    const requests = team.map((p) =>
+      this.megaEvolutionService.getMegaFormsForPokemon(p)
+        .pipe(
+          // Map to a consistent structure.
+          // (We keep the same Pokémon object reference so we can mutate it for battle.)
+          map((forms) => ({ pokemon: p, megaForms: forms }))
+        )
+    );
+
+    const sub = forkJoin(requests).subscribe({
+      next: (results) => {
+        this.megaCandidates = results.filter((r) => (r.megaForms?.length ?? 0) > 0);
+
+        this.isLoading = false;
+
+        if (this.megaCandidates.length === 0) {
+          // Team has no Mega-capable Pokémon; skip this state.
+          this.megaEvolutionFinished.emit();
+          return;
+        }
+
+        this.mode = 'select-pokemon';
+        this.wheelTitle = 'Mega Evolution';
+        this.wheelItems = this.megaCandidates.map((c) => c.pokemon);
+      },
+      error: () => {
+        this.isLoading = false;
+        // If anything fails, don't block the game.
+        this.megaEvolutionFinished.emit();
+      }
+    });
+
+    this.subs.add(sub);
+  }
+
+  ngOnDestroy(): void {
+    this.subs.unsubscribe();
+    this.modalRef?.close();
+  }
+
+  onItemSelected(index: number): void {
+    if (this.isLoading) return;
+
+    if (this.mode === 'select-pokemon') {
+      const candidate = this.megaCandidates[index];
+      if (!candidate) {
+        this.megaEvolutionFinished.emit();
+        return;
+      }
+
+      this.selectedPokemonForMega = candidate.pokemon;
+
+      if ((candidate.megaForms?.length ?? 0) <= 1) {
+        // Only one Mega form; apply immediately.
+        const megaForm = candidate.megaForms[0];
+        this.applyMegaEvolution(candidate.pokemon, megaForm);
+        return;
+      }
+
+      // Multiple Mega forms: spin another roulette between them.
+      this.mode = 'select-mega-form';
+      this.wheelTitle = 'Mega Evolution';
+      this.wheelItems = candidate.megaForms.map((f) => ({
+        text: f.displayName,
+        fillStyle: candidate.pokemon.fillStyle,
+        weight: 1,
+        _megaForm: f,
+      }));
+      return;
+    }
+
+    // Selecting the Mega form.
+    const selected = this.wheelItems[index] as any;
+    const megaForm: MegaForm | undefined = selected?._megaForm;
+
+    if (!this.selectedPokemonForMega || !megaForm) {
+      this.megaEvolutionFinished.emit();
+      return;
+    }
+
+    this.applyMegaEvolution(this.selectedPokemonForMega, megaForm);
+  }
+
+  private applyMegaEvolution(pokemon: PokemonItem, megaForm: MegaForm): void {
+    // Prepare popup before we mutate the Pokémon.
+    this.popupBeforePokemon = pokemon;
+    this.popupAfterName = megaForm.displayName;
+    // Set animation color based on the Pokemon's type (fillStyle)
+    this.popupAnimationColor = pokemon.fillStyle || '#FFD700'; // Default to gold if no fillStyle
+
+    const sub = this.megaEvolutionService.megaEvolveForBattle(pokemon, megaForm).subscribe({
+      next: () => {
+        // Build the image URL for the "after" sprite.
+        // (At this point, the Pokémon object has already been updated.)
+        const sprite = pokemon.sprite;
+        this.popupAfterSpriteUrl = pokemon.shiny
+          ? (sprite?.front_shiny || sprite?.front_default || '')
+          : (sprite?.front_default || '');
+
+        // Get Pokemon types from local Pokedex data
+        const types = getPokemonTypes(megaForm.pokemonId);
+        console.log(`Pokemon #${megaForm.pokemonId} types (from local Pokedex):`, types);
+        this.popupTypeEffects = types;
+        
+        this.openMegaPopupAndProceed();
+      },
+      error: () => {
+        // If it fails, proceed without Mega.
+        this.megaEvolutionFinished.emit();
+      }
+    });
+
+    this.subs.add(sub);
+  }
+
+  private openMegaPopupAndProceed(): void {
+    try {
+      // Play Mega Evolution cry audio
+      this.playMegaCry();
+
+      this.modalRef = this.modalService.open(this.megaEvolutionModal, {
+        centered: true,
+        backdrop: 'static',
+        keyboard: false,
+      });
+
+      // Extended time to allow cry to play and animations to be visible (3 seconds)
+      setTimeout(() => {
+        try {
+          this.modalRef?.close();
+        } finally {
+          this.megaEvolutionFinished.emit();
+        }
+      }, 3000);
+    } catch {
+      // If modal fails (shouldn't), just proceed.
+      this.megaEvolutionFinished.emit();
+    }
+  }
+
+  /**
+   * Plays the cry audio for the Mega Evolved Pokémon.
+   * Uses Pokemon Showdown's audio CDN with the Mega form's API name.
+   */
+  private playMegaCry(): void {
+    if (!this.popupAfterName) {
+      console.warn('No Mega form name available for cry playback');
+      return;
+    }
+
+    // Extract the Mega form name from popupAfterName (e.g., "Mega Charizard X")
+    // and convert it to the API format expected by Pokemon Showdown
+    const megaApiName = this.convertDisplayNameToApiName(this.popupAfterName);
+    
+    // Pokemon Showdown cry URL format: https://play.pokemonshowdown.com/audio/cries/<pokemon-name>.mp3
+    const cryUrl = `https://play.pokemonshowdown.com/audio/cries/${megaApiName}.mp3`;
+    
+    console.log('Playing Mega Evolution cry:', cryUrl);
+    
+    try {
+      const cryAudio = this.audioService.createAudio(cryUrl);
+      // Play with higher volume for better audibility
+      this.audioService.playAudio(cryAudio, 0.7);
+    } catch (error) {
+      // If cry playback fails, just continue silently
+      console.warn('Failed to play Mega Evolution cry:', error);
+    }
+  }
+
+  /**
+   * Converts a display name like "Mega Charizard X" to API format "charizardmegax"
+   * for use with Pokemon Showdown's cry URLs.
+   */
+  private convertDisplayNameToApiName(displayName: string): string {
+    // Remove spaces and convert to lowercase
+    // "Mega Charizard X" -> "charizardmegax"
+    // Handle special cases like "Mega Charizard X" -> "charizardmegax"
+    const normalized = displayName.toLowerCase().replace(/\s+/g, '');
+    
+    // Pokemon Showdown uses specific naming for megas
+    // Format: pokemonname + mega + variant (if any)
+    // Examples: "charizardmegax", "charizardmegay", "venusaurmega"
+    return normalized;
+  }
+}

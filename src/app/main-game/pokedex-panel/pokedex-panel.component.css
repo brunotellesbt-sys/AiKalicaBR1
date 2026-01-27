@@ -1,0 +1,200 @@
+.pokedex-panel {
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  padding: 12px;
+  max-height: 80vh;
+  overflow: hidden;
+  background-color: var(--bs-body-bg);
+}
+
+.pokedex-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pokedex-search {
+  width: 100%;
+  font-size: 0.95rem;
+}
+
+.pokedex-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.pokedex-page-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  min-width: 100px;
+  text-align: center;
+}
+
+.pokedex-list {
+  max-height: 65vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  margin-top: 12px;
+}
+
+.pokedex-row {
+  display: flex;
+  gap: 12px;
+  padding: 12px 8px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  transition: background-color 0.2s ease;
+}
+
+.pokedex-row:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.pokedex-row:last-child {
+  border-bottom: none;
+}
+
+.pokedex-img {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+
+.pokedex-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pokedex-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.pokedex-id {
+  font-weight: 700;
+  color: #666;
+  font-size: 0.95rem;
+}
+
+.pokedex-name {
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--bs-body-color);
+}
+
+.pokedex-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.9rem;
+}
+
+.pokedex-power {
+  color: #0066cc;
+  font-size: 0.95rem;
+}
+
+.pokedex-measures {
+  color: #666;
+  font-size: 0.85rem;
+}
+
+.pokedex-loading {
+  color: #999;
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.pokedex-desc {
+  margin-top: 4px;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: #444;
+}
+
+/* Mobile improvements */
+@media (max-width: 576px) {
+  .pokedex-panel {
+    position: fixed;
+    top: 60px;
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    max-height: none;
+    z-index: 1050;
+    padding: 15px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  .pokedex-list {
+    max-height: calc(100vh - 200px);
+  }
+
+  .pokedex-img {
+    width: 70px;
+    height: 70px;
+  }
+
+  .pokedex-row {
+    gap: 10px;
+    padding: 10px 6px;
+  }
+
+  .pokedex-search {
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+
+  .pokedex-name {
+    font-size: 1rem;
+  }
+
+  .pokedex-desc {
+    font-size: 0.85rem;
+    line-height: 1.3;
+  }
+}
+
+/* Tablet improvements */
+@media (min-width: 577px) and (max-width: 768px) {
+  .pokedex-panel {
+    max-height: 75vh;
+  }
+
+  .pokedex-list {
+    max-height: 60vh;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .pokedex-panel {
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+
+  .pokedex-row {
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .pokedex-row:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+
+  .pokedex-id {
+    color: #aaa;
+  }
+
+  .pokedex-measures {
+    color: #aaa;
+  }
+
+  .pokedex-desc {
+    color: #ccc;
+  }
+}
