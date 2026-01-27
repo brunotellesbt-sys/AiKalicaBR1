@@ -214,6 +214,55 @@ export const POKEMON_TYPES: Record<number, PokemonType[]> = {
   10337: ['dragon', 'ground'],    // Garchomp Mega
   10338: ['fighting', 'steel'],   // Lucario Mega
   10339: ['grass', 'ice'],        // Abomasnow Mega
+  
+  // NEW Mega Evolutions from Pokémon Legends: Z-A & Mega Dimension DLC (2025-2026)
+  10026: ['electric'],            // Raichu Mega X
+  10027: ['electric'],            // Raichu Mega Y
+  10037: ['fairy', 'flying'],     // Clefable Mega
+  10071: ['grass', 'poison'],     // Victreebel Mega
+  10121: ['water', 'psychic'],    // Starmie Mega
+  10149: ['dragon', 'flying'],    // Dragonite Mega
+  10154: ['grass', 'fairy'],      // Meganium Mega
+  10160: ['water', 'dragon'],     // Feraligatr Mega
+  10227: ['steel', 'flying'],     // Skarmory Mega
+  10500: ['fire', 'fighting'],    // Emboar Mega
+  10530: ['ground', 'steel'],     // Excadrill Mega
+  10545: ['bug', 'poison'],       // Scolipede Mega
+  10560: ['dark', 'fighting'],    // Scrafty Mega
+  10609: ['ghost', 'fire'],       // Chandelure Mega
+  10604: ['electric'],            // Eelektross Mega
+  10652: ['grass', 'fighting'],   // Chesnaught Mega
+  10655: ['fire', 'psychic'],     // Delphox Mega
+  10658: ['water', 'dark'],       // Greninja Mega
+  10670: ['fairy'],               // Floette Mega
+  10668: ['fire', 'normal'],      // Pyroar Mega
+  10689: ['rock', 'fighting'],    // Barbaracle Mega
+  10691: ['poison', 'dragon'],    // Dragalge Mega
+  10701: ['fighting', 'flying'],  // Hawlucha Mega
+  10687: ['dark', 'psychic'],     // Malamar Mega
+  10780: ['normal', 'dragon'],    // Drampa Mega
+  10870: ['fighting'],            // Falinks Mega
+  10478: ['ice', 'ghost'],        // Froslass Mega
+  10398: ['fighting', 'flying'],  // Staraptor Mega
+  10678: ['psychic'],             // Meowstic Mega
+  10768: ['bug', 'steel'],        // Golisopod Mega
+  10623: ['ground', 'ghost'],     // Golurk Mega
+  10485: ['fire', 'steel'],       // Heatran Mega
+  10491: ['dark'],                // Darkrai Mega
+  10740: ['fighting', 'ice'],     // Crabominable Mega
+  10801: ['steel', 'fairy'],      // Magearna Mega
+  10807: ['electric'],            // Zeraora Mega
+  10998: ['dragon', 'ice'],       // Baxcalibur Mega
+  10970: ['rock', 'poison'],      // Glimmora Mega
+  10358: ['psychic', 'steel'],    // Chimecho Mega
+  10953: ['grass', 'fire'],       // Scovillain Mega
+  10978: ['dragon', 'water'],     // Tatsugiri Mega
+  10718: ['dragon', 'ground'],    // Zygarde Mega
+  
+  // Special Z Mega Evolutions (Enhanced Mega forms)
+  10448: ['fighting', 'steel'],   // Lucario Mega Z
+  10445: ['dragon', 'ground'],    // Garchomp Mega Z
+  10359: ['dark', 'ghost'],       // Absol Mega Z (gains Ghost type!)
 };
 
 /**
