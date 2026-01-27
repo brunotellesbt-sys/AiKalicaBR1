@@ -1,5 +1,5 @@
 import { Component, EventEmitter, OnDestroy, OnInit, Output, TemplateRef, ViewChild } from '@angular/core';
-import { NgIf } from '@angular/common';
+import { NgIf, CommonModule } from '@angular/common';
 import { map, Subscription, forkJoin } from 'rxjs';
 import { TranslatePipe } from '@ngx-translate/core';
 import { NgbModal, NgbModalRef } from '@ng-bootstrap/ng-bootstrap';
@@ -14,7 +14,7 @@ type MegaRouletteMode = 'select-pokemon' | 'select-mega-form';
 
 @Component({
   selector: 'app-mega-evolution-roulette',
-  imports: [WheelComponent, TranslatePipe, NgIf],
+  imports: [WheelComponent, TranslatePipe, NgIf, CommonModule],
   templateUrl: './mega-evolution-roulette.component.html',
   styleUrl: './mega-evolution-roulette.component.css'
 })
@@ -42,6 +42,8 @@ export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
   popupAfterName = '';
   popupAfterSpriteUrl = '';
   popupAnimationColor = ''; // Color for type-based animation effects
+  popupTypeEffect = ''; // Type-specific effect (fire, water, electric, etc.)
+  particleArray = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]; // 10 particles for each type effect
 
   private subs = new Subscription();
   private modalRef: NgbModalRef | null = null;
@@ -153,6 +155,8 @@ export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
     this.popupAfterName = megaForm.displayName;
     // Set animation color based on the Pokemon's type (fillStyle)
     this.popupAnimationColor = pokemon.fillStyle || '#FFD700'; // Default to gold if no fillStyle
+    // Determine type-specific effect based on fillStyle/color
+    this.popupTypeEffect = this.getTypeEffectFromColor(pokemon.fillStyle || '');
 
     const sub = this.megaEvolutionService.megaEvolveForBattle(pokemon, megaForm).subscribe({
       next: () => {
@@ -242,5 +246,71 @@ export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
     // Format: pokemonname + mega + variant (if any)
     // Examples: "charizardmegax", "charizardmegay", "venusaurmega"
     return normalized;
+  }
+
+  /**
+   * Determines the type-specific visual effect based on Pokemon's fillStyle color.
+   * Maps colors to Pokemon types and returns the appropriate effect class.
+   */
+  private getTypeEffectFromColor(fillStyle: string): string {
+    const color = fillStyle.toLowerCase();
+    
+    // Water types - blue colors
+    if (color.includes('blue') || color === 'cyan' || color === 'aqua') {
+      return 'water';
+    }
+    
+    // Fire types - red/orange colors
+    if (color.includes('red') || color === 'orange' || color === 'orangered' || color === 'crimson') {
+      return 'fire';
+    }
+    
+    // Electric types - yellow colors
+    if (color === 'yellow' || color === 'gold' || color === 'goldenrod') {
+      return 'electric';
+    }
+    
+    // Grass types - green colors
+    if (color.includes('green') || color === 'lime' || color === 'forestgreen') {
+      return 'grass';
+    }
+    
+    // Psychic/Poison types - purple/pink colors
+    if (color === 'purple' || color === 'violet' || color === 'magenta' || color === 'pink') {
+      return 'psychic';
+    }
+    
+    // Ice types - light blue/white
+    if (color === 'lightblue' || color === 'skyblue' || color === 'white' || color === 'snow') {
+      return 'ice';
+    }
+    
+    // Rock/Ground types - brown/tan colors
+    if (color === 'brown' || color === 'tan' || color === 'sienna' || color === 'peru') {
+      return 'rock';
+    }
+    
+    // Dark types - black/gray
+    if (color === 'black' || color.includes('gray') || color === 'darkgray' || color === 'dimgray') {
+      return 'dark';
+    }
+    
+    // Steel types - silver/gray
+    if (color === 'silver' || color === 'gray' || color === 'slategray') {
+      return 'steel';
+    }
+    
+    // Fairy types - light pink
+    if (color === 'lightpink' || color === 'hotpink' || color === 'lavender') {
+      return 'fairy';
+    }
+    
+    // Dragon types - indigo/purple-blue
+    if (color === 'indigo' || color === 'darkviolet' || color === 'blueviolet') {
+      return 'dragon';
+    }
+    
+    // Default to normal/neutral effect
+    return 'normal';
   }
 }
