@@ -3,13 +3,13 @@ import { NgIf, CommonModule } from '@angular/common';
 import { map, Subscription, forkJoin } from 'rxjs';
 import { TranslatePipe } from '@ngx-translate/core';
 import { NgbModal, NgbModalRef } from '@ng-bootstrap/ng-bootstrap';
-import { HttpClient } from '@angular/common/http';
 
 import { WheelComponent } from '../../../../wheel/wheel.component';
 import { PokemonItem } from '../../../../interfaces/pokemon-item';
 import { MegaEvolutionService, MegaForm } from '../../../../services/mega-evolution-service/mega-evolution.service';
 import { TrainerService } from '../../../../services/trainer-service/trainer.service';
 import { AudioService } from '../../../../services/audio-service/audio.service';
+import { getPokemonTypes } from '../../../../services/pokemon-service/pokemon-types-data';
 
 type MegaRouletteMode = 'select-pokemon' | 'select-mega-form';
 
@@ -53,8 +53,7 @@ export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
     private trainerService: TrainerService,
     private megaEvolutionService: MegaEvolutionService,
     private modalService: NgbModal,
-    private audioService: AudioService,
-    private http: HttpClient
+    private audioService: AudioService
   ) {}
 
   ngOnInit(): void {
@@ -167,18 +166,12 @@ export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
           ? (sprite?.front_shiny || sprite?.front_default || '')
           : (sprite?.front_default || '');
 
-        // Fetch real Pokemon types from PokeAPI
-        this.fetchPokemonTypes(megaForm.pokemonId).subscribe({
-          next: (types) => {
-            this.popupTypeEffects = types;
-            this.openMegaPopupAndProceed();
-          },
-          error: () => {
-            // Fallback to normal effect if API fails
-            this.popupTypeEffects = ['normal'];
-            this.openMegaPopupAndProceed();
-          }
-        });
+        // Get Pokemon types from local Pokedex data
+        const types = getPokemonTypes(megaForm.pokemonId);
+        console.log(`Pokemon #${megaForm.pokemonId} types (from local Pokedex):`, types);
+        this.popupTypeEffects = types;
+        
+        this.openMegaPopupAndProceed();
       },
       error: () => {
         // If it fails, proceed without Mega.
@@ -257,29 +250,5 @@ export class MegaEvolutionRouletteComponent implements OnInit, OnDestroy {
     // Format: pokemonname + mega + variant (if any)
     // Examples: "charizardmegax", "charizardmegay", "venusaurmega"
     return normalized;
-  }
-
-  /**
-   * Fetches the real Pokemon types from PokeAPI.
-   * Returns an array of type names (e.g., ['fire', 'flying']).
-   * Supports Pokemon with 1 or 2 types.
-   */
-  private fetchPokemonTypes(pokemonId: number) {
-    const apiUrl = `https://pokeapi.co/api/v2/pokemon/${pokemonId}`;
-    
-    return this.http.get<any>(apiUrl).pipe(
-      map((data) => {
-        // Extract types from the API response
-        // PokeAPI returns types in format: { type: { name: 'fire' } }
-        const types = (data.types || [])
-          .map((t: any) => t.type?.name)
-          .filter((name: string) => name); // Filter out undefined/null
-        
-        console.log(`Pokemon #${pokemonId} types:`, types);
-        
-        // Return types array (1 or 2 types)
-        return types.length > 0 ? types : ['normal'];
-      })
-    );
   }
 }
