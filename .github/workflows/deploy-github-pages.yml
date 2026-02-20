@@ -1,8 +1,8 @@
-name: Deploy GitHub Pages (from zip)
+name: Deploy Angular (GitHub Pages)
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main" ]
   workflow_dispatch:
 
 permissions:
@@ -11,7 +11,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: "pages"
   cancel-in-progress: true
 
 jobs:
@@ -21,44 +21,61 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # O zip deve estar commitado na raiz da branch main
-      - name: Extract game zip
-        run: |
-          set -e
-          ls -la
-          test -f ./westeros-chronicles-angular.zip
-
-          rm -rf app
-          mkdir -p app
-
-          unzip -q ./westeros-chronicles-angular.zip -d ./app
-
-          # Se o zip contém uma pasta raiz, normaliza para ./app
-          if [ -d "./app/westeros-chronicles-angular" ]; then
-            rsync -a ./app/westeros-chronicles-angular/ ./app/
-            rm -rf ./app/westeros-chronicles-angular
-          fi
-
-          ls -la ./app
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # Sem npm cache/ci porque não há package-lock.json no projeto
-      - name: Install
-        working-directory: ./app
-        run: npm install --no-audit --no-fund
+      - name: Extract project zip from repo root
+        id: extract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ZIP_FILE="$(ls -1 *.zip 2>/dev/null | head -n 1 || true)"
+          if [ -z "${ZIP_FILE}" ]; then
+            echo "Nenhum .zip encontrado na raiz do repositório. Coloque o arquivo do jogo na raiz (ex: westeros-chronicles-angular.zip)."
+            exit 1
+          fi
+
+          rm -rf app
+          mkdir -p app
+          unzip -q "${ZIP_FILE}" -d app
+
+          # Descobre onde está o package.json dentro do zip
+          if [ -f "app/package.json" ]; then
+            APP_DIR="app"
+          else
+            PKG="$(find app -maxdepth 3 -name package.json -print -quit || true)"
+            if [ -z "${PKG}" ]; then
+              echo "Não encontrei package.json dentro do zip."
+              exit 1
+            fi
+            APP_DIR="$(dirname "${PKG}")"
+          fi
+
+          echo "APP_DIR=${APP_DIR}" >> "$GITHUB_OUTPUT"
+          echo "ZIP_FILE=${ZIP_FILE}" >> "$GITHUB_OUTPUT"
+          echo "Usando APP_DIR=${APP_DIR}"
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -e
+          cd "${{ steps.extract.outputs.APP_DIR }}"
+          npm ci --no-audit --no-fund
 
       - name: Build
-        working-directory: ./app
-        run: npm run build -- --base-href "/${{ github.event.repository.name }}/"
+        shell: bash
+        run: |
+          set -e
+          cd "${{ steps.extract.outputs.APP_DIR }}"
+          npm run build -- --base-href "/${{ github.event.repository.name }}/"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./app/dist/westeros-chronicles
+          path: ${{ steps.extract.outputs.APP_DIR }}/dist
 
   deploy:
     needs: build
