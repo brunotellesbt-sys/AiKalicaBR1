@@ -26,6 +26,10 @@ jobs:
         with:
           node-version: 20
 
+      # Recomendado pelo GitHub Pages (workflow moderno)
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
       - name: Extract project zip from repo root
         id: extract
         shell: bash
@@ -61,21 +65,73 @@ jobs:
       - name: Install dependencies
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
           cd "${{ steps.extract.outputs.APP_DIR }}"
-          npm ci --no-audit --no-fund
+
+          # npm ci exige package-lock.json; sem lockfile usamos npm install (sem alterar o jogo)
+          if [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ]; then
+            npm ci --no-audit --no-fund
+          else
+            echo "package-lock.json não encontrado — usando npm install."
+            npm install --no-audit --no-fund
+          fi
 
       - name: Build
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
           cd "${{ steps.extract.outputs.APP_DIR }}"
           npm run build -- --base-href "/${{ github.event.repository.name }}/"
+
+      - name: Resolve Angular dist output (outputPath)
+        id: dist
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_DIR="${{ steps.extract.outputs.APP_DIR }}"
+          cd "$APP_DIR"
+
+          # Pega outputPath do angular.json (defaultProject ou primeiro projeto)
+          OUT="$(node -e "const a=require('./angular.json'); const name=a.defaultProject || Object.keys(a.projects)[0]; const o=a.projects[name]?.architect?.build?.options?.outputPath; if(!o){process.exit(2)}; process.stdout.write(typeof o==='string'?o:JSON.stringify(o));")" || {
+            echo "Falha ao ler outputPath do angular.json"
+            exit 1
+          }
+
+          # Alguns builders novos podem devolver objeto; tentamos caminhos comuns
+          if [[ "$OUT" == "{"* ]]; then
+            # tenta chaves comuns
+            BASE="$(node -e "const o=JSON.parse(process.argv[1]); console.log(o.browser||o.outputPath||Object.values(o)[0]);" "$OUT")"
+          else
+            BASE="$OUT"
+          fi
+
+          DIST_PATH="$APP_DIR/$BASE"
+          # Angular 17+ (application builder) às vezes gera dist/<app>/browser
+          if [ -f "$DIST_PATH/browser/index.html" ]; then
+            DIST_PATH="$DIST_PATH/browser"
+          fi
+
+          echo "DIST_PATH=$DIST_PATH" >> "$GITHUB_OUTPUT"
+          echo "Usando DIST_PATH=$DIST_PATH"
+
+          if [ ! -f "$DIST_PATH/index.html" ]; then
+            echo "Não encontrei index.html em $DIST_PATH"
+            echo "Listando dist para debug:"
+            find "$APP_DIR/dist" -maxdepth 3 -type f -name index.html -print || true
+            exit 1
+          fi
+
+      - name: SPA fallback (404.html)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "${{ steps.dist.outputs.DIST_PATH }}/index.html" "${{ steps.dist.outputs.DIST_PATH }}/404.html"
+          touch "${{ steps.dist.outputs.DIST_PATH }}/.nojekyll"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ${{ steps.extract.outputs.APP_DIR }}/dist
+          path: ${{ steps.dist.outputs.DIST_PATH }}
 
   deploy:
     needs: build
