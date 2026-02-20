@@ -48,6 +48,8 @@ jobs:
           PKG="$(find app -maxdepth 10 -name package.json -print -quit || true)"
           if [ -z "${PKG}" ]; then
             echo "Não encontrei package.json dentro do ${ZIP_FILE}."
+            echo "Conteúdo extraído (nível 2):"
+            find app -maxdepth 2 -mindepth 1 -print
             exit 1
           fi
 
@@ -75,50 +77,50 @@ jobs:
           cd "${{ steps.extract.outputs.APP_DIR }}"
           npm run build -- --base-href "/${{ github.event.repository.name }}/"
 
-      - name: Resolve dist output (outputPath)
-        id: dist
+      - name: Locate built site folder (find index.html)
+        id: site
         shell: bash
         run: |
           set -euo pipefail
           APP_DIR="${{ steps.extract.outputs.APP_DIR }}"
-          cd "$APP_DIR"
 
-          OUT="$(node -e "const a=require('./angular.json'); const name=a.defaultProject||Object.keys(a.projects)[0]; const o=a.projects[name]?.architect?.build?.options?.outputPath; if(!o) process.exit(2); process.stdout.write(typeof o==='string'?o:JSON.stringify(o));")" || {
-            echo "Falha ao ler outputPath do angular.json"
-            exit 1
-          }
+          echo "Procurando index.html gerado dentro de: $APP_DIR"
 
-          if [[ "$OUT" == "{"* ]]; then
-            BASE="$(node -e "const o=JSON.parse(process.argv[1]); console.log(o.browser||o.outputPath||Object.values(o)[0]);" "$OUT")"
-          else
-            BASE="$OUT"
+          # Procura primeiro nos padrões mais comuns do Angular:
+          # - dist/<app>/index.html
+          # - dist/<app>/browser/index.html (Angular 17+ application builder)
+          FOUND="$(find "$APP_DIR" -maxdepth 10 -type f \( -path "*/dist/*/index.html" -o -path "*/dist/*/browser/index.html" \) -print -quit || true)"
+
+          # Se não achou, tenta achar QUALQUER index.html abaixo do projeto (último recurso)
+          if [ -z "$FOUND" ]; then
+            FOUND="$(find "$APP_DIR" -maxdepth 12 -type f -name index.html -print -quit || true)"
           fi
 
-          DIST_PATH="$APP_DIR/$BASE"
-          if [ -f "$DIST_PATH/browser/index.html" ]; then
-            DIST_PATH="$DIST_PATH/browser"
-          fi
-
-          echo "DIST_PATH=$DIST_PATH" >> "$GITHUB_OUTPUT"
-          echo "Usando DIST_PATH=$DIST_PATH"
-
-          if [ ! -f "$DIST_PATH/index.html" ]; then
-            echo "Não encontrei index.html em $DIST_PATH"
-            find "$APP_DIR/dist" -maxdepth 4 -type f -name index.html -print || true
+          if [ -z "$FOUND" ]; then
+            echo "Não encontrei nenhum index.html gerado após o build."
+            echo "Debug: listando diretórios (nível 4):"
+            find "$APP_DIR" -maxdepth 4 -type d -print
+            echo "Debug: procurando pastas dist (nível 6):"
+            find "$APP_DIR" -maxdepth 6 -type d -name dist -print || true
             exit 1
           fi
 
-      - name: SPA fallback (404.html)
+          SITE_DIR="$(dirname "$FOUND")"
+          echo "SITE_DIR=$SITE_DIR" >> "$GITHUB_OUTPUT"
+          echo "Usando SITE_DIR=$SITE_DIR (index: $FOUND)"
+
+      - name: SPA fallback (404.html) + disable jekyll
         shell: bash
         run: |
           set -euo pipefail
-          cp "${{ steps.dist.outputs.DIST_PATH }}/index.html" "${{ steps.dist.outputs.DIST_PATH }}/404.html"
-          touch "${{ steps.dist.outputs.DIST_PATH }}/.nojekyll"
+          SITE_DIR="${{ steps.site.outputs.SITE_DIR }}"
+          cp "$SITE_DIR/index.html" "$SITE_DIR/404.html"
+          touch "$SITE_DIR/.nojekyll"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ${{ steps.dist.outputs.DIST_PATH }}
+          path: ${{ steps.site.outputs.SITE_DIR }}
 
   deploy:
     needs: build
