@@ -26,19 +26,18 @@ jobs:
         with:
           node-version: 20
 
-      # Recomendado pelo GitHub Pages (workflow moderno)
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
-      - name: Extract project zip from repo root
+      - name: Extract project zip (fixed name)
         id: extract
         shell: bash
         run: |
           set -euo pipefail
 
-          ZIP_FILE="$(ls -1 *.zip 2>/dev/null | head -n 1 || true)"
-          if [ -z "${ZIP_FILE}" ]; then
-            echo "Nenhum .zip encontrado na raiz do repositório. Coloque o arquivo do jogo na raiz (ex: westeros-chronicles-angular.zip)."
+          ZIP_FILE="westeros-chronicles-angular.zip"
+          if [ ! -f "${ZIP_FILE}" ]; then
+            echo "Não encontrei ${ZIP_FILE} na raiz do repositório."
             exit 1
           fi
 
@@ -46,20 +45,14 @@ jobs:
           mkdir -p app
           unzip -q "${ZIP_FILE}" -d app
 
-          # Descobre onde está o package.json dentro do zip
-          if [ -f "app/package.json" ]; then
-            APP_DIR="app"
-          else
-            PKG="$(find app -maxdepth 3 -name package.json -print -quit || true)"
-            if [ -z "${PKG}" ]; then
-              echo "Não encontrei package.json dentro do zip."
-              exit 1
-            fi
-            APP_DIR="$(dirname "${PKG}")"
+          PKG="$(find app -maxdepth 10 -name package.json -print -quit || true)"
+          if [ -z "${PKG}" ]; then
+            echo "Não encontrei package.json dentro do ${ZIP_FILE}."
+            exit 1
           fi
 
+          APP_DIR="$(dirname "${PKG}")"
           echo "APP_DIR=${APP_DIR}" >> "$GITHUB_OUTPUT"
-          echo "ZIP_FILE=${ZIP_FILE}" >> "$GITHUB_OUTPUT"
           echo "Usando APP_DIR=${APP_DIR}"
 
       - name: Install dependencies
@@ -68,7 +61,6 @@ jobs:
           set -euo pipefail
           cd "${{ steps.extract.outputs.APP_DIR }}"
 
-          # npm ci exige package-lock.json; sem lockfile usamos npm install (sem alterar o jogo)
           if [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ]; then
             npm ci --no-audit --no-fund
           else
@@ -83,7 +75,7 @@ jobs:
           cd "${{ steps.extract.outputs.APP_DIR }}"
           npm run build -- --base-href "/${{ github.event.repository.name }}/"
 
-      - name: Resolve Angular dist output (outputPath)
+      - name: Resolve dist output (outputPath)
         id: dist
         shell: bash
         run: |
@@ -91,22 +83,18 @@ jobs:
           APP_DIR="${{ steps.extract.outputs.APP_DIR }}"
           cd "$APP_DIR"
 
-          # Pega outputPath do angular.json (defaultProject ou primeiro projeto)
-          OUT="$(node -e "const a=require('./angular.json'); const name=a.defaultProject || Object.keys(a.projects)[0]; const o=a.projects[name]?.architect?.build?.options?.outputPath; if(!o){process.exit(2)}; process.stdout.write(typeof o==='string'?o:JSON.stringify(o));")" || {
+          OUT="$(node -e "const a=require('./angular.json'); const name=a.defaultProject||Object.keys(a.projects)[0]; const o=a.projects[name]?.architect?.build?.options?.outputPath; if(!o) process.exit(2); process.stdout.write(typeof o==='string'?o:JSON.stringify(o));")" || {
             echo "Falha ao ler outputPath do angular.json"
             exit 1
           }
 
-          # Alguns builders novos podem devolver objeto; tentamos caminhos comuns
           if [[ "$OUT" == "{"* ]]; then
-            # tenta chaves comuns
             BASE="$(node -e "const o=JSON.parse(process.argv[1]); console.log(o.browser||o.outputPath||Object.values(o)[0]);" "$OUT")"
           else
             BASE="$OUT"
           fi
 
           DIST_PATH="$APP_DIR/$BASE"
-          # Angular 17+ (application builder) às vezes gera dist/<app>/browser
           if [ -f "$DIST_PATH/browser/index.html" ]; then
             DIST_PATH="$DIST_PATH/browser"
           fi
@@ -116,8 +104,7 @@ jobs:
 
           if [ ! -f "$DIST_PATH/index.html" ]; then
             echo "Não encontrei index.html em $DIST_PATH"
-            echo "Listando dist para debug:"
-            find "$APP_DIR/dist" -maxdepth 3 -type f -name index.html -print || true
+            find "$APP_DIR/dist" -maxdepth 4 -type f -name index.html -print || true
             exit 1
           fi
 
