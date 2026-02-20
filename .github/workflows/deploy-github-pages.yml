@@ -1,67 +1,126 @@
-name: Deploy (zip → GitHub Pages)
+name: Deploy Angular (from ZIP) to GitHub Pages
 
 on:
   push:
     branches: ["main"]
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+env:
+  ZIP_FILE: westeros-chronicles-angular.zip
+  EXTRACT_DIR: app
 
 jobs:
-  build-deploy:
+  build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
+      - name: Checkout (repo contains the ZIP)
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Debug - list repo root
+        run: ls -la
+
+      - name: Install unzip
+        run: sudo apt-get update && sudo apt-get install -y unzip
+
+      - name: Extract ZIP
+        run: |
+          set -e
+          test -f "./${{ env.ZIP_FILE }}" || (echo "ZIP not found: ${{ env.ZIP_FILE }}" && exit 1)
+          rm -rf "${{ env.EXTRACT_DIR }}"
+          mkdir -p "${{ env.EXTRACT_DIR }}"
+          unzip -q "./${{ env.ZIP_FILE }}" -d "${{ env.EXTRACT_DIR }}"
+          echo "Extracted:"
+          ls -la "${{ env.EXTRACT_DIR }}"
+
+      - name: Locate Angular project folder (package.json)
+        id: locate
+        run: |
+          set -e
+          ROOT="${{ env.EXTRACT_DIR }}"
+
+          if [ -f "$ROOT/package.json" ]; then
+            echo "project_dir=$ROOT" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          FOUND=$(find "$ROOT" -maxdepth 4 -type f -name package.json | head -n 1 || true)
+          if [ -z "$FOUND" ]; then
+            echo "No package.json found inside extracted zip."
+            find "$ROOT" -maxdepth 3 -type f | head -n 80
+            exit 1
+          fi
+
+          echo "project_dir=$(dirname "$FOUND")" >> $GITHUB_OUTPUT
+          echo "Project found at: $(dirname "$FOUND")"
+
+      - name: Setup Node (no cache)
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: "20"
 
-      - name: Extract app zip
+      - name: Install dependencies
+        working-directory: ${{ steps.locate.outputs.project_dir }}
         run: |
           set -e
-          rm -rf app
-          ZIP_FILE="westeros-chronicles-angular.zip"
-          if [ ! -f "$ZIP_FILE" ]; then
-            echo "Arquivo $ZIP_FILE não encontrado na raiz do repositório." >&2
-            echo "Coloque o ZIP na raiz com esse nome (ou ajuste o workflow)." >&2
-            exit 1
-          fi
-          unzip -q "$ZIP_FILE" -d app
-          # Se o zip veio com uma pasta interna, normalize para app/
-          if [ -d "app/westeros-chronicles-angular" ]; then
-            mv app/westeros-chronicles-angular/* app/
-            rm -rf app/westeros-chronicles-angular
+          if [ -f "package-lock.json" ]; then
+            npm ci
+          else
+            npm install
           fi
 
-      - name: Install deps
-        working-directory: ./app
-        run: npm install
-
-      - name: Build
-        working-directory: ./app
-        run: npm run build -- --configuration production --base-href "/${{ github.event.repository.name }}/"
-
-      - name: Prepare Pages folder
+      - name: Build Angular (NO duplicated --configuration)
+        working-directory: ${{ steps.locate.outputs.project_dir }}
         run: |
           set -e
-          rm -rf site
-          mkdir -p site
-          # Descobre onde está o index.html gerado
-          OUT_DIR=$(dirname "$(find app/dist -name index.html -maxdepth 5 | head -n 1)")
-          if [ -z "$OUT_DIR" ] || [ ! -f "$OUT_DIR/index.html" ]; then
-            echo "Não encontrei index.html em app/dist" >&2
-            find app/dist -maxdepth 4 -type f | head -n 50 || true
+          npm run build -- --base-href "/${{ github.event.repository.name }}/"
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Locate dist output (index.html)
+        id: dist
+        working-directory: ${{ steps.locate.outputs.project_dir }}
+        run: |
+          set -e
+          if [ ! -d "dist" ]; then
+            echo "No dist folder found after build."
+            ls -la
             exit 1
           fi
-          echo "Publicando de: $OUT_DIR"
-          cp -R "$OUT_DIR"/* site/
 
-      - name: Deploy
-        uses: peaceiris/actions-gh-pages@v4
+          CANDIDATE=$(find dist -maxdepth 5 -type f -name index.html | head -n 1 || true)
+          if [ -z "$CANDIDATE" ]; then
+            echo "No index.html found in dist."
+            find dist -maxdepth 4 -type f | head -n 80
+            exit 1
+          fi
+
+          OUTDIR=$(dirname "$CANDIDATE")
+          echo "outdir=$OUTDIR" >> $GITHUB_OUTPUT
+          echo "Using output dir: $OUTDIR"
+          ls -la "$OUTDIR" | head -n 50
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./site
+          path: ${{ steps.locate.outputs.project_dir }}/${{ steps.dist.outputs.outdir }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
