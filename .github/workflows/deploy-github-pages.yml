@@ -25,9 +25,6 @@ jobs:
       - name: Checkout (repo contains the ZIP)
         uses: actions/checkout@v4
 
-      - name: Debug - list repo root
-        run: ls -la
-
       - name: Install unzip
         run: sudo apt-get update && sudo apt-get install -y unzip
 
@@ -38,31 +35,25 @@ jobs:
           rm -rf "${{ env.EXTRACT_DIR }}"
           mkdir -p "${{ env.EXTRACT_DIR }}"
           unzip -q "./${{ env.ZIP_FILE }}" -d "${{ env.EXTRACT_DIR }}"
-          echo "Extracted:"
-          ls -la "${{ env.EXTRACT_DIR }}"
 
       - name: Locate Angular project folder (package.json)
         id: locate
         run: |
           set -e
           ROOT="${{ env.EXTRACT_DIR }}"
-
           if [ -f "$ROOT/package.json" ]; then
             echo "project_dir=$ROOT" >> $GITHUB_OUTPUT
             exit 0
           fi
-
           FOUND=$(find "$ROOT" -maxdepth 4 -type f -name package.json | head -n 1 || true)
           if [ -z "$FOUND" ]; then
             echo "No package.json found inside extracted zip."
             find "$ROOT" -maxdepth 3 -type f | head -n 80
             exit 1
           fi
-
           echo "project_dir=$(dirname "$FOUND")" >> $GITHUB_OUTPUT
-          echo "Project found at: $(dirname "$FOUND")"
 
-      - name: Setup Node (no cache)
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -77,11 +68,9 @@ jobs:
             npm install
           fi
 
-      - name: Build Angular (NO duplicated --configuration)
+      - name: Build Angular
         working-directory: ${{ steps.locate.outputs.project_dir }}
-        run: |
-          set -e
-          npm run build -- --base-href "/${{ github.event.repository.name }}/"
+        run: npm run build -- --base-href "/${{ github.event.repository.name }}/"
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
@@ -91,23 +80,14 @@ jobs:
         working-directory: ${{ steps.locate.outputs.project_dir }}
         run: |
           set -e
-          if [ ! -d "dist" ]; then
-            echo "No dist folder found after build."
-            ls -la
-            exit 1
-          fi
-
           CANDIDATE=$(find dist -maxdepth 5 -type f -name index.html | head -n 1 || true)
           if [ -z "$CANDIDATE" ]; then
             echo "No index.html found in dist."
             find dist -maxdepth 4 -type f | head -n 80
             exit 1
           fi
-
           OUTDIR=$(dirname "$CANDIDATE")
           echo "outdir=$OUTDIR" >> $GITHUB_OUTPUT
-          echo "Using output dir: $OUTDIR"
-          ls -la "$OUTDIR" | head -n 50
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
