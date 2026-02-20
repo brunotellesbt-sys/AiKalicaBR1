@@ -1,8 +1,8 @@
-name: Deploy Angular (from ZIP) to GitHub Pages
+name: Deploy GitHub Pages (from zip)
 
 on:
   push:
-    branches: ["main"]
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -11,88 +11,54 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "pages"
+  group: pages
   cancel-in-progress: true
-
-env:
-  ZIP_FILE: westeros-chronicles-angular.zip
-  EXTRACT_DIR: app
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout (repo contains the ZIP)
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install unzip
-        run: sudo apt-get update && sudo apt-get install -y unzip
-
-      - name: Extract ZIP
+      # O zip deve estar commitado na raiz da branch main
+      - name: Extract game zip
         run: |
           set -e
-          test -f "./${{ env.ZIP_FILE }}" || (echo "ZIP not found: ${{ env.ZIP_FILE }}" && exit 1)
-          rm -rf "${{ env.EXTRACT_DIR }}"
-          mkdir -p "${{ env.EXTRACT_DIR }}"
-          unzip -q "./${{ env.ZIP_FILE }}" -d "${{ env.EXTRACT_DIR }}"
+          ls -la
+          test -f ./westeros-chronicles-angular.zip
 
-      - name: Locate Angular project folder (package.json)
-        id: locate
-        run: |
-          set -e
-          ROOT="${{ env.EXTRACT_DIR }}"
-          if [ -f "$ROOT/package.json" ]; then
-            echo "project_dir=$ROOT" >> $GITHUB_OUTPUT
-            exit 0
+          rm -rf app
+          mkdir -p app
+
+          unzip -q ./westeros-chronicles-angular.zip -d ./app
+
+          # Se o zip contém uma pasta raiz, normaliza para ./app
+          if [ -d "./app/westeros-chronicles-angular" ]; then
+            rsync -a ./app/westeros-chronicles-angular/ ./app/
+            rm -rf ./app/westeros-chronicles-angular
           fi
-          FOUND=$(find "$ROOT" -maxdepth 4 -type f -name package.json | head -n 1 || true)
-          if [ -z "$FOUND" ]; then
-            echo "No package.json found inside extracted zip."
-            find "$ROOT" -maxdepth 3 -type f | head -n 80
-            exit 1
-          fi
-          echo "project_dir=$(dirname "$FOUND")" >> $GITHUB_OUTPUT
+
+          ls -la ./app
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: 20
 
-      - name: Install dependencies
-        working-directory: ${{ steps.locate.outputs.project_dir }}
-        run: |
-          set -e
-          if [ -f "package-lock.json" ]; then
-            npm ci
-          else
-            npm install
-          fi
+      # Sem npm cache/ci porque não há package-lock.json no projeto
+      - name: Install
+        working-directory: ./app
+        run: npm install --no-audit --no-fund
 
-      - name: Build Angular
-        working-directory: ${{ steps.locate.outputs.project_dir }}
+      - name: Build
+        working-directory: ./app
         run: npm run build -- --base-href "/${{ github.event.repository.name }}/"
-
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-
-      - name: Locate dist output (index.html)
-        id: dist
-        working-directory: ${{ steps.locate.outputs.project_dir }}
-        run: |
-          set -e
-          CANDIDATE=$(find dist -maxdepth 5 -type f -name index.html | head -n 1 || true)
-          if [ -z "$CANDIDATE" ]; then
-            echo "No index.html found in dist."
-            find dist -maxdepth 4 -type f | head -n 80
-            exit 1
-          fi
-          OUTDIR=$(dirname "$CANDIDATE")
-          echo "outdir=$OUTDIR" >> $GITHUB_OUTPUT
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ${{ steps.locate.outputs.project_dir }}/${{ steps.dist.outputs.outdir }}
+          path: ./app/dist/westeros-chronicles
 
   deploy:
     needs: build
