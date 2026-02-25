@@ -1,0 +1,93 @@
+name: Deploy Angular (GitHub Pages)
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages-${{ github.ref }}"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ]; then
+            npm ci --no-audit --no-fund
+          else
+            echo "package-lock.json não encontrado — usando npm install."
+            npm install --no-audit --no-fund
+          fi
+
+      - name: Build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build -- --base-href "/${{ github.event.repository.name }}/"
+
+      - name: Locate built site folder (find index.html)
+        id: site
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          FOUND="$(find . -maxdepth 12 -type f \( -path "*/dist/*/index.html" -o -path "*/dist/*/browser/index.html" \) -print -quit || true)"
+          if [ -z "$FOUND" ]; then
+            FOUND="$(find . -maxdepth 15 -type f -name index.html -print -quit || true)"
+          fi
+
+          if [ -z "$FOUND" ]; then
+            echo "Não encontrei nenhum index.html gerado após o build."
+            echo "Debug: listando diretórios (nível 4):"
+            find . -maxdepth 4 -type d -print
+            exit 1
+          fi
+
+          SITE_DIR="$(dirname "$FOUND")"
+          echo "SITE_DIR=$SITE_DIR" >> "$GITHUB_OUTPUT"
+          echo "Usando SITE_DIR=$SITE_DIR (index: $FOUND)"
+
+      - name: SPA fallback (404.html) + disable jekyll
+        shell: bash
+        run: |
+          set -euo pipefail
+          SITE_DIR="${{ steps.site.outputs.SITE_DIR }}"
+          cp "$SITE_DIR/index.html" "$SITE_DIR/404.html"
+          touch "$SITE_DIR/.nojekyll"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ steps.site.outputs.SITE_DIR }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

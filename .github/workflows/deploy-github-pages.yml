@@ -32,23 +32,53 @@ jobs:
           cache: "npm"
           cache-dependency-path: westeros-chronicles-angular/package-lock.json
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build (Angular)
-        run: |
-          REPO_NAME="${GITHUB_REPOSITORY#*/}"
-          # Se seu repo for um "project site" (https://user.github.io/REPO/), o base-href precisa ser /REPO/
-          npm run build -- --configuration production --base-href "/${REPO_NAME}/"
-
       - name: Configure Pages
         uses: actions/configure-pages@v5
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+            npm ci --no-audit --no-fund
+          else
+            echo "package-lock.json não encontrado — usando npm install."
+            npm install --no-audit --no-fund
+          fi
+
+      - name: Build (Angular)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build -- --base-href "/${{ github.event.repository.name }}/"
+
+      - name: Resolve publish directory
+        id: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          SITE_DIR="dist/westeros-chronicles"
+          if [ -d "${SITE_DIR}/browser" ]; then
+            SITE_DIR="${SITE_DIR}/browser"
+          fi
+
+          if [ ! -f "${SITE_DIR}/index.html" ]; then
+            echo "Não encontrei ${SITE_DIR}/index.html após o build."
+            find dist -maxdepth 4 -type f -name index.html -print || true
+            exit 1
+          fi
+
+          cp "${SITE_DIR}/index.html" "${SITE_DIR}/404.html"
+          touch "${SITE_DIR}/.nojekyll"
+
+          echo "SITE_DIR=${SITE_DIR}" >> "$GITHUB_OUTPUT"
+          echo "Publicando de ${SITE_DIR}"
 
       # ✅ Ajuste o path do dist (veja nota abaixo)
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: westeros-chronicles-angular/dist/<NOME_DO_PROJETO>
+          path: westeros-chronicles-angular/${{ steps.site.outputs.SITE_DIR }}
 
   deploy:
     runs-on: ubuntu-latest
