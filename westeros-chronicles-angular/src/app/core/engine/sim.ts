@@ -1512,22 +1512,6 @@ function ensureMissions(state: GameState, rng: Rng): void {
   // limpa expiradas
   state.missions = state.missions.filter(m => m.status !== 'expirada' && m.expiresTurn > now);
 
-  // Migração silenciosa: remove nomes genéricos em missões já existentes no save.
-  for (const m of state.missions) {
-    if (!m?.title) continue;
-    if (m.title.includes('Ordens do líder da Casa')) {
-      m.title = 'Recado de confiança do salão familiar';
-    }
-    if (m.title.includes('Chamado da Coroa')) {
-      m.title = 'Lacre Real entregue por corvo';
-    }
-    if (m.title.includes('Pedido do suserano') || m.title.includes('Pedido de vassalo')) {
-      m.title = m.title
-        .replace('Pedido do suserano: ', 'Despacho feudal: ')
-        .replace('Pedido de vassalo: ', 'Súplica juramentada: ');
-    }
-  }
-
   // se houver poucas, cria missões locais (mantém sistema original) + complementos inteligentes
   const player = state.characters[state.playerId];
   const here = state.locations[player.locationId];
@@ -1564,19 +1548,62 @@ function ensureMissions(state: GameState, rng: Rng): void {
   };
 
   for (let i = 0; i < needed; i++) {
-    const kind: 'diplomacia' | 'bandidos' | 'selvagens' | 'comercio' = rng.pick(['diplomacia','bandidos','selvagens','comercio']);
-    const req = kind === 'diplomacia' ? rng.int(10, 35) : kind === 'comercio' ? rng.int(15, 40) : rng.int(25, 70);
-    const reward = rng.int(25, 120) + Math.floor(req * 1.2);
-    const title = rng.pick(localTitlesByKind[kind]);
+    const earlyWeights = ['lider', 'lider', 'diplomacia', 'comercio', 'bandidos'];
+    const midWeights = ['lider', 'diplomacia', 'comercio', 'bandidos', 'selvagens', 'suserano'];
+    const lateWeights = ['diplomacia', 'comercio', 'bandidos', 'selvagens', 'suserano', 'vassalo', 'coroa'];
+    const basePool = playerPower < 38 ? earlyWeights : playerPower < 62 ? midWeights : lateWeights;
+    const pool = playerIsLeader ? basePool.filter(k => k !== 'lider') : basePool;
+    let kind = rng.pick(pool.length ? pool : ['diplomacia', 'comercio', 'bandidos']) as any;
+    if (kind === 'coroa') {
+      const crownChance = playerPower >= 72 ? 0.22 : playerPower >= 60 ? 0.12 : 0.05;
+      if (!rng.chance(crownChance)) kind = rng.pick(['diplomacia', 'comercio', 'bandidos', 'selvagens']) as any;
+    }
+
+    const req = kind === 'diplomacia' ? rng.int(12, 38)
+      : kind === 'comercio' ? rng.int(16, 44)
+      : kind === 'lider' ? rng.int(14, 40)
+      : kind === 'coroa' ? rng.int(50, 82)
+      : rng.int(24, 74);
+
+    const baseRequester = kind === 'lider' ? 1.10
+      : kind === 'suserano' ? 1.25
+      : kind === 'vassalo' ? 1.35
+      : kind === 'coroa' ? 1.75
+      : 1.0;
+    const reward = Math.floor((rng.int(25, 120) + Math.floor(req * 1.2)) * baseRequester);
+
+    const title = kind === 'diplomacia' ? 'Negociar apoio local' :
+                  kind === 'comercio' ? 'Escolta comercial' :
+                  kind === 'lider' ? 'Ordens do líder da Casa' :
+                  kind === 'suserano' ? 'Pedido do suserano local' :
+                  kind === 'vassalo' ? 'Pedido de casa suserana regional' :
+                  kind === 'coroa' ? 'Chamado da Coroa' :
+                  kind === 'bandidos' ? 'Caçar bandidos' : 'Afastar selvagens';
     const desc = kind === 'diplomacia'
       ? 'Leve uma mensagem e tente melhorar relações com uma vila ou castelo próximo.'
       : kind === 'comercio'
       ? 'Garanta que uma caravana chegue ao destino sem incidentes.'
+      : kind === 'lider'
+      ? `Um recado direto de ${state.characters[playerHouse.leaderId]?.name ?? 'seu líder'} pede serviço inicial para provar seu valor.`
+      : kind === 'suserano'
+      ? 'A casa suserana exige ação rápida para manter sua posição feudal.'
+      : kind === 'vassalo'
+      ? 'Uma casa sob sua influência pede uma resposta firme para manter a ordem.'
+      : kind === 'coroa'
+      ? 'Um emissário real traz tarefa rara. O risco é alto, mas a recompensa é nobre.'
       : kind === 'bandidos'
       ? 'Um clã de bandidos tem atacado viajantes. Encontre-os e elimine a ameaça.'
       : 'Relatos de selvagens/fora-da-lei. Faça patrulhas e afaste-os.';
     const edges = state.travelGraph[here.id] ?? [];
     const target = edges.length ? rng.pick(edges).toLocationId : here.id;
+
+    const requesterHouseId = kind === 'coroa'
+      ? 'targaryen_throne'
+      : kind === 'lider'
+      ? playerHouse.id
+      : kind === 'suserano'
+      ? (playerHouse.suzerainId ?? undefined)
+      : undefined;
 
     state.missions.push({
       id: uid('m'),
@@ -1587,23 +1614,25 @@ function ensureMissions(state: GameState, rng: Rng): void {
       targetLocationId: target,
       requiredMartial: req,
       rewardGold: reward,
+      rewardPrestige: kind === 'coroa' ? 3 : kind === 'vassalo' ? 2 : 1,
+      rewardRelation: kind === 'coroa' ? 5 : kind === 'vassalo' ? 3 : 2,
+      requesterHouseId,
       createdTurn: now,
       expiresTurn: now + rng.int(6, 16),
       status: 'aberta',
     });
   }
 
-  // Complemento 1 (fase inicial): missões pequenas dadas pelo líder da sua Casa, em locais próximos.
+  // Complemento: enquanto não for líder e ainda estiver em ascensão, recebe missões do líder da própria Casa.
   const leaderMissionOpen = state.missions.some(m => m.kind === 'lider' && m.status === 'aberta');
   if (!playerIsLeader && !leaderMissionOpen) {
     const leader = state.characters[playerHouse.leaderId];
-    const leaderChance = playerPower < 35 ? 0.90 : playerPower < 55 ? 0.62 : 0.28;
+    const leaderChance = playerPower < 35 ? 0.85 : playerPower < 55 ? 0.55 : 0.25;
     if (leader && leader.alive && rng.chance(leaderChance)) {
       const leaderTitles = [
-        `Recado de ${leader.name}: patrulha de confiança`,
-        `Favor pessoal de ${leader.name} nas redondezas`,
-        `Serviço de honra para ${playerHouse.name}`,
-        `Corvo selado de ${leader.name}: tarefa discreta`,
+        `Selo de ${leader.name}: juramento de serviço`,
+        `Ordem de ${leader.name}: provar lealdade`,
+        `Chamado do salão de ${playerHouse.name}`,
       ];
       const edges = state.travelGraph[here.id] ?? [];
       const target = edges.length ? rng.pick(edges).toLocationId : here.id;
@@ -1627,29 +1656,27 @@ function ensureMissions(state: GameState, rng: Rng): void {
     }
   }
 
-  // Complemento 3 (fase avançada): apenas Casa de alto prestígio e personagem líder podem receber tarefas da Coroa.
+  // Complemento raro: missões da Coroa (não substitui as demais).
   const crownMissionOpen = state.missions.some(m => m.kind === 'coroa' && m.status === 'aberta');
-  const housePrestige = playerHouse.prestige ?? 0;
-  if (!crownMissionOpen && playerIsLeader && housePrestige >= 82) {
-    const crownChance = housePrestige >= 92 ? 0.22 : housePrestige >= 86 ? 0.16 : 0.10;
+  if (!crownMissionOpen) {
+    const crownChance = playerPower >= 75 ? 0.18 : playerPower >= 60 ? 0.10 : 0.03;
     if (rng.chance(crownChance)) {
       const crownSeat = state.houses['targaryen_throne']?.seatLocationId ?? here.id;
       const crownTitles = [
-        'Selo do Trono de Ferro: assunto reservado',
-        'Corvo de Porto Real: comissão régia',
-        'Mandado da Coroa perante o Pequeno Conselho',
-        'Carta lacrada da Fortaleza Vermelha',
+        'Lacre Real: Negócios do Trono de Ferro',
+        'Corvos de Porto Real: Missão da Coroa',
+        'Decreto selado pelo Mestre dos Sussurros',
       ];
       state.missions.push({
         id: uid('m'),
         kind: 'coroa',
         title: rng.pick(crownTitles),
-        description: 'A Coroa reconhece o peso da sua Casa e exige uma missão sensível. Êxito eleva seu nome entre os grandes.',
+        description: 'Um emissário real exige discrição e eficácia. Falhar mancha o nome da Casa, vencer abre portas no reino.',
         regionId,
         targetLocationId: crownSeat,
-        requiredMartial: rng.int(52, 84),
-        rewardGold: rng.int(130, 280),
-        rewardHouseGold: rng.int(90, 240),
+        requiredMartial: rng.int(48, 82),
+        rewardGold: rng.int(120, 260),
+        rewardHouseGold: rng.int(80, 220),
         rewardPrestige: 3,
         rewardRelation: 6,
         requesterHouseId: 'targaryen_throne',
@@ -1661,7 +1688,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
   }
 
 
-  // Complemento 2 (fase intermediária): ao virar líder, passam a surgir missões da Casa suserana e dos vassalos.
+  // --- Missões de suserania/vassalagem (pedidos individuais) ---
   // Mantém poucas ativas ao mesmo tempo para não virar spam.
   if (!playerIsLeader) return;
 
