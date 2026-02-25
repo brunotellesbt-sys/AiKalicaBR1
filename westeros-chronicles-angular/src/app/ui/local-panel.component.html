@@ -1,0 +1,44 @@
+<div class="panel">
+  <div class="h2">Pessoas no local</div>
+  <div class="p muted">Local: <b>{{state.locations[player.locationId]?.name}}</b></div>
+
+  <div class="empty" *ngIf="charsHere().length===0">Não há personagens nomeados aqui neste momento.</div>
+
+  <div class="card" *ngFor="let c of charsHere()">
+    <div class="row">
+      <div>
+        <div class="name">{{c.name}}</div>
+        <div class="meta">
+          {{houseName(c.currentHouseId)}} • {{c.gender==='M'?'Homem':'Mulher'}} • {{c.ageYears}} anos <span *ngIf="kinshipLabel(c)" class="muted">• {{kinshipLabel(c)}}</span>
+        </div>
+      </div>
+      <div class="rel">Relação: <b>{{c.relationshipToPlayer}}</b>/100</div>
+    </div>
+
+    <div class="actions">
+      <button (click)="on('talk', c.id)">Conversar</button>
+      <button (click)="on('drink', c.id)">Beber</button>
+      <button (click)="on('hunt', c.id)" [disabled]="!canHuntWith(c)" title="Requer força (marcial) suficiente.">Caçar</button>
+      <button (click)="on('flowers', c.id)" [disabled]="!canFlowers(c)" title="Flores apenas para mulheres.">Dar flores</button>
+      <button (click)="on('kiss', c.id)" [disabled]="!canKiss(c)" title="Requer relação 80+ e não pode com pai/mãe/filhos.">Beijar</button>
+      <button (click)="on('relations', c.id)" [disabled]="!canRelations(c)" title="Requer relação 90+ e beijo anterior.">Relações</button>
+      <button (click)="onMarry(c)" [disabled]="!canMarry(c)" title="Requer relação 92+ e beijo anterior. Se a mulher for a última da casa, você escolhe o sobrenome.">Casar</button>
+    </div>
+  </div>
+
+  <!-- Modal simples de escolha de sobrenome (apenas quando a mulher é a última da casa) -->
+  <div class="card" *ngIf="pendingMarriage">
+    <div class="name">Escolha o sobrenome do casamento</div>
+    <div class="meta">
+      {{pendingMarriage.groomName}} + {{pendingMarriage.brideName}} • A noiva é a última viva da sua Casa.
+    </div>
+    <div class="p muted" style="margin-top:8px;">
+      Pela regra padrão, o casal assume o sobrenome do homem. Você pode preservar a Casa da mulher.
+    </div>
+    <div class="actions" style="margin-top:10px;">
+      <button (click)="confirmMarriage('patri')">Sobrenome do homem ({{pendingMarriage.groomHouse}})</button>
+      <button (click)="confirmMarriage('matri')">Preservar a Casa da mulher ({{pendingMarriage.brideHouse}})</button>
+      <button (click)="cancelMarriage()">Cancelar</button>
+    </div>
+  </div>
+</div>

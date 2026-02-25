@@ -1,0 +1,33 @@
+<div class="panel">
+  <div class="h2">Torneios</div>
+  <div class="p muted">Probabilidades (ao competir): <b>10%</b> morrer • <b>30%</b> perder • <b>20%</b> ferir/perder prestígio • <b>40%</b> vencer.</div>
+
+  <div class="organize card" *ngIf="isLeader()">
+    <div class="row">
+      <div>
+        <div class="name">Organizar torneio</div>
+        <div class="meta">O tipo é definido pelo prestígio da sua Casa (menor/mediano/importante).</div>
+      </div>
+      <button (click)="organize()">Organizar</button>
+    </div>
+  </div>
+
+  <div class="empty" *ngIf="openTournaments().length===0">Nenhum torneio anunciado agora.</div>
+
+  <div class="card" *ngFor="let t of openTournaments()">
+    <div class="row">
+      <div>
+        <div class="name">{{hostName(t)}} • {{t.size}}</div>
+        <div class="meta">Local: {{locName(t)}} • Motivo: {{t.reason}} • Expira em {{turnsLeft(t)}} turno(s)</div>
+        <div class="meta">Categorias: <b>{{t.categories.join(' / ')}}</b></div>
+      </div>
+      <button [disabled]="!canJoin(t)" (click)="join(t)">Competir</button>
+    </div>
+
+    <div class="hint" *ngIf="!canJoin(t)">
+      <span *ngIf="state.characters[state.playerId].locationId !== t.locationId">Você precisa estar no local do torneio para competir.</span>
+      <span *ngIf="state.characters[state.playerId].locationId === t.locationId && !t.categories.includes(state.characters[state.playerId].renownTier)">Sua categoria atual não participa deste torneio.</span>
+      <span *ngIf="(state.characters[state.playerId].injuredUntilTurn ?? 0) > state.date.absoluteTurn">Você está ferido(a) e não pode competir neste turno.</span>
+    </div>
+  </div>
+</div>

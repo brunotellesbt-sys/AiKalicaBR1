@@ -1,0 +1,32 @@
+<div class="wrap" *ngIf="state as s">
+  <div class="head">
+    <div class="title">Diplomacia</div>
+    <div class="sub">Relações entre casas (0..100)</div>
+  </div>
+
+  <div class="body">
+    <div class="card">
+      <div class="h3">Resumo</div>
+      <div class="muted small">
+        0 = guerra • 50 = possível aliança • 80+ = aliança forte
+      </div>
+      <div class="muted small">
+        Para interagir (conversar/presentear/audiência/casamento/Banco de Ferro), use o Chat → “Diplomacia”.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="h3">Top relações da sua Casa</div>
+      <div class="table">
+        <div class="row headRow">
+          <div>Casa</div><div>Relação</div><div>Prestígio</div>
+        </div>
+        <div class="row" *ngFor="let r of topRelations()">
+          <div>{{r.name}}</div>
+          <div><b>{{r.rel}}</b></div>
+          <div>{{r.prestige}}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
