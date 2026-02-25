@@ -37,12 +37,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
-            npm ci --no-audit --no-fund
-          else
-            echo "package-lock.json não encontrado — usando npm install."
-            npm install --no-audit --no-fund
+          if [ ! -f package-lock.json ] && [ ! -f npm-shrinkwrap.json ]; then
+            echo "Arquivo de lock não encontrado. Gere e versione package-lock.json para builds reprodutíveis."
+            exit 1
           fi
+
+          npm ci --no-audit --no-fund
 
       - name: Build (Angular)
         shell: bash
