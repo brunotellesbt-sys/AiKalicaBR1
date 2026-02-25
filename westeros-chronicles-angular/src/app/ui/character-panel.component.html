@@ -1,7 +1,7 @@
 <div class="wrap">
   <div class="head">
     <div class="title">Personagem</div>
-    <div class="sub">Atributos e contatos</div>
+    <div class="sub">Atributos, contatos e parentesco</div>
   </div>
 
   <div class="body" *ngIf="state as s">
@@ -16,25 +16,23 @@
       </div>
 
       <div class="grid2">
-        <div class="miniCard">
-          <div class="k">Combate (martial)</div>
-          <div class="v">{{p.martial}} <span class="muted">({{p.renownTier}})</span></div>
-        </div>
-        <div class="miniCard">
-          <div class="k">Beleza/Apresentação</div>
-          <div class="v">{{p.beauty}}</div>
-        </div>
-        <div class="miniCard">
-          <div class="k">Carisma</div>
-          <div class="v">{{p.charm}}</div>
-        </div>
-        <div class="miniCard">
-          <div class="k">Bem quisto</div>
-          <div class="v">{{p.wellLiked}}</div>
-        </div>
-        <div class="miniCard">
-          <div class="k">Prestígio pessoal</div>
-          <div class="v">{{p.personalPrestige ?? 0}}</div>
+        <div class="miniCard"><div class="k">Combate (martial)</div><div class="v">{{p.martial}} <span class="muted">({{p.renownTier}})</span></div></div>
+        <div class="miniCard"><div class="k">Beleza/Apresentação</div><div class="v">{{p.beauty}}</div></div>
+        <div class="miniCard"><div class="k">Carisma</div><div class="v">{{p.charm}}</div></div>
+        <div class="miniCard"><div class="k">Bem quisto</div><div class="v">{{p.wellLiked}}</div></div>
+        <div class="miniCard"><div class="k">Prestígio pessoal</div><div class="v">{{p.personalPrestige ?? 0}}</div></div>
+      </div>
+
+      <div class="card">
+        <div class="h3">Família e parentes conhecidos</div>
+        <div class="list">
+          <div class="row" *ngFor="let c of relatedKnown(s, p.id)">
+            <div class="nm">{{c.name}}</div>
+            <div class="sm muted">{{s.houses[c.currentHouseId]?.name}}</div>
+            <div class="rl">Parentesco: <b>{{kinshipLabel(s, c, p.id)}}</b></div>
+            <div class="rl">Relação: <b>{{c.relationshipToPlayer}}</b></div>
+          </div>
+          <div class="muted small" *ngIf="relatedKnown(s, p.id).length===0">Nenhum parente conhecido no momento.</div>
         </div>
       </div>
 
@@ -44,11 +42,10 @@
           <div class="row" *ngFor="let c of nearbyKnown(s, p.id)">
             <div class="nm">{{c.name}}</div>
             <div class="sm muted">{{s.houses[c.currentHouseId]?.name}}</div>
+            <div class="rl">Parentesco: <b>{{kinshipLabel(s, c, p.id)}}</b></div>
             <div class="rl">Relação: <b>{{c.relationshipToPlayer}}</b></div>
           </div>
-          <div class="muted small" *ngIf="nearbyKnown(s, p.id).length===0">
-            Ninguém conhecido por perto ainda.
-          </div>
+          <div class="muted small" *ngIf="nearbyKnown(s, p.id).length===0">Ninguém conhecido por perto ainda.</div>
         </div>
       </div>
     </ng-container>

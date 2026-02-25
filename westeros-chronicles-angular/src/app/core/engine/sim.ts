@@ -3771,17 +3771,6 @@ function tickPregnancies(state: GameState, rng: Rng): void {
   }
 }
 
-state.chronicle.unshift({
-  turn: state.date.absoluteTurn,
-  title: 'Nascimento nobre',
-  body: `${baby.name} nasce na ${state.houses[pair.houseId].name}.`,
-  tags: ['nascimento']
-});
-    }
-  }
-}
-
-
 function prestigeToTournamentSize(prestige: number): TournamentSize {
   if (prestige < 45) return 'menor';
   if (prestige < 75) return 'medio';
