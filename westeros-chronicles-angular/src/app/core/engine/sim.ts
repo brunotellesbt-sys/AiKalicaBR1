@@ -1512,32 +1512,74 @@ function ensureMissions(state: GameState, rng: Rng): void {
   // limpa expiradas
   state.missions = state.missions.filter(m => m.status !== 'expirada' && m.expiresTurn > now);
 
-  // se houver poucas, cria algumas na região atual
+  // se houver poucas, cria algumas na região atual com progressão inteligente
   const player = state.characters[state.playerId];
   const here = state.locations[player.locationId];
   const regionId = here.regionId;
   const playerHouse = state.houses[state.playerHouseId];
   const playerIsLeader = playerHouse?.leaderId === player.id;
+  const playerPower = Math.round((player.martial * 0.65) + (player.personalPrestige * 0.35));
 
   const openInRegion = state.missions.filter(m => m.regionId === regionId && m.status === 'aberta');
   const needed = 3 - openInRegion.length;
   for (let i = 0; i < needed; i++) {
-    const kind: any = rng.pick(['diplomacia','bandidos','selvagens','comercio']);
-    const req = kind === 'diplomacia' ? rng.int(10, 35) : kind === 'comercio' ? rng.int(15, 40) : rng.int(25, 70);
-    const reward = rng.int(25, 120) + Math.floor(req * 1.2);
+    const earlyWeights = ['lider', 'lider', 'diplomacia', 'comercio', 'bandidos'];
+    const midWeights = ['lider', 'diplomacia', 'comercio', 'bandidos', 'selvagens', 'suserano'];
+    const lateWeights = ['diplomacia', 'comercio', 'bandidos', 'selvagens', 'suserano', 'vassalo', 'coroa'];
+    const basePool = playerPower < 38 ? earlyWeights : playerPower < 62 ? midWeights : lateWeights;
+    const pool = playerIsLeader ? basePool.filter(k => k !== 'lider') : basePool;
+    let kind = rng.pick(pool.length ? pool : ['diplomacia', 'comercio', 'bandidos']) as any;
+    if (kind === 'coroa') {
+      const crownChance = playerPower >= 72 ? 0.22 : playerPower >= 60 ? 0.12 : 0.05;
+      if (!rng.chance(crownChance)) kind = rng.pick(['diplomacia', 'comercio', 'bandidos', 'selvagens']) as any;
+    }
+
+    const req = kind === 'diplomacia' ? rng.int(12, 38)
+      : kind === 'comercio' ? rng.int(16, 44)
+      : kind === 'lider' ? rng.int(14, 40)
+      : kind === 'coroa' ? rng.int(50, 82)
+      : rng.int(24, 74);
+
+    const baseRequester = kind === 'lider' ? 1.10
+      : kind === 'suserano' ? 1.25
+      : kind === 'vassalo' ? 1.35
+      : kind === 'coroa' ? 1.75
+      : 1.0;
+    const reward = Math.floor((rng.int(25, 120) + Math.floor(req * 1.2)) * baseRequester);
+
     const title = kind === 'diplomacia' ? 'Negociar apoio local' :
                   kind === 'comercio' ? 'Escolta comercial' :
+                  kind === 'lider' ? 'Ordens do líder da Casa' :
+                  kind === 'suserano' ? 'Pedido do suserano local' :
+                  kind === 'vassalo' ? 'Pedido de casa suserana regional' :
+                  kind === 'coroa' ? 'Chamado da Coroa' :
                   kind === 'bandidos' ? 'Caçar bandidos' : 'Afastar selvagens';
     const desc = kind === 'diplomacia'
       ? 'Leve uma mensagem e tente melhorar relações com uma vila ou castelo próximo.'
       : kind === 'comercio'
       ? 'Garanta que uma caravana chegue ao destino sem incidentes.'
+      : kind === 'lider'
+      ? `Um recado direto de ${state.characters[playerHouse.leaderId]?.name ?? 'seu líder'} pede serviço inicial para provar seu valor.`
+      : kind === 'suserano'
+      ? 'A casa suserana exige ação rápida para manter sua posição feudal.'
+      : kind === 'vassalo'
+      ? 'Uma casa sob sua influência pede uma resposta firme para manter a ordem.'
+      : kind === 'coroa'
+      ? 'Um emissário real traz tarefa rara. O risco é alto, mas a recompensa é nobre.'
       : kind === 'bandidos'
       ? 'Um clã de bandidos tem atacado viajantes. Encontre-os e elimine a ameaça.'
       : 'Relatos de selvagens/fora-da-lei. Faça patrulhas e afaste-os.';
     // alvo: escolhe um destino próximo (ou fica aqui)
     const edges = state.travelGraph[here.id] ?? [];
     const target = edges.length ? rng.pick(edges).toLocationId : here.id;
+
+    const requesterHouseId = kind === 'coroa'
+      ? 'targaryen_throne'
+      : kind === 'lider'
+      ? playerHouse.id
+      : kind === 'suserano'
+      ? (playerHouse.suzerainId ?? undefined)
+      : undefined;
 
     state.missions.push({
       id: uid('m'),
@@ -1548,6 +1590,9 @@ function ensureMissions(state: GameState, rng: Rng): void {
       targetLocationId: target,
       requiredMartial: req,
       rewardGold: reward,
+      rewardPrestige: kind === 'coroa' ? 3 : kind === 'vassalo' ? 2 : 1,
+      rewardRelation: kind === 'coroa' ? 5 : kind === 'vassalo' ? 3 : 2,
+      requesterHouseId,
       createdTurn: now,
       expiresTurn: now + rng.int(6, 16),
       status: 'aberta',
@@ -1895,8 +1940,8 @@ function promptMissions(state: GameState, rng: Rng): void {
 
   // Mostra missões locais + missões feudo (suserano/vassalo) em qualquer região.
   const missions = (state.missions ?? [])
-    .filter(m => (m.kind === 'suserano' || m.kind === 'vassalo') || m.regionId === here.regionId)
-    .slice(0, 10);
+    .filter(m => (m.kind === 'suserano' || m.kind === 'vassalo' || m.kind === 'lider' || m.kind === 'coroa') || m.regionId === here.regionId)
+    .slice(0, 12);
 
 const playerHouse = state.houses[state.playerHouseId];
 const isLeader = playerHouse.leaderId === player.id;
@@ -2707,7 +2752,10 @@ function promptTraining(state: GameState, rng: Rng): void {
 
   pushSystem(state, text, [
     { id: 'tr:yard', label: 'Treinar no pátio', hint: 'Custo 20 ouro • martial +2~+6' },
+    { id: 'tr:drill', label: 'Treino disciplinado (instrutor)', hint: 'Custo 55 ouro • martial +3~+8 • charm +0~+2 • crescimento estável' },
+    { id: 'tr:attire_basic', label: 'Comprar roupa simples', hint: 'Custo 15 ouro • beleza +1~+3' },
     { id: 'tr:attire', label: 'Comprar traje refinado', hint: 'Custo 35 ouro • beleza +3~+8' },
+    { id: 'tr:attire_noble', label: 'Encomendar vestes nobres', hint: 'Custo 90 ouro • beleza +6~+12 • prestígio pessoal +1' },
     { id: 'tr:duel', label: 'Treino de combate arriscado', hint: 'Custo 0 • martial +4~+10 (10% ferimento social: prestígio -1)' },
     { id: 'back', label: 'Voltar' },
   ]);
@@ -2730,6 +2778,33 @@ export function applyTraining(state: GameState, rng: Rng, trainingId: string): v
     return promptMainMenu(state, rng);
   }
 
+  if (trainingId === 'drill') {
+    if (house.resources.gold < 55) {
+      pushNarration(state, 'Ouro insuficiente para contratar um instrutor disciplinado.');
+      return promptMainMenu(state, rng);
+    }
+    house.resources.gold -= 55;
+    const martialGain = rng.int(3, 8);
+    const charmGain = rng.int(0, 2);
+    player.martial = clamp(player.martial + martialGain, 0, 100);
+    player.charm = clamp(player.charm + charmGain, 0, 100);
+    player.renownTier = renownFromMartial(player.martial);
+    pushNarration(state, `Treino metódico concluído. Martial +${martialGain}${charmGain > 0 ? ` • Carisma +${charmGain}` : ''}.`);
+    return promptMainMenu(state, rng);
+  }
+
+  if (trainingId === 'attire_basic') {
+    if (house.resources.gold < 15) {
+      pushNarration(state, 'Ouro insuficiente até mesmo para roupas simples.');
+      return promptMainMenu(state, rng);
+    }
+    house.resources.gold -= 15;
+    const gain = rng.int(1, 3);
+    player.beauty = clamp(player.beauty + gain, 0, 100);
+    pushNarration(state, `Você melhora sua apresentação com roupas comuns, porém limpas e bem talhadas. Beleza +${gain}.`);
+    return promptMainMenu(state, rng);
+  }
+
   if (trainingId === 'attire') {
     if (house.resources.gold < 35) {
       pushNarration(state, 'Ouro insuficiente para um traje digno.');
@@ -2739,6 +2814,19 @@ export function applyTraining(state: GameState, rng: Rng, trainingId: string): v
     const gain = rng.int(3, 8);
     player.beauty = clamp(player.beauty + gain, 0, 100);
     pushNarration(state, `Você adquire um traje: “Veludo Sombrio de Lys” e “Fivela de Prata de Valdocaso”. Beleza +${gain}.`);
+    return promptMainMenu(state, rng);
+  }
+
+  if (trainingId === 'attire_noble') {
+    if (house.resources.gold < 90) {
+      pushNarration(state, 'Ouro insuficiente para vestes nobres de alto custo.');
+      return promptMainMenu(state, rng);
+    }
+    house.resources.gold -= 90;
+    const gain = rng.int(6, 12);
+    player.beauty = clamp(player.beauty + gain, 0, 100);
+    player.personalPrestige = clamp((player.personalPrestige ?? 0) + 1, 0, 100);
+    pushNarration(state, `Suas vestes chamam atenção em toda a região. Beleza +${gain} • Prestígio pessoal +1.`);
     return promptMainMenu(state, rng);
   }
 
@@ -3036,6 +3124,9 @@ export function advanceTurn(state: GameState, rng: Rng): void {
   // 3.5) Política: casamentos arranjados (IA)
   tickArrangedMarriages(state, rng);
 
+  // 3.75) Progressão pessoal natural (atributos e prestígio)
+  tickPersonalProgression(state, rng);
+
   // 4) Concepções e gravidez (15 turnos) + partos
   tickConceptions(state, rng);
   tickPregnancies(state, rng);
@@ -3272,6 +3363,51 @@ function deathChanceByAge(age: number): number {
   if (age < 55) return 0;
   const step = Math.floor((age - 55) / 5) + 1; // 55..59 =>1, 60..64=>2...
   return clamp(step * 0.05, 0.05, 0.95);
+}
+
+
+function tickPersonalProgression(state: GameState, rng: Rng): void {
+  for (const c of Object.values(state.characters)) {
+    if (!c.alive) continue;
+
+    const age = c.ageYears;
+    const growthPhase = age < 16 ? 1.0 : age <= 28 ? 0.7 : age <= 45 ? 0.35 : 0.12;
+    const declinePhase = age >= 56 ? (age >= 68 ? 0.45 : 0.25) : 0;
+
+    // Combate cresce mais em juventude e cai gradualmente com idade avançada.
+    if (rng.chance(0.22 * growthPhase)) {
+      c.martial = clamp(c.martial + rng.int(0, 2), 0, 100);
+    }
+    if (declinePhase > 0 && rng.chance(declinePhase)) {
+      c.martial = clamp(c.martial - rng.int(0, 2), 0, 100);
+    }
+
+    // Carisma amadurece com experiência; declínio suave apenas em idades muito altas.
+    if (rng.chance(age < 50 ? 0.18 : 0.08)) {
+      c.charm = clamp(c.charm + rng.int(0, 1), 0, 100);
+    }
+    if (age >= 72 && rng.chance(0.20)) {
+      c.charm = clamp(c.charm - 1, 0, 100);
+    }
+
+    // Apresentação acompanha idade e recursos pessoais (quem tem ouro tende a manter status visual).
+    if ((c.personalGold ?? 0) > 80 && rng.chance(0.16)) {
+      c.beauty = clamp(c.beauty + 1, 0, 100);
+      c.personalGold = Math.max(0, (c.personalGold ?? 0) - 5);
+    } else if (age >= 60 && rng.chance(0.17)) {
+      c.beauty = clamp(c.beauty - 1, 0, 100);
+    }
+
+    // Prestígio pessoal: cresce conforme conjunto de atributos, mais devagar no topo.
+    const build = Math.round((c.martial + c.charm + c.beauty) / 3);
+    const prestigeGainChance = build >= 72 ? 0.20 : build >= 56 ? 0.14 : 0.08;
+    if (rng.chance(prestigeGainChance)) {
+      const gain = c.personalPrestige >= 85 ? 0 : 1;
+      c.personalPrestige = clamp((c.personalPrestige ?? 0) + gain, 0, 100);
+    }
+
+    c.renownTier = renownFromMartial(c.martial);
+  }
 }
 
 function tickAgesAndDeaths(state: GameState, rng: Rng): void {

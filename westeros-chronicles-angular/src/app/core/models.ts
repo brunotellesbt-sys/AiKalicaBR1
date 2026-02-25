@@ -195,7 +195,7 @@ export interface ChatMessage {
 // Missões
 // - "suserano": pedidos individuais do seu suserano (você é vassalo)
 // - "vassalo": pedidos individuais de um vassalo (você é suserano)
-export type MissionKind = 'diplomacia' | 'bandidos' | 'selvagens' | 'comercio' | 'suserano' | 'vassalo';
+export type MissionKind = 'diplomacia' | 'bandidos' | 'selvagens' | 'comercio' | 'lider' | 'suserano' | 'vassalo' | 'coroa';
 
 export type MissionStatus = 'aberta' | 'aceita' | 'delegada' | 'concluida' | 'falhou' | 'expirada';
 
