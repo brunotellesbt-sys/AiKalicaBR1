@@ -17,7 +17,7 @@
 
     <div class="actions">
       <button (click)="on('talk', c.id)">Conversar</button>
-      <button *ngIf="canDrinkWith(c)" (click)="on('drink', c.id)">Beber</button>
+      <button (click)="on('drink', c.id)">Beber</button>
       <button *ngIf="canHuntWith(c)" (click)="on('hunt', c.id)" title="Caça em grupo masculino; mulheres só quando guerreiras.">Caçar</button>
       <button *ngIf="canFlowers(c)" (click)="on('flowers', c.id)" title="Flores apenas para mulheres.">Dar flores</button>
       <button *ngIf="canKiss(c)" (click)="on('kiss', c.id)" title="Requer relação 80+ e não pode com pai/mãe/filhos.">Beijar</button>
