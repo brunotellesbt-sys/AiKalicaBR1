@@ -17,6 +17,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: westeros-chronicles-angular
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,39 +32,10 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
-      - name: Extract project zip (fixed name)
-        id: extract
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          ZIP_FILE="westeros-chronicles-angular.zip"
-          if [ ! -f "${ZIP_FILE}" ]; then
-            echo "Não encontrei ${ZIP_FILE} na raiz do repositório."
-            exit 1
-          fi
-
-          rm -rf app
-          mkdir -p app
-          unzip -q "${ZIP_FILE}" -d app
-
-          PKG="$(find app -maxdepth 10 -name package.json -print -quit || true)"
-          if [ -z "${PKG}" ]; then
-            echo "Não encontrei package.json dentro do ${ZIP_FILE}."
-            echo "Conteúdo extraído (nível 2):"
-            find app -maxdepth 2 -mindepth 1 -print
-            exit 1
-          fi
-
-          APP_DIR="$(dirname "${PKG}")"
-          echo "APP_DIR=${APP_DIR}" >> "$GITHUB_OUTPUT"
-          echo "Usando APP_DIR=${APP_DIR}"
-
       - name: Install dependencies
         shell: bash
         run: |
           set -euo pipefail
-          cd "${{ steps.extract.outputs.APP_DIR }}"
 
           if [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ]; then
             npm ci --no-audit --no-fund
@@ -74,7 +48,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cd "${{ steps.extract.outputs.APP_DIR }}"
           npm run build -- --base-href "/${{ github.event.repository.name }}/"
 
       - name: Locate built site folder (find index.html)
@@ -82,7 +55,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          APP_DIR="${{ steps.extract.outputs.APP_DIR }}"
+          APP_DIR="."
 
           echo "Procurando index.html gerado dentro de: $APP_DIR"
 
