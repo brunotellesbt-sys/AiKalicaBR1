@@ -7,6 +7,7 @@ import {
   Gender,
   HouseState,
   Location,
+  Mission,
   RenownTier,
   Tournament,
   TournamentReason,
@@ -1547,6 +1548,73 @@ function ensureMissions(state: GameState, rng: Rng): void {
     ],
   };
 
+  const activeStatuses = new Set(['aberta', 'aceita', 'delegada']);
+  const activeTitles = new Set(
+    (state.missions ?? [])
+      .filter(m => activeStatuses.has(m.status))
+      .map(m => m.title.trim().toLowerCase())
+  );
+
+  const uniqueMissionTitle = (baseTitle: string): string => {
+    const base = baseTitle.trim();
+    const low = base.toLowerCase();
+    if (!activeTitles.has(low)) {
+      activeTitles.add(low);
+      return base;
+    }
+    const suffixes = ['(novo despacho)', '(segunda ordem)', '(ordem extraordinária)', '(ordem urgente)'];
+    for (const suffix of suffixes) {
+      const candidate = `${base} ${suffix}`;
+      const key = candidate.toLowerCase();
+      if (!activeTitles.has(key)) {
+        activeTitles.add(key);
+        return candidate;
+      }
+    }
+    let n = 2;
+    while (activeTitles.has(`${base} #${n}`.toLowerCase())) n += 1;
+    const fallback = `${base} #${n}`;
+    activeTitles.add(fallback.toLowerCase());
+    return fallback;
+  };
+
+  const tuneMissionRewards = (mission: Mission): Mission => {
+    const rewardLevel = mission.kind === 'lider' ? 0
+      : mission.kind === 'suserano' ? 1
+      : mission.kind === 'coroa' ? 2
+      : mission.kind === 'vassalo' ? 1
+      : 1;
+
+    const goldMult = rewardLevel === 0 ? 0.70 : rewardLevel === 1 ? 1.25 : 2.10;
+    const houseMult = rewardLevel === 0 ? 0.60 : rewardLevel === 1 ? 1.45 : 2.30;
+
+    mission.rewardGold = Math.max(8, Math.floor((mission.rewardGold ?? 0) * goldMult));
+
+    const baseHouse = mission.rewardHouseGold ?? 0;
+    mission.rewardHouseGold = rewardLevel === 0
+      ? Math.floor(baseHouse * houseMult)
+      : Math.max(Math.floor(mission.rewardGold * (rewardLevel === 2 ? 0.85 : 0.55)), Math.floor(baseHouse * houseMult));
+
+    mission.rewardPrestige = rewardLevel === 0
+      ? Math.max(0, Math.min(1, mission.rewardPrestige ?? 1))
+      : rewardLevel === 1
+      ? Math.max(2, mission.rewardPrestige ?? 2)
+      : Math.max(4, mission.rewardPrestige ?? 3);
+
+    mission.rewardRelation = rewardLevel === 0
+      ? Math.max(1, Math.min(2, mission.rewardRelation ?? 2))
+      : rewardLevel === 1
+      ? Math.max(4, mission.rewardRelation ?? 3)
+      : Math.max(8, mission.rewardRelation ?? 6);
+
+    return mission;
+  };
+
+  const addMission = (mission: Mission): void => {
+    mission.title = uniqueMissionTitle(mission.title);
+    state.missions!.push(tuneMissionRewards(mission));
+  };
+
   for (let i = 0; i < needed; i++) {
     const earlyWeights = ['lider', 'lider', 'diplomacia', 'comercio', 'bandidos'];
     const midWeights = ['lider', 'diplomacia', 'comercio', 'bandidos', 'selvagens', 'suserano'];
@@ -1572,13 +1640,17 @@ function ensureMissions(state: GameState, rng: Rng): void {
       : 1.0;
     const reward = Math.floor((rng.int(25, 120) + Math.floor(req * 1.2)) * baseRequester);
 
-    const title = kind === 'diplomacia' ? 'Negociar apoio local' :
-                  kind === 'comercio' ? 'Escolta comercial' :
-                  kind === 'lider' ? 'Ordens do líder da Casa' :
-                  kind === 'suserano' ? 'Pedido do suserano local' :
-                  kind === 'vassalo' ? 'Pedido de casa suserana regional' :
-                  kind === 'coroa' ? 'Chamado da Coroa' :
-                  kind === 'bandidos' ? 'Caçar bandidos' : 'Afastar selvagens';
+    const titlePools: Record<string, string[]> = {
+      diplomacia: localTitlesByKind['diplomacia'],
+      comercio: localTitlesByKind['comercio'],
+      bandidos: localTitlesByKind['bandidos'],
+      selvagens: localTitlesByKind['selvagens'],
+      lider: ['Ordens do líder da Casa', 'Recado urgente do líder', 'Serviço direto ao salão da Casa'],
+      suserano: ['Pedido do suserano local', 'Carta lacrada do suserano', 'Chamado feudal do suserano'],
+      vassalo: ['Pedido de casa suserana regional', 'Apelo de um vassalo inquieto', 'Disputa em feudo juramentado'],
+      coroa: ['Chamado da Coroa', 'Despacho de Porto Real', 'Corvos reais: tarefa sigilosa'],
+    };
+    const title = rng.pick(titlePools[kind] ?? ['Missão local']);
     const desc = kind === 'diplomacia'
       ? 'Leve uma mensagem e tente melhorar relações com uma vila ou castelo próximo.'
       : kind === 'comercio'
@@ -1605,7 +1677,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
       ? (playerHouse.suzerainId ?? undefined)
       : undefined;
 
-    state.missions.push({
+    addMission({
       id: uid('m'),
       kind,
       title,
@@ -1637,7 +1709,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
       const edges = state.travelGraph[here.id] ?? [];
       const target = edges.length ? rng.pick(edges).toLocationId : here.id;
       const req = playerPower < 35 ? rng.int(16, 34) : rng.int(24, 46);
-      state.missions.push({
+      addMission({
         id: uid('m'),
         kind: 'lider',
         title: rng.pick(leaderTitles),
@@ -1667,7 +1739,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
         'Corvos de Porto Real: Missão da Coroa',
         'Decreto selado pelo Mestre dos Sussurros',
       ];
-      state.missions.push({
+      addMission({
         id: uid('m'),
         kind: 'coroa',
         title: rng.pick(crownTitles),
@@ -1737,7 +1809,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
       : rng.int(28, 55);
 
     if (template === 'tributo') {
-      state.missions.push({
+      addMission({
         id: uid('m'),
         kind: 'suserano',
         title: rng.pick(['Cobrança de estandarte: tributo extraordinário','Arca de guerra do suserano','Dízimo de lealdade ao suserano']),
@@ -1758,7 +1830,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
     }
 
     if (template === 'levies') {
-      state.missions.push({
+      addMission({
         id: uid('m'),
         kind: 'suserano',
         title: rng.pick(['Convocação de hoste: envio de levies','Bandeiras erguidas para o suserano','Chamado de guerra do seu suserano']),
@@ -1780,7 +1852,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
     }
 
     if (template === 'suprimentos') {
-      state.missions.push({
+      addMission({
         id: uid('m'),
         kind: 'suserano',
         title: rng.pick(['Celeiros para a campanha do suserano','Comboio de víveres da vassalagem','Mantimentos para a marcha do estandarte']),
@@ -1803,7 +1875,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
     }
 
     if (template === 'conselho') {
-      state.missions.push({
+      addMission({
         id: uid('m'),
         kind: 'suserano',
         title: rng.pick(['Conselho fechado do suserano','Audiência de lealdade no salão feudal','Mesa de guerra convocada pelo suserano']),
@@ -1825,7 +1897,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
     // escolta
     const edges = state.travelGraph[here.id] ?? [];
     const target = edges.length ? rng.pick(edges).toLocationId : here.id;
-    state.missions.push({
+    addMission({
       id: uid('m'),
       kind: 'suserano',
       title: rng.pick(['Escolta do comboio feudal','Estrada segura para o tributo da coroa','Guarda de caravana sob juramento']),
@@ -1860,7 +1932,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
     : rng.int(22, 48);
 
   if (template === 'ajuda') {
-    state.missions.push({
+    addMission({
       id: uid('m'),
       kind: 'vassalo',
       title: rng.pick([`Inverno curto em ${vassal.name}: auxílio de mantimentos`,`Celeiros vazios em ${vassal.name}`,`Pedido urgente de víveres por ${vassal.name}`]),
@@ -1884,7 +1956,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
   if (template === 'media') {
     const others = vassals.filter(x => x.id !== vassal.id);
     const other = others.length ? others[rng.int(0, others.length - 1)] : undefined;
-    state.missions.push({
+    addMission({
       id: uid('m'),
       kind: 'vassalo',
       title: rng.pick([`Disputa de fronteira sob ${vassal.name}`,`Conciliação feudal solicitada por ${vassal.name}`,`Paz armada entre vassalos`]),
@@ -1905,7 +1977,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
   }
 
   if (template === 'reparos') {
-    state.missions.push({
+    addMission({
       id: uid('m'),
       kind: 'vassalo',
       title: rng.pick([`Pedra e cal para ${vassal.name}`,`Reforço de muralhas em ${vassal.name}`,`Reconstrução urgente no assento vassalo`]),
@@ -1926,7 +1998,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
   }
 
   // proteção
-  state.missions.push({
+  addMission({
     id: uid('m'),
     kind: 'vassalo',
     title: rng.pick([`Estandarte sob ataque em ${vassal.name}`,`Caça aos saqueadores de ${vassal.name}`,`Punho de ferro contra bandos locais`]),
@@ -2028,8 +2100,15 @@ function promptMissions(state: GameState, rng: Rng): void {
   const region = state.regions[here.regionId];
 
   // Mostra missões locais + missões feudo (suserano/vassalo) em qualquer região.
+  const seenMissionKeys = new Set<string>();
   const missions = (state.missions ?? [])
     .filter(m => (m.kind === 'suserano' || m.kind === 'vassalo' || m.kind === 'lider' || m.kind === 'coroa') || m.regionId === here.regionId)
+    .filter(m => {
+      const key = `${m.kind}|${(m.requesterHouseId ?? '-') }|${m.targetLocationId}|${m.title.toLowerCase().trim()}`;
+      if (seenMissionKeys.has(key)) return false;
+      seenMissionKeys.add(key);
+      return true;
+    })
     .slice(0, 12);
 
 const playerHouse = state.houses[state.playerHouseId];
@@ -4209,13 +4288,32 @@ export function applyLocalAction(
 
 
 // Regras de etiqueta e preparo
-if (action === 'flowers' && target.gender === 'M') {
-  pushNarration(state, 'Você não pode dar flores para um homem.');
+if (action === 'flowers') {
+  if (target.gender === 'M') {
+    pushNarration(state, 'Você não pode dar flores para um homem.');
+    return;
+  }
+  const flowersToParent = (target.id === player.fatherId) || (target.id === player.motherId);
+  const flowersToChild = (target.fatherId === player.id) || (target.motherId === player.id);
+  if (flowersToParent || flowersToChild) {
+    pushNarration(state, 'Dar flores para pai/mãe ou filhos não é permitido nesta campanha.');
+    return;
+  }
+}
+if (action === 'drink' && (player.ageYears < 18 || target.ageYears < 18)) {
+  pushNarration(state, 'Crianças e adolescentes não bebem (mínimo 18 anos).');
   return;
 }
-if (action === 'hunt' && (target.martial ?? 0) < 35) {
-  pushNarration(state, 'Esta pessoa não parece preparada para caçar com segurança.');
-  return;
+if (action === 'hunt') {
+  if (player.gender !== 'M') {
+    pushNarration(state, 'Pelas regras desta campanha, caçadas locais são para personagem masculino.');
+    return;
+  }
+  const canHunt = target.gender === 'M' || (target.martial ?? 0) >= 35;
+  if (!canHunt) {
+    pushNarration(state, 'Esta pessoa não parece preparada para caçar com segurança.');
+    return;
+  }
 }
 // Romance: bloqueia pai/mãe
 const isParent = (target.id === player.fatherId) || (target.id === player.motherId);
@@ -4229,8 +4327,8 @@ if (action === 'kiss') {
     pushNarration(state, 'A relação ainda não é alta o suficiente para um beijo (mínimo 80).');
     return;
   }
-  player.kissedIds = player.kissedIds ?? [];
-  if (!player.kissedIds.includes(target.id)) player.kissedIds.push(target.id);
+  const kissedIds = (player.kissedIds ??= []);
+  if (!kissedIds.includes(target.id)) kissedIds.push(target.id);
   target.relationshipToPlayer = clamp(target.relationshipToPlayer + 2 + rng.int(-1, 2), 0, 100);
   pushNarration(state, `Você beijou ${target.name}.`);
   canonTouchIfCanonical(state, target, 'kiss', 2);
@@ -4241,8 +4339,8 @@ if (action === 'relations') {
     pushNarration(state, 'A relação ainda não é alta o suficiente para relações (mínimo 90).');
     return;
   }
-  player.kissedIds = player.kissedIds ?? [];
-  if (!player.kissedIds.includes(target.id)) {
+  const kissedIds = (player.kissedIds ??= []);
+  if (!kissedIds.includes(target.id)) {
     pushNarration(state, 'Primeiro vocês precisam se beijar.');
     return;
   }
@@ -4254,8 +4352,8 @@ if (action === 'relations') {
   // chance de concepção (se houver uma mulher fértil envolvida)
   const a = player;
   const b = target;
-  const mother = a.gender === 'F' ? a : (b.gender === 'F' ? b : null);
-  const father = a.gender === 'M' ? a : (b.gender === 'M' ? b : null);
+  const mother: Character | undefined = a.gender === 'F' ? a : (b.gender === 'F' ? b : undefined);
+  const father: Character | undefined = a.gender === 'M' ? a : (b.gender === 'M' ? b : undefined);
 
   if (mother && father) {
     const isBastard = !(a.maritalStatus === 'married' && a.spouseId === b.id && b.maritalStatus === 'married');
