@@ -17,12 +17,12 @@
 
     <div class="actions">
       <button (click)="on('talk', c.id)">Conversar</button>
-      <button (click)="on('drink', c.id)">Beber</button>
-      <button (click)="on('hunt', c.id)" [disabled]="!canHuntWith(c)" title="Requer força (marcial) suficiente.">Caçar</button>
-      <button (click)="on('flowers', c.id)" [disabled]="!canFlowers(c)" title="Flores apenas para mulheres.">Dar flores</button>
-      <button (click)="on('kiss', c.id)" [disabled]="!canKiss(c)" title="Requer relação 80+ e não pode com pai/mãe/filhos.">Beijar</button>
-      <button (click)="on('relations', c.id)" [disabled]="!canRelations(c)" title="Requer relação 90+ e beijo anterior.">Relações</button>
-      <button (click)="onMarry(c)" [disabled]="!canMarry(c)" title="Requer relação 92+ e beijo anterior. Se a mulher for a última da casa, você escolhe o sobrenome.">Casar</button>
+      <button *ngIf="canDrinkWith(c)" (click)="on('drink', c.id)">Beber</button>
+      <button *ngIf="canHuntWith(c)" (click)="on('hunt', c.id)" title="Caça em grupo masculino; mulheres só quando guerreiras.">Caçar</button>
+      <button *ngIf="canFlowers(c)" (click)="on('flowers', c.id)" title="Flores apenas para mulheres.">Dar flores</button>
+      <button *ngIf="canKiss(c)" (click)="on('kiss', c.id)" title="Requer relação 80+ e não pode com pai/mãe/filhos.">Beijar</button>
+      <button *ngIf="canRelations(c)" (click)="on('relations', c.id)" title="Requer relação 90+ e beijo anterior.">Relações</button>
+      <button *ngIf="canMarry(c)" (click)="onMarry(c)" title="Requer relação 92+ e beijo anterior. Se a mulher for a última da casa, você escolhe o sobrenome.">Casar</button>
     </div>
   </div>
 

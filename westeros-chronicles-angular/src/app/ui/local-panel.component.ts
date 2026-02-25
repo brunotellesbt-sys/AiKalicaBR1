@@ -59,11 +59,23 @@ kinshipLabel(c: Character): string | null {
 }
 
 canFlowers(c: Character): boolean {
-  return c.gender === 'F';
+  if (c.gender !== 'F') return false;
+  const p = this.player;
+  const isParent = (c.id === p.fatherId) || (c.id === p.motherId);
+  const isChild = (c.fatherId === p.id) || (c.motherId === p.id);
+  return !isParent && !isChild;
+}
+
+
+canDrinkWith(c: Character): boolean {
+  return this.player.ageYears >= 18 && c.ageYears >= 18;
 }
 
 canHuntWith(c: Character): boolean {
-  // Caçadas exigem preparo físico; usamos um limiar simples por força (marcial).
+  // Regra: personagem do jogador deve ser homem; caça com homens.
+  // Mulheres só entram quando têm habilidade marcial de guerreira.
+  if (this.player.gender !== 'M') return false;
+  if (c.gender === 'M') return true;
   return (c.martial ?? 0) >= 35;
 }
 
