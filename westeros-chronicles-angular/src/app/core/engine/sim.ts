@@ -1640,13 +1640,17 @@ function ensureMissions(state: GameState, rng: Rng): void {
       : 1.0;
     const reward = Math.floor((rng.int(25, 120) + Math.floor(req * 1.2)) * baseRequester);
 
-    const title = kind === 'diplomacia' ? 'Negociar apoio local' :
-                  kind === 'comercio' ? 'Escolta comercial' :
-                  kind === 'lider' ? 'Ordens do líder da Casa' :
-                  kind === 'suserano' ? 'Pedido do suserano local' :
-                  kind === 'vassalo' ? 'Pedido de casa suserana regional' :
-                  kind === 'coroa' ? 'Chamado da Coroa' :
-                  kind === 'bandidos' ? 'Caçar bandidos' : 'Afastar selvagens';
+    const titlePools: Record<string, string[]> = {
+      diplomacia: localTitlesByKind['diplomacia'],
+      comercio: localTitlesByKind['comercio'],
+      bandidos: localTitlesByKind['bandidos'],
+      selvagens: localTitlesByKind['selvagens'],
+      lider: ['Ordens do líder da Casa', 'Recado urgente do líder', 'Serviço direto ao salão da Casa'],
+      suserano: ['Pedido do suserano local', 'Carta lacrada do suserano', 'Chamado feudal do suserano'],
+      vassalo: ['Pedido de casa suserana regional', 'Apelo de um vassalo inquieto', 'Disputa em feudo juramentado'],
+      coroa: ['Chamado da Coroa', 'Despacho de Porto Real', 'Corvos reais: tarefa sigilosa'],
+    };
+    const title = rng.pick(titlePools[kind] ?? ['Missão local']);
     const desc = kind === 'diplomacia'
       ? 'Leve uma mensagem e tente melhorar relações com uma vila ou castelo próximo.'
       : kind === 'comercio'
@@ -4284,13 +4288,32 @@ export function applyLocalAction(
 
 
 // Regras de etiqueta e preparo
-if (action === 'flowers' && target.gender === 'M') {
-  pushNarration(state, 'Você não pode dar flores para um homem.');
-  return;
+if (action === 'flowers') {
+  if (target.gender === 'M') {
+    pushNarration(state, 'Você não pode dar flores para um homem.');
+    return;
+  }
+  const flowersToParent = (target.id === player.fatherId) || (target.id === player.motherId);
+  const flowersToChild = (target.fatherId === player.id) || (target.motherId === player.id);
+  if (flowersToParent || flowersToChild) {
+    pushNarration(state, 'Dar flores para pai/mãe ou filhos não é permitido nesta campanha.');
+    return;
+  }
 }
 if (action === 'drink' && (player.ageYears < 18 || target.ageYears < 18)) {
   pushNarration(state, 'Crianças e adolescentes não bebem (mínimo 18 anos).');
   return;
+if (action === 'hunt') {
+  if (player.gender !== 'M') {
+    pushNarration(state, 'Pelas regras desta campanha, caçadas locais são para personagem masculino.');
+    return;
+  }
+  const canHunt = target.gender === 'M' || (target.martial ?? 0) >= 35;
+  if (!canHunt) {
+    pushNarration(state, 'Esta pessoa não parece preparada para caçar com segurança.');
+    return;
+  }
+}
 if (action === 'hunt') {
   if (player.gender !== 'M') {
     pushNarration(state, 'Pelas regras desta campanha, caçadas locais são para personagem masculino.');

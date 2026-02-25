@@ -59,7 +59,16 @@ kinshipLabel(c: Character): string | null {
 }
 
 canFlowers(c: Character): boolean {
-  return c.gender === 'F';
+  if (c.gender !== 'F') return false;
+  const p = this.player;
+  const isParent = (c.id === p.fatherId) || (c.id === p.motherId);
+  const isChild = (c.fatherId === p.id) || (c.motherId === p.id);
+  return !isParent && !isChild;
+}
+
+
+canDrinkWith(c: Character): boolean {
+  return this.player.ageYears >= 18 && c.ageYears >= 18;
 }
 
 
