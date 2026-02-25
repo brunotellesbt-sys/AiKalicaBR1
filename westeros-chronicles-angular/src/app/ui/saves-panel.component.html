@@ -1,0 +1,23 @@
+<div class="wrap">
+  <div class="head">
+    <div class="title">Saves</div>
+    <div class="sub">3 slots (pode sobrescrever e apagar)</div>
+  </div>
+
+  <div class="body">
+    <div class="card" *ngFor="let slot of SLOTS">
+      <div class="h3">Slot {{slot}}</div>
+      <div class="muted small">Última atualização: {{fmt(updatedAt(slot))}}</div>
+
+      <div class="btns">
+        <button (click)="save(slot)">Salvar</button>
+        <button (click)="load(slot)" [disabled]="!hasSave(slot)">Carregar</button>
+        <button (click)="clear(slot)" class="danger" [disabled]="!hasSave(slot)">Apagar</button>
+      </div>
+    </div>
+
+    <div class="note muted small">
+      Observação: saves ficam no <b>localStorage</b> do navegador. Ao limpar dados do site, os saves somem.
+    </div>
+  </div>
+</div>

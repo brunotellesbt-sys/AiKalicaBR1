@@ -1,0 +1,119 @@
+.shell{
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+}
+
+.grid{
+  flex:1;
+  display:grid;
+  grid-template-columns: 320px 1fr 360px;
+  gap:14px;
+  padding:14px;
+}
+
+.left,.center,.right{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:16px;
+  overflow:hidden;
+  box-shadow: 0 6px 24px rgba(0,0,0,.25);
+}
+
+.center{
+  background: linear-gradient(180deg, rgba(16,26,44,.9), rgba(11,18,32,.9));
+}
+
+.footer{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  padding:10px 14px;
+  border-top:1px solid var(--line);
+  color:var(--muted);
+  font-size:12px;
+}
+
+.muted{color:var(--muted)}
+.small{font-size:12px}
+
+.setup{
+  min-height:100vh;
+  display:grid;
+  place-items:center;
+  padding:20px;
+}
+
+.card{
+  width:min(620px, 100%);
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:18px;
+  padding:18px;
+  box-shadow: 0 10px 28px rgba(0,0,0,.35);
+}
+
+.h1{font-size:22px;font-weight:800;margin-bottom:6px}
+.p{color:var(--text);opacity:.92;line-height:1.4;margin:6px 0 12px}
+.lbl{display:block;color:var(--muted);margin:10px 0 6px}
+
+select{
+  width:100%;
+  background:var(--card);
+  border:1px solid var(--line);
+  color:var(--text);
+  padding:10px 12px;
+  border-radius:12px;
+}
+
+.btn{
+  width:100%;
+  margin-top:14px;
+  padding:12px 14px;
+  border-radius:14px;
+  border:1px solid rgba(59,130,246,.6);
+  background: rgba(59,130,246,.22);
+  color:var(--text);
+  cursor:pointer;
+  font-weight:700;
+}
+
+.btn:hover{background: rgba(59,130,246,.30)}
+
+@media (max-width: 1100px){
+  .grid{grid-template-columns: 1fr; }
+  .left{order:2}
+  .center{order:1}
+  .right{order:3}
+}
+
+.inp{
+  width:100%;
+  background:var(--card);
+  border:1px solid var(--line);
+  color:var(--text);
+  padding:10px 12px;
+  border-radius:12px;
+  margin-bottom:10px;
+}
+
+.modal{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.55);
+  display:grid;
+  place-items:center;
+  z-index:50;
+  padding:18px;
+}
+
+.modal-card{
+  width:min(560px, 100%);
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:18px;
+  padding:16px;
+  box-shadow: 0 14px 44px rgba(0,0,0,.50);
+}
+
+.actions{display:flex;gap:10px;justify-content:flex-end}

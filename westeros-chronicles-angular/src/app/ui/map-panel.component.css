@@ -1,0 +1,49 @@
+.wrap{height:100%; display:flex; flex-direction:column}
+.head{
+  padding:12px 14px;
+  border-bottom:1px solid var(--line);
+  background: rgba(16,26,44,.65);
+}
+.title{font-weight:900}
+.sub{color:var(--muted); font-size:12px; margin-top:2px}
+
+.body{
+  padding:14px;
+  overflow:auto;
+}
+
+.where{margin-bottom:10px}
+.destTitle{margin-top:10px;font-weight:800}
+.dest{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+.dest button{
+  padding:10px 10px;
+  border-radius:14px;
+  border:1px solid var(--line);
+  background: rgba(16,26,44,.85);
+  color:var(--text);
+  cursor:pointer;
+}
+.dest button:hover{border-color: rgba(59,130,246,.7)}
+
+.note{
+  margin-top:14px;
+  border:1px dashed rgba(152,162,179,.4);
+  border-radius:14px;
+  padding:10px 12px;
+  color:var(--muted);
+  line-height:1.35;
+  background: rgba(16,26,44,.35);
+}
+
+.small{font-size:12px}
+.muted{color:var(--muted)}
+
+
+.svg-wrap{margin:10px 0 6px 0;}
+.kingdom-svg{width:100%;max-width:520px;height:auto;display:block;}
+.k-rect{cursor:pointer;fill:rgba(255,255,255,0.06);stroke:rgba(255,255,255,0.18);stroke-width:2;}
+.k-rect.selected{stroke:rgba(255,255,255,0.55);}
+.k-label{cursor:pointer;fill:rgba(255,255,255,0.9);font-size:12px;font-weight:600;dominant-baseline:middle;}
+.areas{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+.areas button{padding:8px 10px;border-radius:10px;}
+.tiny{font-size:12px;}

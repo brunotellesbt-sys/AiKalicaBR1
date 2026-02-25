@@ -1,0 +1,31 @@
+.wrap{height:100%; display:flex; flex-direction:column}
+.head{
+  padding:12px 14px;
+  border-bottom:1px solid var(--line);
+  background: rgba(16,26,44,.65);
+}
+.title{font-weight:900}
+.sub{color:var(--muted); font-size:12px; margin-top:2px}
+.body{padding:14px; overflow:auto; display:flex; flex-direction:column; gap:12px}
+.card{
+  border:1px solid var(--line);
+  background: rgba(16,26,44,.55);
+  border-radius:16px;
+  padding:12px;
+}
+.h3{font-weight:900}
+.btns{display:flex; gap:10px; flex-wrap:wrap; margin-top:10px}
+button{
+  padding:10px 12px;
+  border-radius:14px;
+  border:1px solid var(--line);
+  background: rgba(16,26,44,.85);
+  color:var(--text);
+  cursor:pointer;
+}
+button:hover{border-color: rgba(59,130,246,.7)}
+button:disabled{opacity:.55; cursor:not-allowed}
+button.danger{border-color: rgba(239,68,68,.55)}
+.note{border:1px dashed rgba(152,162,179,.35); padding:10px 12px; border-radius:14px; background: rgba(16,26,44,.35)}
+.small{font-size:12px}
+.muted{color:var(--muted)}

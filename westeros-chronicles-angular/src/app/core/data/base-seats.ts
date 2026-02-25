@@ -1,0 +1,67 @@
+import { Location } from '../models';
+/**
+ * Assentos únicos para casas base.
+ *
+ * Regra do jogo:
+ * - cada Casa deve ter seu próprio castelo/assento (seatLocationId exclusivo).
+ * - quando o assento canônico não estiver listado em BASE_LOCATIONS, ele entra aqui.
+ */
+export const BASE_HOUSE_SEAT_LOCATIONS: Location[] = [
+  // Casa Blackfyre — assento inventado para cumprir a regra de "1 castelo por casa".
+  { id: 'blackfyre_hold', name: 'Blackfyre Hold', regionId: 'crownlands', kind: 'fortress' },
+  { id: 'claw_isle', name: 'Claw Isle', regionId: 'crownlands', kind: 'fortress' },
+  { id: 'driftmark', name: 'Driftmark', regionId: 'crownlands', kind: 'fortress' },
+  { id: 'sharp_point', name: 'Sharp Point', regionId: 'crownlands', kind: 'fortress' },
+  { id: 'hellholt', name: 'Hellholt', regionId: 'dorne', kind: 'fortress' },
+  { id: 'kingsgrave', name: 'Kingsgrave', regionId: 'dorne', kind: 'fortress' },
+  { id: 'sandstone', name: 'Sandstone', regionId: 'dorne', kind: 'fortress' },
+  { id: 'skyreach', name: 'Skyreach', regionId: 'dorne', kind: 'fortress' },
+  { id: 'the_tor', name: 'The Tor', regionId: 'dorne', kind: 'fortress' },
+  { id: 'yronwood_castle', name: 'Yronwood', regionId: 'dorne', kind: 'fortress' },
+  { id: 'blacktyde_keep', name: 'Blacktyde', regionId: 'iron_islands', kind: 'fortress' },
+  { id: 'hammerhorn', name: 'Hammerhorn', regionId: 'iron_islands', kind: 'fortress' },
+  { id: 'lordsport', name: 'Lordsport', regionId: 'iron_islands', kind: 'port' },
+  { id: 'old_wyk', name: 'Old Wyk', regionId: 'iron_islands', kind: 'fortress' },
+  { id: 'ten_towers', name: 'Ten Towers', regionId: 'iron_islands', kind: 'fortress' },
+  { id: 'bear_island', name: 'Bear Island', regionId: 'north', kind: 'fortress' },
+  { id: 'castle_cerwyn', name: 'Castle Cerwyn', regionId: 'north', kind: 'fortress' },
+  { id: 'deepwood_motte', name: 'Deepwood Motte', regionId: 'north', kind: 'fortress' },
+  { id: 'greywater_watch', name: 'Greywater Watch', regionId: 'north', kind: 'fortress' },
+  { id: 'hornwood_castle', name: 'Hornwood', regionId: 'north', kind: 'fortress' },
+  { id: 'karhold', name: 'Karhold', regionId: 'north', kind: 'fortress' },
+  { id: 'last_hearth', name: 'Last Hearth', regionId: 'north', kind: 'fortress' },
+  { id: 'torrhens_square', name: 'Torrhen's Square', regionId: 'north', kind: 'fortress' },
+  { id: 'brightwater_keep', name: 'Brightwater Keep', regionId: 'reach', kind: 'fortress' },
+  { id: 'goldengrove', name: 'Goldengrove', regionId: 'reach', kind: 'fortress' },
+  { id: 'honeyholt', name: 'Honeyholt', regionId: 'reach', kind: 'fortress' },
+  { id: 'old_oak', name: 'Old Oak', regionId: 'reach', kind: 'fortress' },
+  { id: 'the_arbor', name: 'The Arbor', regionId: 'reach', kind: 'port' },
+  { id: 'darry_castle', name: 'Darry', regionId: 'riverlands', kind: 'fortress' },
+  { id: 'maidenpool', name: 'Maidenpool', regionId: 'riverlands', kind: 'port' },
+  { id: 'pinkmaiden', name: 'Pinkmaiden', regionId: 'riverlands', kind: 'fortress' },
+  { id: 'raventree_hall', name: 'Raventree Hall', regionId: 'riverlands', kind: 'fortress' },
+  { id: 'stone_hedge', name: 'Stone Hedge', regionId: 'riverlands', kind: 'fortress' },
+  { id: 'the_twins', name: 'The Twins', regionId: 'riverlands', kind: 'fortress' },
+  { id: 'blackhaven', name: 'Blackhaven', regionId: 'stormlands', kind: 'fortress' },
+  { id: 'evenfall_hall', name: 'Evenfall Hall', regionId: 'stormlands', kind: 'fortress' },
+  { id: 'greenstone', name: 'Greenstone', regionId: 'stormlands', kind: 'fortress' },
+  { id: 'griffins_roost', name: 'Griffin's Roost', regionId: 'stormlands', kind: 'fortress' },
+  { id: 'harvest_hall', name: 'Harvest Hall', regionId: 'stormlands', kind: 'fortress' },
+  { id: 'nightsong', name: 'Nightsong', regionId: 'stormlands', kind: 'fortress' },
+  { id: 'parchments', name: 'Parchments', regionId: 'stormlands', kind: 'fortress' },
+  { id: 'stonehelm', name: 'Stonehelm', regionId: 'stormlands', kind: 'fortress' },
+  { id: 'hearts_home', name: 'Heart's Home', regionId: 'vale', kind: 'fortress' },
+  { id: 'ironoaks', name: 'Ironoaks', regionId: 'vale', kind: 'fortress' },
+  { id: 'longbow_hall', name: 'Longbow Hall', regionId: 'vale', kind: 'fortress' },
+  { id: 'redfort_castle', name: 'Redfort', regionId: 'vale', kind: 'fortress' },
+  { id: 'runestone', name: 'Runestone', regionId: 'vale', kind: 'fortress' },
+  // Casa Baelish (Fingers) — assento pouco documentado; nome inspirado na própria casa.
+  { id: 'baelish_tower', name: 'Baelish Tower (Fingers)', regionId: 'vale', kind: 'fortress' },
+  { id: 'three_sisters', name: 'Three Sisters', regionId: 'vale', kind: 'fortress' },
+  { id: 'ashemark', name: 'Ashemark', regionId: 'westerlands', kind: 'fortress' },
+  { id: 'cleganes_keep', name: 'Clegane's Keep', regionId: 'westerlands', kind: 'fortress' },
+  { id: 'cornfield', name: 'Cornfield', regionId: 'westerlands', kind: 'fortress' },
+  { id: 'crakehall_castle', name: 'Crakehall', regionId: 'westerlands', kind: 'fortress' },
+  { id: 'golden_tooth', name: 'Golden Tooth', regionId: 'westerlands', kind: 'fortress' },
+  { id: 'hornvale', name: 'Hornvale', regionId: 'westerlands', kind: 'fortress' },
+];

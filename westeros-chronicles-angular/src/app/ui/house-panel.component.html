@@ -1,0 +1,61 @@
+<div class="wrap" *ngIf="state as s">
+  <div class="head">
+    <div class="title">Casa</div>
+    <div class="sub">Gestão (se você for o líder)</div>
+  </div>
+
+  <div class="body">
+    <ng-container *ngIf="s.houses[s.playerHouseId] as h">
+      <div class="card">
+        <div class="h2">{{h.name}}</div>
+        <div class="muted small">Prestígio: {{h.prestige}} • Suserano: {{h.suzerainId ? s.houses[h.suzerainId]?.name : '—'}}</div>
+        <div class="muted small">Assento: {{s.locations[h.seatLocationId]?.name}}</div>
+      </div>
+
+      <div class="card">
+        <div class="h3">Economia</div>
+        <div class="grid2">
+          <div class="mini">
+            <div class="k">Camponeses</div>
+            <div class="v">{{h.economy.peasants}}</div>
+          </div>
+          <div class="mini">
+            <div class="k">Fazendas</div>
+            <div class="v">{{h.economy.farms}}</div>
+          </div>
+          <div class="mini">
+            <div class="k">Comida</div>
+            <div class="v">{{h.resources.food}}</div>
+          </div>
+          <div class="mini">
+            <div class="k">Ouro</div>
+            <div class="v">{{h.resources.gold}}</div>
+          </div>
+          <div class="mini">
+            <div class="k">Recursos</div>
+            <div class="v">{{goods(h)}}</div>
+          </div>
+        </div>
+        <div class="muted small">Taxa do suserano: <b>{{(h.economy.taxRate*100) | number:'1.0-0'}}%</b> (tributo em Recursos)</div>
+        <div class="muted small" [class.bad]="!foodOk(h)">
+          Necessidade mínima de comida: <b>{{foodNeed(h)}}</b> — {{foodOk(h) ? 'OK' : 'ABAIXO DO NECESSÁRIO (risco de fome)'}}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="h3">Exército</div>
+        <div class="muted small">
+          Levies {{h.army.levies}} • Homens-de-Armas {{h.army.menAtArms}} • Escudeiros {{h.army.squires}} • Cavaleiros {{h.army.knights}}
+          <span *ngIf="h.army.dragons>0"> • Dragões {{h.army.dragons}} (equiv. 10.000 cavaleiros cada)</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="h3">Ações rápidas (pelo chat)</div>
+        <div class="muted small">
+          Para acionar, vá ao Chat e selecione “Gerenciar Casa”. Aqui ficam apenas os resumos.
+        </div>
+      </div>
+    </ng-container>
+  </div>
+</div>
