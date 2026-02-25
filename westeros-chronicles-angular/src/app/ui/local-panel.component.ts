@@ -63,7 +63,10 @@ canFlowers(c: Character): boolean {
 }
 
 canHuntWith(c: Character): boolean {
-  // Caçadas exigem preparo físico; usamos um limiar simples por força (marcial).
+  // Regra: personagem do jogador deve ser homem; caça com homens.
+  // Mulheres só entram quando têm habilidade marcial de guerreira.
+  if (this.player.gender !== 'M') return false;
+  if (c.gender === 'M') return true;
   return (c.martial ?? 0) >= 35;
 }
 
