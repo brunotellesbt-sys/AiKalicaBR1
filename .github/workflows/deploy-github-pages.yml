@@ -1,8 +1,8 @@
-name: Deploy Angular (GitHub Pages)
+name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
@@ -11,12 +11,16 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "pages-${{ github.ref }}"
+  group: "pages"
   cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: westeros-chronicles-angular
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,110 +28,35 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: westeros-chronicles-angular/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (Angular)
+        run: |
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          # Se seu repo for um "project site" (https://user.github.io/REPO/), o base-href precisa ser /REPO/
+          npm run build -- --configuration production --base-href "/${REPO_NAME}/"
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
-      - name: Extract project zip (fixed name)
-        id: extract
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          ZIP_FILE="westeros-chronicles-angular.zip"
-          if [ ! -f "${ZIP_FILE}" ]; then
-            echo "Não encontrei ${ZIP_FILE} na raiz do repositório."
-            exit 1
-          fi
-
-          rm -rf app
-          mkdir -p app
-          unzip -q "${ZIP_FILE}" -d app
-
-          PKG="$(find app -maxdepth 10 -name package.json -print -quit || true)"
-          if [ -z "${PKG}" ]; then
-            echo "Não encontrei package.json dentro do ${ZIP_FILE}."
-            echo "Conteúdo extraído (nível 2):"
-            find app -maxdepth 2 -mindepth 1 -print
-            exit 1
-          fi
-
-          APP_DIR="$(dirname "${PKG}")"
-          echo "APP_DIR=${APP_DIR}" >> "$GITHUB_OUTPUT"
-          echo "Usando APP_DIR=${APP_DIR}"
-
-      - name: Install dependencies
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "${{ steps.extract.outputs.APP_DIR }}"
-
-          if [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ]; then
-            npm ci --no-audit --no-fund
-          else
-            echo "package-lock.json não encontrado — usando npm install."
-            npm install --no-audit --no-fund
-          fi
-
-      - name: Build
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "${{ steps.extract.outputs.APP_DIR }}"
-          npm run build -- --base-href "/${{ github.event.repository.name }}/"
-
-      - name: Locate built site folder (find index.html)
-        id: site
-        shell: bash
-        run: |
-          set -euo pipefail
-          APP_DIR="${{ steps.extract.outputs.APP_DIR }}"
-
-          echo "Procurando index.html gerado dentro de: $APP_DIR"
-
-          # Procura primeiro nos padrões mais comuns do Angular:
-          # - dist/<app>/index.html
-          # - dist/<app>/browser/index.html (Angular 17+ application builder)
-          FOUND="$(find "$APP_DIR" -maxdepth 10 -type f \( -path "*/dist/*/index.html" -o -path "*/dist/*/browser/index.html" \) -print -quit || true)"
-
-          # Se não achou, tenta achar QUALQUER index.html abaixo do projeto (último recurso)
-          if [ -z "$FOUND" ]; then
-            FOUND="$(find "$APP_DIR" -maxdepth 12 -type f -name index.html -print -quit || true)"
-          fi
-
-          if [ -z "$FOUND" ]; then
-            echo "Não encontrei nenhum index.html gerado após o build."
-            echo "Debug: listando diretórios (nível 4):"
-            find "$APP_DIR" -maxdepth 4 -type d -print
-            echo "Debug: procurando pastas dist (nível 6):"
-            find "$APP_DIR" -maxdepth 6 -type d -name dist -print || true
-            exit 1
-          fi
-
-          SITE_DIR="$(dirname "$FOUND")"
-          echo "SITE_DIR=$SITE_DIR" >> "$GITHUB_OUTPUT"
-          echo "Usando SITE_DIR=$SITE_DIR (index: $FOUND)"
-
-      - name: SPA fallback (404.html) + disable jekyll
-        shell: bash
-        run: |
-          set -euo pipefail
-          SITE_DIR="${{ steps.site.outputs.SITE_DIR }}"
-          cp "$SITE_DIR/index.html" "$SITE_DIR/404.html"
-          touch "$SITE_DIR/.nojekyll"
-
-      - name: Upload Pages artifact
+      # ✅ Ajuste o path do dist (veja nota abaixo)
+      - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ${{ steps.site.outputs.SITE_DIR }}
+          path: westeros-chronicles-angular/dist/<NOME_DO_PROJETO>
 
   deploy:
-    needs: build
     runs-on: ubuntu-latest
+    needs: build
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
