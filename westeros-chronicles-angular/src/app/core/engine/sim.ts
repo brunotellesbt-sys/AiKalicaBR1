@@ -1548,19 +1548,62 @@ function ensureMissions(state: GameState, rng: Rng): void {
   };
 
   for (let i = 0; i < needed; i++) {
-    const kind: 'diplomacia' | 'bandidos' | 'selvagens' | 'comercio' = rng.pick(['diplomacia','bandidos','selvagens','comercio']);
-    const req = kind === 'diplomacia' ? rng.int(10, 35) : kind === 'comercio' ? rng.int(15, 40) : rng.int(25, 70);
-    const reward = rng.int(25, 120) + Math.floor(req * 1.2);
-    const title = rng.pick(localTitlesByKind[kind]);
+    const earlyWeights = ['lider', 'lider', 'diplomacia', 'comercio', 'bandidos'];
+    const midWeights = ['lider', 'diplomacia', 'comercio', 'bandidos', 'selvagens', 'suserano'];
+    const lateWeights = ['diplomacia', 'comercio', 'bandidos', 'selvagens', 'suserano', 'vassalo', 'coroa'];
+    const basePool = playerPower < 38 ? earlyWeights : playerPower < 62 ? midWeights : lateWeights;
+    const pool = playerIsLeader ? basePool.filter(k => k !== 'lider') : basePool;
+    let kind = rng.pick(pool.length ? pool : ['diplomacia', 'comercio', 'bandidos']) as any;
+    if (kind === 'coroa') {
+      const crownChance = playerPower >= 72 ? 0.22 : playerPower >= 60 ? 0.12 : 0.05;
+      if (!rng.chance(crownChance)) kind = rng.pick(['diplomacia', 'comercio', 'bandidos', 'selvagens']) as any;
+    }
+
+    const req = kind === 'diplomacia' ? rng.int(12, 38)
+      : kind === 'comercio' ? rng.int(16, 44)
+      : kind === 'lider' ? rng.int(14, 40)
+      : kind === 'coroa' ? rng.int(50, 82)
+      : rng.int(24, 74);
+
+    const baseRequester = kind === 'lider' ? 1.10
+      : kind === 'suserano' ? 1.25
+      : kind === 'vassalo' ? 1.35
+      : kind === 'coroa' ? 1.75
+      : 1.0;
+    const reward = Math.floor((rng.int(25, 120) + Math.floor(req * 1.2)) * baseRequester);
+
+    const title = kind === 'diplomacia' ? 'Negociar apoio local' :
+                  kind === 'comercio' ? 'Escolta comercial' :
+                  kind === 'lider' ? 'Ordens do líder da Casa' :
+                  kind === 'suserano' ? 'Pedido do suserano local' :
+                  kind === 'vassalo' ? 'Pedido de casa suserana regional' :
+                  kind === 'coroa' ? 'Chamado da Coroa' :
+                  kind === 'bandidos' ? 'Caçar bandidos' : 'Afastar selvagens';
     const desc = kind === 'diplomacia'
       ? 'Leve uma mensagem e tente melhorar relações com uma vila ou castelo próximo.'
       : kind === 'comercio'
       ? 'Garanta que uma caravana chegue ao destino sem incidentes.'
+      : kind === 'lider'
+      ? `Um recado direto de ${state.characters[playerHouse.leaderId]?.name ?? 'seu líder'} pede serviço inicial para provar seu valor.`
+      : kind === 'suserano'
+      ? 'A casa suserana exige ação rápida para manter sua posição feudal.'
+      : kind === 'vassalo'
+      ? 'Uma casa sob sua influência pede uma resposta firme para manter a ordem.'
+      : kind === 'coroa'
+      ? 'Um emissário real traz tarefa rara. O risco é alto, mas a recompensa é nobre.'
       : kind === 'bandidos'
       ? 'Um clã de bandidos tem atacado viajantes. Encontre-os e elimine a ameaça.'
       : 'Relatos de selvagens/fora-da-lei. Faça patrulhas e afaste-os.';
     const edges = state.travelGraph[here.id] ?? [];
     const target = edges.length ? rng.pick(edges).toLocationId : here.id;
+
+    const requesterHouseId = kind === 'coroa'
+      ? 'targaryen_throne'
+      : kind === 'lider'
+      ? playerHouse.id
+      : kind === 'suserano'
+      ? (playerHouse.suzerainId ?? undefined)
+      : undefined;
 
     state.missions.push({
       id: uid('m'),
@@ -1571,6 +1614,9 @@ function ensureMissions(state: GameState, rng: Rng): void {
       targetLocationId: target,
       requiredMartial: req,
       rewardGold: reward,
+      rewardPrestige: kind === 'coroa' ? 3 : kind === 'vassalo' ? 2 : 1,
+      rewardRelation: kind === 'coroa' ? 5 : kind === 'vassalo' ? 3 : 2,
+      requesterHouseId,
       createdTurn: now,
       expiresTurn: now + rng.int(6, 16),
       status: 'aberta',
