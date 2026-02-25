@@ -15,7 +15,7 @@
   border-radius:16px;
   overflow:auto;
   background:linear-gradient(180deg,#071325 0%,#10243c 38%,#1b3144 100%);
-  padding:12px;
+  padding:14px;
   margin-bottom:12px;
 }
 
@@ -48,6 +48,7 @@
   color:#e8eef7;
   cursor:pointer;
   display:flex;
+  z-index:2;
   flex-direction:column;
   align-items:center;
   gap:4px;

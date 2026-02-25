@@ -1512,7 +1512,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
   // limpa expiradas
   state.missions = state.missions.filter(m => m.status !== 'expirada' && m.expiresTurn > now);
 
-  // se houver poucas, cria algumas na região atual com progressão inteligente
+  // se houver poucas, cria missões locais (mantém sistema original) + complementos inteligentes
   const player = state.characters[state.playerId];
   const here = state.locations[player.locationId];
   const regionId = here.regionId;
@@ -1522,6 +1522,31 @@ function ensureMissions(state: GameState, rng: Rng): void {
 
   const openInRegion = state.missions.filter(m => m.regionId === regionId && m.status === 'aberta');
   const needed = 3 - openInRegion.length;
+
+  const localeFlavor = state.locations[here.id]?.name ?? 'a região';
+  const localTitlesByKind: Record<string, string[]> = {
+    diplomacia: [
+      `Tratado nas sombras de ${localeFlavor}`,
+      `Palavras antes do aço em ${localeFlavor}`,
+      `Conselho de paz em ${localeFlavor}`,
+    ],
+    comercio: [
+      `Rota de mercadores de ${localeFlavor}`,
+      `Caravana do amanhecer em ${localeFlavor}`,
+      `Ouro e sal rumo a ${localeFlavor}`,
+    ],
+    bandidos: [
+      `Sangue na estrada de ${localeFlavor}`,
+      `Caçada ao estandarte negro em ${localeFlavor}`,
+      `Lâminas contra saqueadores de ${localeFlavor}`,
+    ],
+    selvagens: [
+      `Vigília fria de ${localeFlavor}`,
+      `Ecos além das colinas de ${localeFlavor}`,
+      `Patrulha de ferro em ${localeFlavor}`,
+    ],
+  };
+
   for (let i = 0; i < needed; i++) {
     const earlyWeights = ['lider', 'lider', 'diplomacia', 'comercio', 'bandidos'];
     const midWeights = ['lider', 'diplomacia', 'comercio', 'bandidos', 'selvagens', 'suserano'];
@@ -1569,7 +1594,6 @@ function ensureMissions(state: GameState, rng: Rng): void {
       : kind === 'bandidos'
       ? 'Um clã de bandidos tem atacado viajantes. Encontre-os e elimine a ameaça.'
       : 'Relatos de selvagens/fora-da-lei. Faça patrulhas e afaste-os.';
-    // alvo: escolhe um destino próximo (ou fica aqui)
     const edges = state.travelGraph[here.id] ?? [];
     const target = edges.length ? rng.pick(edges).toLocationId : here.id;
 
@@ -1598,6 +1622,71 @@ function ensureMissions(state: GameState, rng: Rng): void {
       status: 'aberta',
     });
   }
+
+  // Complemento: enquanto não for líder e ainda estiver em ascensão, recebe missões do líder da própria Casa.
+  const leaderMissionOpen = state.missions.some(m => m.kind === 'lider' && m.status === 'aberta');
+  if (!playerIsLeader && !leaderMissionOpen) {
+    const leader = state.characters[playerHouse.leaderId];
+    const leaderChance = playerPower < 35 ? 0.85 : playerPower < 55 ? 0.55 : 0.25;
+    if (leader && leader.alive && rng.chance(leaderChance)) {
+      const leaderTitles = [
+        `Selo de ${leader.name}: juramento de serviço`,
+        `Ordem de ${leader.name}: provar lealdade`,
+        `Chamado do salão de ${playerHouse.name}`,
+      ];
+      const edges = state.travelGraph[here.id] ?? [];
+      const target = edges.length ? rng.pick(edges).toLocationId : here.id;
+      const req = playerPower < 35 ? rng.int(16, 34) : rng.int(24, 46);
+      state.missions.push({
+        id: uid('m'),
+        kind: 'lider',
+        title: rng.pick(leaderTitles),
+        description: `${leader.name} pede uma tarefa inicial para fortalecer seu nome dentro de ${playerHouse.name}.`,
+        regionId,
+        targetLocationId: target,
+        requiredMartial: req,
+        rewardGold: rng.int(30, 95),
+        rewardRelation: 3,
+        rewardPrestige: 1,
+        requesterHouseId: playerHouse.id,
+        createdTurn: now,
+        expiresTurn: now + rng.int(7, 14),
+        status: 'aberta',
+      });
+    }
+  }
+
+  // Complemento raro: missões da Coroa (não substitui as demais).
+  const crownMissionOpen = state.missions.some(m => m.kind === 'coroa' && m.status === 'aberta');
+  if (!crownMissionOpen) {
+    const crownChance = playerPower >= 75 ? 0.18 : playerPower >= 60 ? 0.10 : 0.03;
+    if (rng.chance(crownChance)) {
+      const crownSeat = state.houses['targaryen_throne']?.seatLocationId ?? here.id;
+      const crownTitles = [
+        'Lacre Real: Negócios do Trono de Ferro',
+        'Corvos de Porto Real: Missão da Coroa',
+        'Decreto selado pelo Mestre dos Sussurros',
+      ];
+      state.missions.push({
+        id: uid('m'),
+        kind: 'coroa',
+        title: rng.pick(crownTitles),
+        description: 'Um emissário real exige discrição e eficácia. Falhar mancha o nome da Casa, vencer abre portas no reino.',
+        regionId,
+        targetLocationId: crownSeat,
+        requiredMartial: rng.int(48, 82),
+        rewardGold: rng.int(120, 260),
+        rewardHouseGold: rng.int(80, 220),
+        rewardPrestige: 3,
+        rewardRelation: 6,
+        requesterHouseId: 'targaryen_throne',
+        createdTurn: now,
+        expiresTurn: now + rng.int(8, 18),
+        status: 'aberta',
+      });
+    }
+  }
+
 
   // --- Missões de suserania/vassalagem (pedidos individuais) ---
   // Mantém poucas ativas ao mesmo tempo para não virar spam.
@@ -1651,7 +1740,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
       state.missions.push({
         id: uid('m'),
         kind: 'suserano',
-        title: 'Pedido do suserano: tributo extraordinário',
+        title: rng.pick(['Cobrança de estandarte: tributo extraordinário','Arca de guerra do suserano','Dízimo de lealdade ao suserano']),
         description: `Um mensageiro de ${suzerain!.name} exige reforço de tributos (recursos). Leve o tributo e mantenha sua posição.`,
         regionId,
         targetLocationId: suzerain!.seatLocationId,
@@ -1672,7 +1761,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
       state.missions.push({
         id: uid('m'),
         kind: 'suserano',
-        title: 'Pedido do suserano: enviar levies',
+        title: rng.pick(['Convocação de hoste: envio de levies','Bandeiras erguidas para o suserano','Chamado de guerra do seu suserano']),
         description: `O suserano solicita homens para uma hoste temporária. Envie levies e evite suspeitas de deslealdade.`,
         regionId,
         targetLocationId: suzerain!.seatLocationId,
@@ -1694,7 +1783,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
       state.missions.push({
         id: uid('m'),
         kind: 'suserano',
-        title: 'Pedido do suserano: suprimentos para campanha',
+        title: rng.pick(['Celeiros para a campanha do suserano','Comboio de víveres da vassalagem','Mantimentos para a marcha do estandarte']),
         description: `O suserano pede mantimentos para abastecer uma campanha. Entregar comida/recursos melhora sua posição na corte.`,
         regionId,
         targetLocationId: suzerain!.seatLocationId,
@@ -1717,7 +1806,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
       state.missions.push({
         id: uid('m'),
         kind: 'suserano',
-        title: 'Pedido do suserano: comparecer ao conselho',
+        title: rng.pick(['Conselho fechado do suserano','Audiência de lealdade no salão feudal','Mesa de guerra convocada pelo suserano']),
         description: `O suserano convoca você para um conselho privado. Vá ao assento dele para demonstrar lealdade e colher favores.`,
         regionId,
         targetLocationId: suzerain!.seatLocationId,
@@ -1739,7 +1828,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
     state.missions.push({
       id: uid('m'),
       kind: 'suserano',
-      title: 'Pedido do suserano: escolta da coroa',
+      title: rng.pick(['Escolta do comboio feudal','Estrada segura para o tributo da coroa','Guarda de caravana sob juramento']),
       description: `Uma caravana ligada a ${suzerain!.name} precisa atravessar estradas perigosas. Escolte-a até o destino.`,
       regionId,
       targetLocationId: target,
@@ -1774,7 +1863,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
     state.missions.push({
       id: uid('m'),
       kind: 'vassalo',
-      title: `Pedido de vassalo: auxílio de mantimentos`,
+      title: rng.pick([`Inverno curto em ${vassal.name}: auxílio de mantimentos`,`Celeiros vazios em ${vassal.name}`,`Pedido urgente de víveres por ${vassal.name}`]),
       description: `${vassal.name} relata escassez e pede ajuda (comida/recursos). Um suserano forte mantém seus vassalos de pé.`,
       regionId,
       targetLocationId: vassal.seatLocationId,
@@ -1798,7 +1887,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
     state.missions.push({
       id: uid('m'),
       kind: 'vassalo',
-      title: `Pedido de vassalo: mediação feudal`,
+      title: rng.pick([`Disputa de fronteira sob ${vassal.name}`,`Conciliação feudal solicitada por ${vassal.name}`,`Paz armada entre vassalos`]),
       description: `${vassal.name} pede que você imponha ordem numa disputa local${other ? ` envolvendo ${other.name}` : ''}. Vá até o feudo e resolva com firmeza.`,
       regionId,
       targetLocationId: vassal.seatLocationId,
@@ -1819,7 +1908,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
     state.missions.push({
       id: uid('m'),
       kind: 'vassalo',
-      title: `Pedido de vassalo: reparos no assento`,
+      title: rng.pick([`Pedra e cal para ${vassal.name}`,`Reforço de muralhas em ${vassal.name}`,`Reconstrução urgente no assento vassalo`]),
       description: `${vassal.name} precisa de recursos para reforçar muralhas e celeiros. Apoiar infraestrutura aumenta lealdade e reduz riscos futuros.`,
       regionId,
       targetLocationId: vassal.seatLocationId,
@@ -1840,7 +1929,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
   state.missions.push({
     id: uid('m'),
     kind: 'vassalo',
-    title: `Pedido de vassalo: proteção contra saqueadores`,
+    title: rng.pick([`Estandarte sob ataque em ${vassal.name}`,`Caça aos saqueadores de ${vassal.name}`,`Punho de ferro contra bandos locais`]),
     description: `${vassal.name} sofre com saqueadores. Um exemplo de força evita revoltas e traições.`,
     regionId,
     targetLocationId: vassal.seatLocationId,
