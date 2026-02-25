@@ -1,0 +1,18 @@
+<div class="wrap" *ngIf="state as s">
+  <div class="head">
+    <div class="title">Crônicas</div>
+    <div class="sub">Registros do que aconteceu (e rumores do reino)</div>
+  </div>
+
+  <div class="body">
+    <div class="card" *ngFor="let e of s.chronicle | slice:0:40">
+      <div class="h3">[T{{e.turn}}] {{e.title}}</div>
+      <div class="muted small">Tags: {{e.tags.join(', ')}}</div>
+      <div class="text" [innerText]="e.body"></div>
+    </div>
+
+    <div class="muted small" *ngIf="s.chronicle.length===0">
+      Ainda não há registros. Avance turnos e tome decisões.
+    </div>
+  </div>
+</div>

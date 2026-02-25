@@ -1,0 +1,50 @@
+<header class="bar">
+  <div class="left">
+    <div class="brand">Westeros Chronicles</div>
+    <div class="date">Ano {{state.date.year}} DC • Turno {{state.date.turn}}/20</div>
+  </div>
+
+  <div class="stats">
+    <div class="pill" *ngIf="state.game?.over">
+      <span class="k">Status</span>
+      <span class="v">{{state.game.victory ? 'Vitória' : 'Game Over'}}</span>
+    </div>
+    <div class="pill">
+      <span class="k">Casa</span>
+      <span class="v">{{state.houses[state.playerHouseId]?.name}}</span>
+    </div>
+
+    <div class="pill">
+      <span class="k">Comida</span>
+      <span class="v">{{state.houses[state.playerHouseId]?.resources.food}}</span>
+    </div>
+
+    <div class="pill">
+      <span class="k">Ouro</span>
+      <span class="v">{{state.houses[state.playerHouseId]?.resources.gold}}</span>
+    </div>
+
+    <div class="pill">
+      <span class="k">Prestígio</span>
+      <span class="v">{{state.houses[state.playerHouseId]?.prestige}}</span>
+    </div>
+
+    <div class="pill">
+      <span class="k">Prest. pessoal</span>
+      <span class="v">{{state.characters[state.playerId]?.personalPrestige ?? 0}}</span>
+    </div>
+  </div>
+
+  <nav class="tabs">
+    <button (click)="setTab('chat')" [class.active]="state.ui.activeTab==='chat'">Chat</button>
+    <button (click)="setTab('map')" [class.active]="state.ui.activeTab==='map'">Mapa</button>
+    <button (click)="setTab('local')" [class.active]="state.ui.activeTab==='local'">Local</button>
+    <button (click)="setTab('tournaments')" [class.active]="state.ui.activeTab==='tournaments'">Torneios</button>
+    <button (click)="setTab('character')" [class.active]="state.ui.activeTab==='character'">Personagem</button>
+    <button (click)="setTab('house')" [class.active]="state.ui.activeTab==='house'">Casa</button>
+    <button (click)="setTab('diplomacy')" [class.active]="state.ui.activeTab==='diplomacy'">Diplomacia</button>
+    <button (click)="setTab('canon')" [class.active]="state.ui.activeTab==='canon'">Cânone</button>
+    <button (click)="setTab('chronicle')" [class.active]="state.ui.activeTab==='chronicle'">Crônicas</button>
+    <button (click)="setTab('saves')" [class.active]="state.ui.activeTab==='saves'">Saves</button>
+  </nav>
+</header>

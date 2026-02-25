@@ -1,0 +1,113 @@
+<div class="wrap" *ngIf="state as s">
+  <div class="head">
+    <div class="title">Cânone & Divergência</div>
+    <div class="sub">Acompanhe marcos históricos, guerras em andamento e onde sua história já desviou o destino.</div>
+  </div>
+
+  <div class="grid">
+
+    <div class="card">
+      <div class="h2">Configuração</div>
+
+      <div class="row">
+        <div class="k">Cânone</div>
+        <div class="v">
+          <span class="badge" [class.ok]="s.canon?.enabled" [class.off]="!s.canon?.enabled">
+            {{s.canon?.enabled ? 'Ativo' : 'Desativado'}}
+          </span>
+        </div>
+        <button class="btn" (click)="toggleCanon()">{{s.canon?.enabled ? 'Desativar' : 'Ativar'}}</button>
+      </div>
+
+      <div class="row">
+        <div class="k">Modo</div>
+        <div class="v">
+          <span class="badge" [class.ok]="s.canon?.mode==='strict'">Strict</span>
+          <span class="badge" [class.ok]="s.canon?.mode==='anchors'">Anchors</span>
+        </div>
+        <div class="actions">
+          <button class="btn" (click)="setMode('strict')">Strict</button>
+          <button class="btn" (click)="setMode('anchors')">Anchors</button>
+        </div>
+      </div>
+
+      <div class="muted small">
+        <b>Strict</b>: aplica todos os marcos registrados. <b>Anchors</b>: prioriza grandes âncoras (guerras, mandatos, marcos).
+        Em ambos, interferência do jogador pode abrir divergências.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="h2">Guerras canônicas ativas</div>
+
+      <div class="muted small" *ngIf="activeWars().length===0">Nenhuma guerra canônica em andamento neste turno.</div>
+
+      <div class="war" *ngFor="let w of activeWars()">
+        <div class="war-top">
+          <div class="h3">{{w.name}}</div>
+          <div class="badge">{{warScoreLabel(w)}}</div>
+        </div>
+        <div class="muted small">Intensidade: {{w.intensity}} • Tags: {{w.tags.join(', ')}}</div>
+
+        <div class="battles" *ngIf="warRecentBattles(w).length">
+          <div class="h4">Últimas batalhas</div>
+          <div class="battle" *ngFor="let b of warRecentBattles(w)">
+            <span class="t">T{{b.absTurn}}</span>
+            <span class="s">{{b.summary}}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="h2">Interferências em canônicos</div>
+      <div class="muted small">Quando o score chega em <b>5</b>, o destino deixa de ser forçado (mortes/mandatos).</div>
+
+      <input class="inp" [(ngModel)]="filterText" placeholder="Filtrar por nome..." />
+
+      <div class="list">
+        <div class="item" *ngFor="let x of touchedList()">
+          <div class="left">
+            <div class="h3">{{canonName(x.canonId)}}</div>
+            <div class="muted small">Score: {{x.score}} • Motivos: {{x.reasons.join(', ') || '—'}}</div>
+          </div>
+          <div class="right">
+            <span class="badge" [class.warn]="isDiverged(x.canonId)">{{isDiverged(x.canonId) ? 'Divergiu' : 'Trilho'}}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="muted small" *ngIf="touchedList().length===0">Nenhuma interferência registrada ainda.</div>
+    </div>
+
+    <div class="card">
+      <div class="h2">Nascimentos pendentes</div>
+      <div class="muted small">Quando um nascimento não pode ocorrer (pais mortos/casamento diferente), ele tenta por uma janela (~5 anos) e pode virar tardio — ou se perder.</div>
+
+      <div class="muted small" *ngIf="pendingBirths().length===0">Nenhum nascimento pendente.</div>
+
+      <div class="item" *ngFor="let p of pendingBirths()">
+        <div class="left">
+          <div class="h3">{{canonName(p.canonId)}}</div>
+          <div class="muted small">Desejado em T{{p.desired}} • Expira em T{{p.expires}}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="h2">Próximos eventos canônicos</div>
+      <input class="inp" [(ngModel)]="eventFilter" placeholder="Filtrar por título/descrição..." />
+      <div class="muted small">Lista do que está por vir (até 35 entradas).</div>
+
+      <div class="event" *ngFor="let x of upcomingEvents()">
+        <div class="event-top">
+          <div class="h3">Ano {{x.e.year}} • Turno {{x.e.turn}} — {{x.e.title}}</div>
+          <span class="badge" [class.ok]="x.isAnchor">Âncora</span>
+        </div>
+        <div class="muted small">Tags: {{x.e.tags?.join(', ') || '—'}}</div>
+        <div class="text" [innerText]="x.e.body"></div>
+      </div>
+    </div>
+
+  </div>
+</div>

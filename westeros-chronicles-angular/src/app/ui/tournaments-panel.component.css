@@ -1,0 +1,14 @@
+.panel{padding:12px;}
+.h2{font-weight:700;margin:4px 0 10px 0;}
+.p{margin:0 0 10px 0;}
+.muted{opacity:.75}
+.card{border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:10px;margin:10px 0;background:rgba(0,0,0,.15)}
+.row{display:flex;justify-content:space-between;gap:10px;align-items:center;}
+.name{font-weight:700}
+.meta{opacity:.75;font-size:12px}
+button{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:6px 10px;color:#fff;cursor:pointer}
+button:hover{background:rgba(255,255,255,.12)}
+button:disabled{opacity:.4;cursor:not-allowed}
+.empty{opacity:.7;padding:10px;border:1px dashed rgba(255,255,255,.2);border-radius:10px}
+.hint{margin-top:8px;opacity:.8;font-size:12px}
+.organize button{min-width:110px}

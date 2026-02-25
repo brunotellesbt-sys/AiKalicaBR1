@@ -1,0 +1,78 @@
+<div class="shell" *ngIf="vm$ | async as state; else setup">
+  <app-header-bar
+    [state]="state"
+    (tab)="setTab(state, $event)"
+  />
+
+  <div class="grid">
+    <section class="left">
+      <app-map-panel [state]="state" (choose)="game.choose($event)"></app-map-panel>
+    </section>
+
+    <section class="center">
+      <app-chat-panel [state]="state" (choose)="game.choose($event)"></app-chat-panel>
+    </section>
+
+    <section class="right">
+      <ng-container [ngSwitch]="state.ui.activeTab">
+        <app-character-panel *ngSwitchCase="'character'" [state]="state"></app-character-panel>
+        <app-house-panel *ngSwitchCase="'house'" [state]="state" (choose)="game.choose($event)"></app-house-panel>
+        <app-diplomacy-panel *ngSwitchCase="'diplomacy'" [state]="state" (choose)="game.choose($event)"></app-diplomacy-panel>
+        <app-local-panel *ngSwitchCase="'local'" [state]="state" (choose)="game.choose($event)"></app-local-panel>
+        <app-tournaments-panel *ngSwitchCase="'tournaments'" [state]="state" (choose)="game.choose($event)"></app-tournaments-panel>
+        <app-canon-panel *ngSwitchCase="'canon'" [state]="state" (choose)="game.choose($event)"></app-canon-panel>
+        <app-chronicle-panel *ngSwitchCase="'chronicle'" [state]="state"></app-chronicle-panel>
+        <app-saves-panel *ngSwitchCase="'saves'" [state]="state" (loadState)="game.setState($event)"></app-saves-panel>
+        <app-character-panel *ngSwitchDefault [state]="state"></app-character-panel>
+      </ng-container>
+    </section>
+  </div>
+
+
+  <div class="modal" *ngIf="state.ui.pendingNameQueue?.length">
+    <div class="modal-card">
+      <div class="h1">Nomear bebê</div>
+      <div class="p">Escolha o primeiro nome agora. (Sem sobrenomes — o jogo aplica o nome da Casa automaticamente.)</div>
+      <input class="inp" [(ngModel)]="babyName" placeholder="Ex.: Alyn, Rhaena, Lyanna..." />
+      <div class="actions">
+        <button class="btn" (click)="nameNextBaby(state)">Confirmar</button>
+      </div>
+      <div class="p small muted">Obs.: você pode deixar para depois, mas enquanto houver um bebê sem nome a janela ficará aqui.</div>
+    </div>
+  </div>
+
+
+  <footer class="footer">
+    <span>Controles: clique nas opções do chat • Aba “Mapa” para viajar • 3 slots de save</span>
+    <span class="muted">Fan-game não oficial. Sem imagens de personagens. Sem dragões “em cena” (apenas referências em crônicas). A campanha encerra por tempo no fim dos eventos de 304–305 DC.</span>
+  </footer>
+</div>
+
+<ng-template #setup>
+  <div class="setup">
+    <div class="card">
+      <div class="h1">Westeros Chronicles</div>
+      <div class="p">RPG de decisões (chat + mapa), inspirado no mundo de Westeros. Ano inicial: <b>150 DC</b> (reinado de Aegon III).</div>
+
+      <label class="lbl">Escolha sua Casa</label>
+      <input class="inp" [(ngModel)]="setupQuery" placeholder="Pesquisar casa (ex.: Stark, Dondarrion, Blackwood...)" />
+      <select [(ngModel)]="setupHouseId" size="10">
+        <option *ngFor="let h of housesFiltered()" [value]="h.id">
+          {{h.name}} • Prestígio base {{h.prestigeBase}}
+        </option>
+      </select>
+
+      <label class="lbl">Gênero do personagem</label>
+      <select [(ngModel)]="setupGender">
+        <option value="M">Masculino</option>
+        <option value="F">Feminino</option>
+      </select>
+
+      <button class="btn" (click)="startNewGame()">Começar</button>
+
+      <div class="p small muted">
+        Dica: você pode adicionar/editar casas em <code>src/app/core/data/houses.ts</code>.
+      </div>
+    </div>
+  </div>
+</ng-template>

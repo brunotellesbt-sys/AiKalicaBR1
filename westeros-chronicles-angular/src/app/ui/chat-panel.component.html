@@ -1,0 +1,39 @@
+<div class="wrap">
+  <div class="head">
+    <div class="title">Janela de decisões</div>
+    <div class="sub">Escolha uma opção na última mensagem do sistema</div>
+  </div>
+
+  <div class="gameover" *ngIf="state.game?.over">
+    <b>{{ state.game.victory ? 'Vitória' : 'Game Over' }}</b>
+    <span class="muted">— {{state.game.reason}}</span>
+  </div>
+
+  <div class="log" id="log">
+    <div class="msg" *ngFor="let m of state.chat; trackBy: trackById" [class.system]="m.speaker==='sistema'" [class.npc]="m.speaker==='npc'">
+      <div class="meta">
+        <span class="tag" [class.tSys]="m.speaker==='sistema'" [class.tNpc]="m.speaker==='npc'" [class.tNar]="m.speaker==='narrador'">
+          {{m.speaker}}
+        </span>
+        <span class="turn">T{{m.tsTurn}}</span>
+      </div>
+
+      <div class="body">
+        <div class="title2" *ngIf="m.title">{{m.title}}</div>
+        <div class="text" [innerText]="m.text"></div>
+
+        <div class="choices" *ngIf="m.choices?.length">
+          <button
+            *ngFor="let c of m.choices"
+            [disabled]="(!!state.game?.over && !(c.id==='saves' || c.id==='reset')) || !!c.disabled || !!m.chosenId"
+            (click)="onChoose(c.id, (!!state.game?.over && !(c.id==='saves' || c.id==='reset')) || c.disabled || !!m.chosenId)"
+            [title]="c.hint || ''"
+          >
+            {{c.label}}
+          </button>
+        </div>
+        <div class="chosen" *ngIf="m.chosenId">Escolha registrada: <b>{{m.chosenId}}</b></div>
+      </div>
+    </div>
+  </div>
+</div>

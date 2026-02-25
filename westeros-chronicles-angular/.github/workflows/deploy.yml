@@ -1,8 +1,8 @@
-name: Deploy to GitHub Pages
+name: Deploy Angular (GitHub Pages)
 
 on:
   push:
-    branches: ["main"]
+    branches: [ "main" ]
   workflow_dispatch:
 
 permissions:
@@ -11,16 +11,12 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: "pages-${{ github.ref }}"
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: westeros-chronicles-angular
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,7 +24,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: 20
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
@@ -37,45 +33,53 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+          if [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ]; then
             npm ci --no-audit --no-fund
           else
             echo "package-lock.json não encontrado — usando npm install."
             npm install --no-audit --no-fund
           fi
 
-      - name: Build (Angular)
+      - name: Build
         shell: bash
         run: |
           set -euo pipefail
           npm run build -- --base-href "/${{ github.event.repository.name }}/"
 
-      - name: Resolve publish directory
+      - name: Locate built site folder (find index.html)
         id: site
         shell: bash
         run: |
           set -euo pipefail
-          SITE_DIR="dist/westeros-chronicles"
-          if [ -d "${SITE_DIR}/browser" ]; then
-            SITE_DIR="${SITE_DIR}/browser"
+
+          FOUND="$(find . -maxdepth 12 -type f \( -path "*/dist/*/index.html" -o -path "*/dist/*/browser/index.html" \) -print -quit || true)"
+          if [ -z "$FOUND" ]; then
+            FOUND="$(find . -maxdepth 15 -type f -name index.html -print -quit || true)"
           fi
 
-          if [ ! -f "${SITE_DIR}/index.html" ]; then
-            echo "Não encontrei ${SITE_DIR}/index.html após o build."
-            find dist -maxdepth 4 -type f -name index.html -print || true
+          if [ -z "$FOUND" ]; then
+            echo "Não encontrei nenhum index.html gerado após o build."
+            echo "Debug: listando diretórios (nível 4):"
+            find . -maxdepth 4 -type d -print
             exit 1
           fi
 
-          cp "${SITE_DIR}/index.html" "${SITE_DIR}/404.html"
-          touch "${SITE_DIR}/.nojekyll"
+          SITE_DIR="$(dirname "$FOUND")"
+          echo "SITE_DIR=$SITE_DIR" >> "$GITHUB_OUTPUT"
+          echo "Usando SITE_DIR=$SITE_DIR (index: $FOUND)"
 
-          echo "SITE_DIR=${SITE_DIR}" >> "$GITHUB_OUTPUT"
-          echo "Publicando de ${SITE_DIR}"
+      - name: SPA fallback (404.html) + disable jekyll
+        shell: bash
+        run: |
+          set -euo pipefail
+          SITE_DIR="${{ steps.site.outputs.SITE_DIR }}"
+          cp "$SITE_DIR/index.html" "$SITE_DIR/404.html"
+          touch "$SITE_DIR/.nojekyll"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: westeros-chronicles-angular/${{ steps.site.outputs.SITE_DIR }}
+          path: ${{ steps.site.outputs.SITE_DIR }}
 
   deploy:
     needs: build
@@ -83,7 +87,6 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
