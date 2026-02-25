@@ -7,6 +7,7 @@ import {
   Gender,
   HouseState,
   Location,
+  MissionKind,
   RenownTier,
   Tournament,
   TournamentReason,
@@ -1506,6 +1507,24 @@ function getActiveArmySize(state: GameState, marchingRatio: number): number {
 }
 
 
+
+function missionPowerScore(state: GameState): number {
+  const p = state.characters[state.playerId];
+  return (p.martial ?? 0) + (p.personalPrestige ?? 0);
+}
+
+function missionRequesterWeight(kind: MissionKind): number {
+  if (kind === 'coroa') return 1.9;
+  if (kind === 'suserano') return 1.5;
+  if (kind === 'lider') return 1.25;
+  if (kind === 'vassalo') return 1.15;
+  return 1.0;
+}
+
+function scaledMissionReward(base: number, kind: MissionKind): number {
+  return Math.max(10, Math.round(base * missionRequesterWeight(kind)));
+}
+
 function ensureMissions(state: GameState, rng: Rng): void {
   state.missions = state.missions ?? [];
   const now = state.date.absoluteTurn;
@@ -1554,11 +1573,91 @@ function ensureMissions(state: GameState, rng: Rng): void {
     });
   }
 
+  // --- Missões hierárquicas inteligentes (líder, suserano e Coroa) ---
+  const powerScore = missionPowerScore(state);
+  const baseReqByPower = Math.max(10, Math.min(90, Math.round(powerScore * 0.55)));
+
+  const activeHier = state.missions.filter(m => (m.kind === 'lider' || m.kind === 'suserano' || m.kind === 'coroa') && m.status === 'aberta');
+
+  // 1) Missão do líder da sua Casa (quando o jogador não é líder)
+  if (!playerIsLeader && activeHier.filter(m => m.kind === 'lider').length < 1 && rng.chance(0.78)) {
+    const leader = state.characters[playerHouse.leaderId];
+    if (leader && leader.alive) {
+      const kindPick = rng.pick(['diplomacia', 'comercio', 'bandidos'] as const);
+      const req = kindPick === 'diplomacia' ? Math.max(8, baseReqByPower - 12) : baseReqByPower;
+      const rewardBase = rng.int(25, 70) + req;
+      state.missions.push({
+        id: uid('m'),
+        kind: 'lider',
+        title: `Ordem do líder da Casa: ${kindPick === 'diplomacia' ? 'negociar apoio' : kindPick === 'comercio' ? 'proteger comboio' : 'caçar saqueadores'}`,
+        description: `${leader.name} exige serviço direto em nome de ${playerHouse.name}.`,
+        regionId,
+        targetLocationId: (state.travelGraph[here.id]?.[0]?.toLocationId ?? here.id),
+        requiredMartial: req,
+        rewardGold: scaledMissionReward(rewardBase, 'lider'),
+        rewardPrestige: 1,
+        requesterHouseId: playerHouse.id,
+        createdTurn: now,
+        expiresTurn: now + rng.int(6, 14),
+        status: 'aberta',
+      });
+    }
+  }
+
+  // 2) Missão da Casa suserana (mesmo sem ser líder, para representar cobrança política)
+  const suzerainHouse = playerHouse.suzerainId ? state.houses[playerHouse.suzerainId] : undefined;
+  if (suzerainHouse && activeHier.filter(m => m.kind === 'suserano').length < 1 && rng.chance(0.58)) {
+    const req = Math.max(14, Math.round(baseReqByPower * 1.05));
+    const rewardBase = rng.int(35, 95) + req;
+    state.missions.push({
+      id: uid('m'),
+      kind: 'suserano',
+      title: 'Mandato da Casa suserana',
+      description: `${suzerainHouse.name} emite uma ordem formal. Cumprir fortalece sua posição feudal.`,
+      regionId,
+      targetLocationId: suzerainHouse.seatLocationId,
+      requiredMartial: req,
+      rewardGold: scaledMissionReward(rewardBase, 'suserano'),
+      rewardRelation: 4,
+      rewardPrestige: 1,
+      requesterHouseId: suzerainHouse.id,
+      createdTurn: now,
+      expiresTurn: now + rng.int(6, 14),
+      status: 'aberta',
+    });
+  }
+
+  // 3) Missão da Coroa (rara)
+  if (activeHier.filter(m => m.kind === 'coroa').length < 1 && rng.chance(0.18 + Math.min(0.12, powerScore / 1000))) {
+    const crown = state.houses['targaryen_throne'];
+    if (crown) {
+      const req = Math.max(20, Math.round(baseReqByPower * 1.25));
+      const rewardBase = rng.int(70, 160) + (req * 2);
+      state.missions.push({
+        id: uid('m'),
+        kind: 'coroa',
+        title: 'Comissão da Coroa',
+        description: `Um emissário do Trono de Ferro convoca você para uma tarefa de alto risco e alta visibilidade.`,
+        regionId,
+        targetLocationId: crown.seatLocationId,
+        requiredMartial: req,
+        rewardGold: scaledMissionReward(rewardBase, 'coroa'),
+        rewardHouseGold: rng.int(80, 220),
+        rewardRelation: 6,
+        rewardPrestige: 2,
+        requesterHouseId: crown.id,
+        createdTurn: now,
+        expiresTurn: now + rng.int(5, 11),
+        status: 'aberta',
+      });
+    }
+  }
+
   // --- Missões de suserania/vassalagem (pedidos individuais) ---
   // Mantém poucas ativas ao mesmo tempo para não virar spam.
   if (!playerIsLeader) return;
 
-  const openFeudal = state.missions.filter(m => (m.kind === 'suserano' || m.kind === 'vassalo') && m.status === 'aberta');
+  const openFeudal = state.missions.filter(m => (m.kind === 'lider' || m.kind === 'suserano' || m.kind === 'vassalo' || m.kind === 'coroa') && m.status === 'aberta');
   if (openFeudal.length >= 2) return;
   if (!rng.chance(0.65)) return;
 
@@ -1828,14 +1927,14 @@ function tickMissions(state: GameState, rng: Rng): void {
       }
 
       // penalidade feudal por ignorar pedidos diretos
-      if ((m.kind === 'suserano' || m.kind === 'vassalo') && m.requesterHouseId) {
+      if ((m.kind === 'lider' || m.kind === 'suserano' || m.kind === 'vassalo' || m.kind === 'coroa') && m.requesterHouseId) {
         const ph = state.houses[state.playerHouseId];
         const req = state.houses[m.requesterHouseId];
         if (ph && req) {
-          const d = m.kind === 'suserano' ? 5 : 3;
+          const d = m.kind === 'coroa' ? 7 : m.kind === 'suserano' ? 5 : m.kind === 'lider' ? 4 : 3;
           ph.relations[req.id] = clamp((ph.relations[req.id] ?? 50) - d, 0, 100);
           req.relations[ph.id] = clamp((req.relations[ph.id] ?? 50) - d, 0, 100);
-          if (m.kind === 'suserano') ph.prestige = clamp(ph.prestige - 1, 1, 100);
+          if (m.kind === 'suserano' || m.kind === 'coroa') ph.prestige = clamp(ph.prestige - 1, 1, 100);
         }
       }
     }
@@ -1895,7 +1994,7 @@ function promptMissions(state: GameState, rng: Rng): void {
 
   // Mostra missões locais + missões feudo (suserano/vassalo) em qualquer região.
   const missions = (state.missions ?? [])
-    .filter(m => (m.kind === 'suserano' || m.kind === 'vassalo') || m.regionId === here.regionId)
+    .filter(m => (m.kind === 'lider' || m.kind === 'suserano' || m.kind === 'vassalo' || m.kind === 'coroa') || m.regionId === here.regionId)
     .slice(0, 10);
 
 const playerHouse = state.houses[state.playerHouseId];
@@ -2087,7 +2186,7 @@ export function applyMissionAction(state: GameState, rng: Rng, cmd: string): voi
   if (action === 'abandon') {
     if (m.status === 'aceita' && m.assignedToId === player.id) {
       m.status = 'falhou';
-      const basePenalty = (m.kind === 'suserano' || m.kind === 'vassalo') ? 3 : 2;
+      const basePenalty = (m.kind === 'lider' || m.kind === 'suserano' || m.kind === 'vassalo' || m.kind === 'coroa') ? 3 : 2;
       player.personalPrestige = clamp((player.personalPrestige ?? 0) - basePenalty, 0, 100);
 
       // penaliza relação feudal se for pedido direto
@@ -2095,7 +2194,7 @@ export function applyMissionAction(state: GameState, rng: Rng, cmd: string): voi
         const house = state.houses[state.playerHouseId];
         const req = state.houses[m.requesterHouseId];
         if (house && req) {
-          const d = (m.kind === 'suserano') ? 6 : 4;
+          const d = (m.kind === 'coroa') ? 8 : (m.kind === 'suserano') ? 6 : (m.kind === 'lider') ? 5 : 4;
           house.relations[req.id] = clamp((house.relations[req.id] ?? 50) - d, 0, 100);
           req.relations[house.id] = clamp((req.relations[house.id] ?? 50) - d, 0, 100);
         }
@@ -2113,15 +2212,35 @@ export function applyTravel(state: GameState, rng: Rng, toLocationId: string): v
   const from = state.locations[player.locationId];
   const edges = state.travelGraph[from.id] ?? [];
   const edge = edges.find((e) => e.toLocationId === toLocationId);
-  if (!edge) {
-    pushNarration(state, 'Caminho inválido.');
+  const house = state.houses[state.playerHouseId];
+
+  if (toLocationId === from.id) {
+    pushNarration(state, 'Você já está nesse local.');
     return promptMainMenu(state, rng);
+  }
+
+  // rotas não-diretas: permitem viagem longa mediante custo em ouro pessoal
+  let longTravelGoldCost = 0;
+  if (!edge) {
+    const to = state.locations[toLocationId];
+    if (!to) {
+      pushNarration(state, 'Destino inválido.');
+      return promptMainMenu(state, rng);
+    }
+    longTravelGoldCost = (from.regionId === to.regionId) ? 8 : 18;
+    const personalGold = player.personalGold ?? 0;
+    if (personalGold < longTravelGoldCost) {
+      pushNarration(state, `Você não tem ouro pessoal suficiente para viagem longa (${personalGold}/${longTravelGoldCost}).`);
+      return promptMainMenu(state, rng);
+    }
+    player.personalGold = personalGold - longTravelGoldCost;
+    pushNarration(state, `🧭 Viagem longa contratada (${longTravelGoldCost} ouro pessoal). Não havia rota direta.`);
   }
 
   // custo (comida não é gasta para viajar)
   const armySize = getActiveArmySize(state, 0.6); // padrão: marcha com 60% (o resto fica)
-  const cost = travelFoodCost(state, edge.distance, armySize);
-  const house = state.houses[state.playerHouseId];
+  const distance = edge?.distance ?? (longTravelGoldCost > 0 ? 7 : 3);
+  const cost = travelFoodCost(state, distance, armySize);
 
   // encontro
   const risk = travelEncounterRisk(state, from.regionId, armySize, house.prestige);
@@ -3770,17 +3889,6 @@ function tickPregnancies(state: GameState, rng: Rng): void {
     queueNamingIfPlayerParent(state, baby, father, mother);
   }
 }
-
-state.chronicle.unshift({
-  turn: state.date.absoluteTurn,
-  title: 'Nascimento nobre',
-  body: `${baby.name} nasce na ${state.houses[pair.houseId].name}.`,
-  tags: ['nascimento']
-});
-    }
-  }
-}
-
 
 function prestigeToTournamentSize(prestige: number): TournamentSize {
   if (prestige < 45) return 'menor';
