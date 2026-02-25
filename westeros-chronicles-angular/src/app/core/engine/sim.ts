@@ -4213,9 +4213,16 @@ if (action === 'flowers' && target.gender === 'M') {
   pushNarration(state, 'Você não pode dar flores para um homem.');
   return;
 }
-if (action === 'hunt' && (target.martial ?? 0) < 35) {
-  pushNarration(state, 'Esta pessoa não parece preparada para caçar com segurança.');
-  return;
+if (action === 'hunt') {
+  if (player.gender !== 'M') {
+    pushNarration(state, 'Pelas regras desta campanha, caçadas locais são para personagem masculino.');
+    return;
+  }
+  const canHunt = target.gender === 'M' || (target.martial ?? 0) >= 35;
+  if (!canHunt) {
+    pushNarration(state, 'Esta pessoa não parece preparada para caçar com segurança.');
+    return;
+  }
 }
 // Romance: bloqueia pai/mãe
 const isParent = (target.id === player.fatherId) || (target.id === player.motherId);
