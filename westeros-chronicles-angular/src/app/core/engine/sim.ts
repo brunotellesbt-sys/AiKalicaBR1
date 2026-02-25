@@ -4336,6 +4336,17 @@ if (action === 'hunt') {
     return;
   }
 }
+if (action === 'hunt') {
+  if (player.gender !== 'M') {
+    pushNarration(state, 'Pelas regras desta campanha, caçadas locais são para personagem masculino.');
+    return;
+  }
+  const canHunt = target.gender === 'M' || (target.martial ?? 0) >= 35;
+  if (!canHunt) {
+    pushNarration(state, 'Esta pessoa não parece preparada para caçar com segurança.');
+    return;
+  }
+}
 // Romance: bloqueia pai/mãe
 const isParent = (target.id === player.fatherId) || (target.id === player.motherId);
 const isChild = (target.fatherId === player.id) || (target.motherId === player.id);
@@ -4348,8 +4359,8 @@ if (action === 'kiss') {
     pushNarration(state, 'A relação ainda não é alta o suficiente para um beijo (mínimo 80).');
     return;
   }
-  player.kissedIds = player.kissedIds ?? [];
-  if (!player.kissedIds.includes(target.id)) player.kissedIds.push(target.id);
+  const kissedIds = (player.kissedIds ??= []);
+  if (!kissedIds.includes(target.id)) kissedIds.push(target.id);
   target.relationshipToPlayer = clamp(target.relationshipToPlayer + 2 + rng.int(-1, 2), 0, 100);
   pushNarration(state, `Você beijou ${target.name}.`);
   canonTouchIfCanonical(state, target, 'kiss', 2);
@@ -4360,8 +4371,8 @@ if (action === 'relations') {
     pushNarration(state, 'A relação ainda não é alta o suficiente para relações (mínimo 90).');
     return;
   }
-  player.kissedIds = player.kissedIds ?? [];
-  if (!player.kissedIds.includes(target.id)) {
+  const kissedIds = (player.kissedIds ??= []);
+  if (!kissedIds.includes(target.id)) {
     pushNarration(state, 'Primeiro vocês precisam se beijar.');
     return;
   }
@@ -4373,8 +4384,8 @@ if (action === 'relations') {
   // chance de concepção (se houver uma mulher fértil envolvida)
   const a = player;
   const b = target;
-  const mother = a.gender === 'F' ? a : (b.gender === 'F' ? b : null);
-  const father = a.gender === 'M' ? a : (b.gender === 'M' ? b : null);
+  const mother: Character | undefined = a.gender === 'F' ? a : (b.gender === 'F' ? b : undefined);
+  const father: Character | undefined = a.gender === 'M' ? a : (b.gender === 'M' ? b : undefined);
 
   if (mother && father) {
     const isBastard = !(a.maritalStatus === 'married' && a.spouseId === b.id && b.maritalStatus === 'married');
