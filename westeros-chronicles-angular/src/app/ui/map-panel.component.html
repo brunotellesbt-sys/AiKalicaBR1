@@ -1,7 +1,7 @@
 <div class="wrap">
   <div class="head">
-    <div class="title">Mapa (Reinos)</div>
-    <div class="sub">Clique em um reino e depois em uma área (destinos diretos)</div>
+    <div class="title">Mapa de Westeros</div>
+    <div class="sub">Clique em um reino no mapa e escolha um destino acessível</div>
   </div>
 
   <div class="body" *ngIf="state as s">
@@ -10,30 +10,29 @@
       <span class="muted">({{s.regions[s.locations[s.characters[s.playerId].locationId].regionId]?.name}})</span>
     </div>
 
-    <!-- SVG simplificado (original) -->
-    <div class="svg-wrap">
-      <svg viewBox="0 0 520 240" class="kingdom-svg" role="img" aria-label="Mapa simplificado dos Sete Reinos">
-        <g *ngFor="let k of kingdoms(); let i = index">
-          <rect
-            class="k-rect"
-            [attr.x]="10 + (i%4)*125"
-            [attr.y]="10 + (i>=4 ? 115 : 0)"
-            width="115"
-            height="105"
-            rx="14"
-            (click)="selectKingdom(k.id)"
-            [class.selected]="k.id === selectedRegionId"
-          ></rect>
-          <text
-            class="k-label"
-            [attr.x]="10 + (i%4)*125 + 57.5"
-            [attr.y]="10 + (i>=4 ? 115 : 0) + 55"
-            text-anchor="middle"
-            (click)="selectKingdom(k.id)"
-          >{{k.name}}</text>
-        </g>
-      </svg>
-      <div class="muted tiny">Mapa simplificado. Não representa escala real — serve para navegação.</div>
+    <div class="map-toolbar">
+      <button (click)="zoomOut()">−</button>
+      <button (click)="resetZoom()">100%</button>
+      <button (click)="zoomIn()">+</button>
+      <span class="muted small">Zoom {{(zoom*100) | number:'1.0-0'}}%</span>
+    </div>
+
+    <div class="map-shell">
+      <div class="map-image" [style.transform]="'scale(' + zoom + ')'">
+        <button
+          *ngFor="let pin of regionPins"
+          class="pin"
+          [style.left.%]="pin.x"
+          [style.top.%]="pin.y"
+          [class.selected]="pin.id === selectedRegionId"
+          [class.player-here]="isPlayerRegion(pin.id)"
+          [title]="s.regions[pin.id]?.name"
+          (click)="selectKingdom(pin.id)"
+        >
+          <span class="dot"></span>
+          <span class="label">{{s.regions[pin.id]?.name}}</span>
+        </button>
+      </div>
     </div>
 
     <div class="card">
@@ -41,9 +40,7 @@
       <div class="muted small" *ngIf="selectedRegionId">
         {{s.regions[selectedRegionId]?.name}} • Áreas disponíveis: {{areasInSelected().length}}
       </div>
-      <div class="muted small" *ngIf="!selectedRegionId">
-        Selecione um reino acima.
-      </div>
+      <div class="muted small" *ngIf="!selectedRegionId">Selecione um reino no mapa.</div>
 
       <div class="areas" *ngIf="selectedRegionId">
         <button
@@ -51,15 +48,18 @@
           (click)="onGo(a.id)"
           [disabled]="a.disabled"
           [title]="a.hint"
-        >{{a.label}}</button>
+        >
+          {{a.label}}
+        </button>
       </div>
     </div>
 
     <div class="card">
-      <div class="h3">Destinos diretos (onde você está)</div>
-      <div class="muted small">Lista baseada nas rotas do jogo.</div>
+      <div class="h3">Destinos diretos (sua posição atual)</div>
       <div class="areas">
-        <button *ngFor="let o of travelOptions()" (click)="onGo(o.id)">{{o.label}} <span class="muted">• {{o.hint}}</span></button>
+        <button *ngFor="let o of travelOptions()" (click)="onGo(o.id)">
+          {{o.label}} <span class="muted">• {{o.hint}}</span>
+        </button>
       </div>
     </div>
   </div>

@@ -1,0 +1,39 @@
+<svg width="900" height="1200" viewBox="0 0 900 1200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sea" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#0d2840"/>
+      <stop offset="100%" stop-color="#173b53"/>
+    </linearGradient>
+    <linearGradient id="land" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#688d5f"/>
+      <stop offset="55%" stop-color="#547851"/>
+      <stop offset="100%" stop-color="#4b6746"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000" flood-opacity=".35"/>
+    </filter>
+  </defs>
+
+  <rect width="900" height="1200" fill="url(#sea)"/>
+
+  <path d="M390 70 L470 120 L520 170 L545 245 L580 310 L620 370 L615 455 L640 520 L650 615 L620 700 L592 770 L548 842 L522 930 L487 1020 L452 1110 L414 1148 L382 1130 L360 1070 L332 980 L316 880 L286 790 L240 700 L215 610 L206 530 L180 454 L188 375 L220 305 L246 258 L286 212 L328 150 Z" fill="url(#land)" stroke="#c7d6be" stroke-width="6" filter="url(#shadow)"/>
+
+  <path d="M170 510 L205 485 L232 510 L214 550 L176 550 Z" fill="#5e7f56" stroke="#c7d6be" stroke-width="4"/>
+  <path d="M130 560 L160 540 L182 568 L166 598 L136 590 Z" fill="#607f58" stroke="#c7d6be" stroke-width="3"/>
+
+  <path d="M450 1095 L500 1128 L525 1170 L490 1190 L445 1172 L420 1138 Z" fill="#6f8e5e" stroke="#c7d6be" stroke-width="4"/>
+
+  <g opacity=".25" stroke="#d7e0ce" stroke-width="2">
+    <path d="M355 180 L520 265"/>
+    <path d="M298 305 L605 385"/>
+    <path d="M255 420 L640 520"/>
+    <path d="M230 560 L650 610"/>
+    <path d="M250 700 L610 700"/>
+    <path d="M280 835 L560 840"/>
+    <path d="M320 960 L520 930"/>
+  </g>
+
+  <text x="665" y="160" fill="#dfeaf4" font-size="30" font-family="serif" opacity=".85">Mar Estreito</text>
+  <text x="55" y="450" fill="#dfeaf4" font-size="25" font-family="serif" opacity=".75">Mar do Poente</text>
+  <text x="600" y="1120" fill="#dfeaf4" font-size="22" font-family="serif" opacity=".75">Mar de Dorne</text>
+</svg>
