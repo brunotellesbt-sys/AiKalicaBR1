@@ -33,6 +33,11 @@
       <span class="k">Prest. pessoal</span>
       <span class="v">{{state.characters[state.playerId]?.personalPrestige ?? 0}}</span>
     </div>
+    <div class="pill">
+      <span class="k">Idade</span>
+      <span class="v">{{state.characters[state.playerId]?.ageYears | number:'1.0-0'}} anos</span>
+    </div>
+
   </div>
 
   <nav class="tabs">

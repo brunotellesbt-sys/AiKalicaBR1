@@ -19,6 +19,7 @@
 
     <div class="map-shell">
       <div class="map-image" [style.transform]="'scale(' + zoom + ')'">
+        <img class="map-base" src="/assets/westeros-map.svg" alt="Mapa de Westeros" />
         <button
           *ngFor="let pin of regionPins"
           class="pin"
