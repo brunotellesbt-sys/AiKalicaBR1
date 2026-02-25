@@ -4303,6 +4303,38 @@ if (action === 'flowers') {
 if (action === 'drink' && (player.ageYears < 18 || target.ageYears < 18)) {
   pushNarration(state, 'Crianças e adolescentes não bebem (mínimo 18 anos).');
   return;
+if (action === 'hunt') {
+  if (player.gender !== 'M') {
+    pushNarration(state, 'Pelas regras desta campanha, caçadas locais são para personagem masculino.');
+    return;
+  }
+  const canHunt = target.gender === 'M' || (target.martial ?? 0) >= 35;
+  if (!canHunt) {
+    pushNarration(state, 'Esta pessoa não parece preparada para caçar com segurança.');
+    return;
+  }
+}
+if (action === 'hunt') {
+  if (player.gender !== 'M') {
+    pushNarration(state, 'Pelas regras desta campanha, caçadas locais são para personagem masculino.');
+    return;
+  }
+  const canHunt = target.gender === 'M' || (target.martial ?? 0) >= 35;
+  if (!canHunt) {
+    pushNarration(state, 'Esta pessoa não parece preparada para caçar com segurança.');
+    return;
+  }
+}
+if (action === 'hunt') {
+  if (player.gender !== 'M') {
+    pushNarration(state, 'Pelas regras desta campanha, caçadas locais são para personagem masculino.');
+    return;
+  }
+  const canHunt = target.gender === 'M' || (target.martial ?? 0) >= 35;
+  if (!canHunt) {
+    pushNarration(state, 'Esta pessoa não parece preparada para caçar com segurança.');
+    return;
+  }
 }
 if (action === 'hunt') {
   if (player.gender !== 'M') {
