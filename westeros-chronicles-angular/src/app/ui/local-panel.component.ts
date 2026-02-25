@@ -37,6 +37,15 @@ export class LocalPanelComponent {
     return this.state.houses[houseId]?.name ?? houseId;
   }
 
+  houseSurname(houseId: string): string {
+    const n = this.houseName(houseId).replace(/^Casa\s+/i, '').trim();
+    return n || this.houseName(houseId);
+  }
+
+  displayNameWithSurname(c: Character): string {
+    const surname = this.houseSurname(c.currentHouseId);
+    return c.name?.includes(surname) ? c.name : `${c.name} ${surname}`.trim();
+  }
 
 kinshipLabel(c: Character): string | null {
   const p = this.player;

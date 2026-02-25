@@ -1512,22 +1512,62 @@ function ensureMissions(state: GameState, rng: Rng): void {
   // limpa expiradas
   state.missions = state.missions.filter(m => m.status !== 'expirada' && m.expiresTurn > now);
 
-  // se houver poucas, cria algumas na região atual
+  // Migração silenciosa: remove nomes genéricos em missões já existentes no save.
+  for (const m of state.missions) {
+    if (!m?.title) continue;
+    if (m.title.includes('Ordens do líder da Casa')) {
+      m.title = 'Recado de confiança do salão familiar';
+    }
+    if (m.title.includes('Chamado da Coroa')) {
+      m.title = 'Lacre Real entregue por corvo';
+    }
+    if (m.title.includes('Pedido do suserano') || m.title.includes('Pedido de vassalo')) {
+      m.title = m.title
+        .replace('Pedido do suserano: ', 'Despacho feudal: ')
+        .replace('Pedido de vassalo: ', 'Súplica juramentada: ');
+    }
+  }
+
+  // se houver poucas, cria missões locais (mantém sistema original) + complementos inteligentes
   const player = state.characters[state.playerId];
   const here = state.locations[player.locationId];
   const regionId = here.regionId;
   const playerHouse = state.houses[state.playerHouseId];
   const playerIsLeader = playerHouse?.leaderId === player.id;
+  const playerPower = Math.round((player.martial * 0.65) + (player.personalPrestige * 0.35));
 
   const openInRegion = state.missions.filter(m => m.regionId === regionId && m.status === 'aberta');
   const needed = 3 - openInRegion.length;
+
+  const localeFlavor = state.locations[here.id]?.name ?? 'a região';
+  const localTitlesByKind: Record<string, string[]> = {
+    diplomacia: [
+      `Tratado nas sombras de ${localeFlavor}`,
+      `Palavras antes do aço em ${localeFlavor}`,
+      `Conselho de paz em ${localeFlavor}`,
+    ],
+    comercio: [
+      `Rota de mercadores de ${localeFlavor}`,
+      `Caravana do amanhecer em ${localeFlavor}`,
+      `Ouro e sal rumo a ${localeFlavor}`,
+    ],
+    bandidos: [
+      `Sangue na estrada de ${localeFlavor}`,
+      `Caçada ao estandarte negro em ${localeFlavor}`,
+      `Lâminas contra saqueadores de ${localeFlavor}`,
+    ],
+    selvagens: [
+      `Vigília fria de ${localeFlavor}`,
+      `Ecos além das colinas de ${localeFlavor}`,
+      `Patrulha de ferro em ${localeFlavor}`,
+    ],
+  };
+
   for (let i = 0; i < needed; i++) {
-    const kind: any = rng.pick(['diplomacia','bandidos','selvagens','comercio']);
+    const kind: 'diplomacia' | 'bandidos' | 'selvagens' | 'comercio' = rng.pick(['diplomacia','bandidos','selvagens','comercio']);
     const req = kind === 'diplomacia' ? rng.int(10, 35) : kind === 'comercio' ? rng.int(15, 40) : rng.int(25, 70);
     const reward = rng.int(25, 120) + Math.floor(req * 1.2);
-    const title = kind === 'diplomacia' ? 'Negociar apoio local' :
-                  kind === 'comercio' ? 'Escolta comercial' :
-                  kind === 'bandidos' ? 'Caçar bandidos' : 'Afastar selvagens';
+    const title = rng.pick(localTitlesByKind[kind]);
     const desc = kind === 'diplomacia'
       ? 'Leve uma mensagem e tente melhorar relações com uma vila ou castelo próximo.'
       : kind === 'comercio'
@@ -1535,7 +1575,6 @@ function ensureMissions(state: GameState, rng: Rng): void {
       : kind === 'bandidos'
       ? 'Um clã de bandidos tem atacado viajantes. Encontre-os e elimine a ameaça.'
       : 'Relatos de selvagens/fora-da-lei. Faça patrulhas e afaste-os.';
-    // alvo: escolhe um destino próximo (ou fica aqui)
     const edges = state.travelGraph[here.id] ?? [];
     const target = edges.length ? rng.pick(edges).toLocationId : here.id;
 
@@ -1554,7 +1593,75 @@ function ensureMissions(state: GameState, rng: Rng): void {
     });
   }
 
-  // --- Missões de suserania/vassalagem (pedidos individuais) ---
+  // Complemento 1 (fase inicial): missões pequenas dadas pelo líder da sua Casa, em locais próximos.
+  const leaderMissionOpen = state.missions.some(m => m.kind === 'lider' && m.status === 'aberta');
+  if (!playerIsLeader && !leaderMissionOpen) {
+    const leader = state.characters[playerHouse.leaderId];
+    const leaderChance = playerPower < 35 ? 0.90 : playerPower < 55 ? 0.62 : 0.28;
+    if (leader && leader.alive && rng.chance(leaderChance)) {
+      const leaderTitles = [
+        `Recado de ${leader.name}: patrulha de confiança`,
+        `Favor pessoal de ${leader.name} nas redondezas`,
+        `Serviço de honra para ${playerHouse.name}`,
+        `Corvo selado de ${leader.name}: tarefa discreta`,
+      ];
+      const edges = state.travelGraph[here.id] ?? [];
+      const target = edges.length ? rng.pick(edges).toLocationId : here.id;
+      const req = playerPower < 35 ? rng.int(16, 34) : rng.int(24, 46);
+      state.missions.push({
+        id: uid('m'),
+        kind: 'lider',
+        title: rng.pick(leaderTitles),
+        description: `${leader.name} pede uma tarefa inicial para fortalecer seu nome dentro de ${playerHouse.name}.`,
+        regionId,
+        targetLocationId: target,
+        requiredMartial: req,
+        rewardGold: rng.int(30, 95),
+        rewardRelation: 3,
+        rewardPrestige: 1,
+        requesterHouseId: playerHouse.id,
+        createdTurn: now,
+        expiresTurn: now + rng.int(7, 14),
+        status: 'aberta',
+      });
+    }
+  }
+
+  // Complemento 3 (fase avançada): apenas Casa de alto prestígio e personagem líder podem receber tarefas da Coroa.
+  const crownMissionOpen = state.missions.some(m => m.kind === 'coroa' && m.status === 'aberta');
+  const housePrestige = playerHouse.prestige ?? 0;
+  if (!crownMissionOpen && playerIsLeader && housePrestige >= 82) {
+    const crownChance = housePrestige >= 92 ? 0.22 : housePrestige >= 86 ? 0.16 : 0.10;
+    if (rng.chance(crownChance)) {
+      const crownSeat = state.houses['targaryen_throne']?.seatLocationId ?? here.id;
+      const crownTitles = [
+        'Selo do Trono de Ferro: assunto reservado',
+        'Corvo de Porto Real: comissão régia',
+        'Mandado da Coroa perante o Pequeno Conselho',
+        'Carta lacrada da Fortaleza Vermelha',
+      ];
+      state.missions.push({
+        id: uid('m'),
+        kind: 'coroa',
+        title: rng.pick(crownTitles),
+        description: 'A Coroa reconhece o peso da sua Casa e exige uma missão sensível. Êxito eleva seu nome entre os grandes.',
+        regionId,
+        targetLocationId: crownSeat,
+        requiredMartial: rng.int(52, 84),
+        rewardGold: rng.int(130, 280),
+        rewardHouseGold: rng.int(90, 240),
+        rewardPrestige: 3,
+        rewardRelation: 6,
+        requesterHouseId: 'targaryen_throne',
+        createdTurn: now,
+        expiresTurn: now + rng.int(8, 18),
+        status: 'aberta',
+      });
+    }
+  }
+
+
+  // Complemento 2 (fase intermediária): ao virar líder, passam a surgir missões da Casa suserana e dos vassalos.
   // Mantém poucas ativas ao mesmo tempo para não virar spam.
   if (!playerIsLeader) return;
 
@@ -1606,7 +1713,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
       state.missions.push({
         id: uid('m'),
         kind: 'suserano',
-        title: 'Pedido do suserano: tributo extraordinário',
+        title: rng.pick(['Cobrança de estandarte: tributo extraordinário','Arca de guerra do suserano','Dízimo de lealdade ao suserano']),
         description: `Um mensageiro de ${suzerain!.name} exige reforço de tributos (recursos). Leve o tributo e mantenha sua posição.`,
         regionId,
         targetLocationId: suzerain!.seatLocationId,
@@ -1627,7 +1734,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
       state.missions.push({
         id: uid('m'),
         kind: 'suserano',
-        title: 'Pedido do suserano: enviar levies',
+        title: rng.pick(['Convocação de hoste: envio de levies','Bandeiras erguidas para o suserano','Chamado de guerra do seu suserano']),
         description: `O suserano solicita homens para uma hoste temporária. Envie levies e evite suspeitas de deslealdade.`,
         regionId,
         targetLocationId: suzerain!.seatLocationId,
@@ -1649,7 +1756,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
       state.missions.push({
         id: uid('m'),
         kind: 'suserano',
-        title: 'Pedido do suserano: suprimentos para campanha',
+        title: rng.pick(['Celeiros para a campanha do suserano','Comboio de víveres da vassalagem','Mantimentos para a marcha do estandarte']),
         description: `O suserano pede mantimentos para abastecer uma campanha. Entregar comida/recursos melhora sua posição na corte.`,
         regionId,
         targetLocationId: suzerain!.seatLocationId,
@@ -1672,7 +1779,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
       state.missions.push({
         id: uid('m'),
         kind: 'suserano',
-        title: 'Pedido do suserano: comparecer ao conselho',
+        title: rng.pick(['Conselho fechado do suserano','Audiência de lealdade no salão feudal','Mesa de guerra convocada pelo suserano']),
         description: `O suserano convoca você para um conselho privado. Vá ao assento dele para demonstrar lealdade e colher favores.`,
         regionId,
         targetLocationId: suzerain!.seatLocationId,
@@ -1694,7 +1801,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
     state.missions.push({
       id: uid('m'),
       kind: 'suserano',
-      title: 'Pedido do suserano: escolta da coroa',
+      title: rng.pick(['Escolta do comboio feudal','Estrada segura para o tributo da coroa','Guarda de caravana sob juramento']),
       description: `Uma caravana ligada a ${suzerain!.name} precisa atravessar estradas perigosas. Escolte-a até o destino.`,
       regionId,
       targetLocationId: target,
@@ -1729,7 +1836,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
     state.missions.push({
       id: uid('m'),
       kind: 'vassalo',
-      title: `Pedido de vassalo: auxílio de mantimentos`,
+      title: rng.pick([`Inverno curto em ${vassal.name}: auxílio de mantimentos`,`Celeiros vazios em ${vassal.name}`,`Pedido urgente de víveres por ${vassal.name}`]),
       description: `${vassal.name} relata escassez e pede ajuda (comida/recursos). Um suserano forte mantém seus vassalos de pé.`,
       regionId,
       targetLocationId: vassal.seatLocationId,
@@ -1753,7 +1860,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
     state.missions.push({
       id: uid('m'),
       kind: 'vassalo',
-      title: `Pedido de vassalo: mediação feudal`,
+      title: rng.pick([`Disputa de fronteira sob ${vassal.name}`,`Conciliação feudal solicitada por ${vassal.name}`,`Paz armada entre vassalos`]),
       description: `${vassal.name} pede que você imponha ordem numa disputa local${other ? ` envolvendo ${other.name}` : ''}. Vá até o feudo e resolva com firmeza.`,
       regionId,
       targetLocationId: vassal.seatLocationId,
@@ -1774,7 +1881,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
     state.missions.push({
       id: uid('m'),
       kind: 'vassalo',
-      title: `Pedido de vassalo: reparos no assento`,
+      title: rng.pick([`Pedra e cal para ${vassal.name}`,`Reforço de muralhas em ${vassal.name}`,`Reconstrução urgente no assento vassalo`]),
       description: `${vassal.name} precisa de recursos para reforçar muralhas e celeiros. Apoiar infraestrutura aumenta lealdade e reduz riscos futuros.`,
       regionId,
       targetLocationId: vassal.seatLocationId,
@@ -1795,7 +1902,7 @@ function ensureMissions(state: GameState, rng: Rng): void {
   state.missions.push({
     id: uid('m'),
     kind: 'vassalo',
-    title: `Pedido de vassalo: proteção contra saqueadores`,
+    title: rng.pick([`Estandarte sob ataque em ${vassal.name}`,`Caça aos saqueadores de ${vassal.name}`,`Punho de ferro contra bandos locais`]),
     description: `${vassal.name} sofre com saqueadores. Um exemplo de força evita revoltas e traições.`,
     regionId,
     targetLocationId: vassal.seatLocationId,
@@ -1895,8 +2002,8 @@ function promptMissions(state: GameState, rng: Rng): void {
 
   // Mostra missões locais + missões feudo (suserano/vassalo) em qualquer região.
   const missions = (state.missions ?? [])
-    .filter(m => (m.kind === 'suserano' || m.kind === 'vassalo') || m.regionId === here.regionId)
-    .slice(0, 10);
+    .filter(m => (m.kind === 'suserano' || m.kind === 'vassalo' || m.kind === 'lider' || m.kind === 'coroa') || m.regionId === here.regionId)
+    .slice(0, 12);
 
 const playerHouse = state.houses[state.playerHouseId];
 const isLeader = playerHouse.leaderId === player.id;
@@ -2707,7 +2814,10 @@ function promptTraining(state: GameState, rng: Rng): void {
 
   pushSystem(state, text, [
     { id: 'tr:yard', label: 'Treinar no pátio', hint: 'Custo 20 ouro • martial +2~+6' },
+    { id: 'tr:drill', label: 'Treino disciplinado (instrutor)', hint: 'Custo 55 ouro • martial +3~+8 • charm +0~+2 • crescimento estável' },
+    { id: 'tr:attire_basic', label: 'Comprar roupa simples', hint: 'Custo 15 ouro • beleza +1~+3' },
     { id: 'tr:attire', label: 'Comprar traje refinado', hint: 'Custo 35 ouro • beleza +3~+8' },
+    { id: 'tr:attire_noble', label: 'Encomendar vestes nobres', hint: 'Custo 90 ouro • beleza +6~+12 • prestígio pessoal +1' },
     { id: 'tr:duel', label: 'Treino de combate arriscado', hint: 'Custo 0 • martial +4~+10 (10% ferimento social: prestígio -1)' },
     { id: 'back', label: 'Voltar' },
   ]);
@@ -2730,6 +2840,33 @@ export function applyTraining(state: GameState, rng: Rng, trainingId: string): v
     return promptMainMenu(state, rng);
   }
 
+  if (trainingId === 'drill') {
+    if (house.resources.gold < 55) {
+      pushNarration(state, 'Ouro insuficiente para contratar um instrutor disciplinado.');
+      return promptMainMenu(state, rng);
+    }
+    house.resources.gold -= 55;
+    const martialGain = rng.int(3, 8);
+    const charmGain = rng.int(0, 2);
+    player.martial = clamp(player.martial + martialGain, 0, 100);
+    player.charm = clamp(player.charm + charmGain, 0, 100);
+    player.renownTier = renownFromMartial(player.martial);
+    pushNarration(state, `Treino metódico concluído. Martial +${martialGain}${charmGain > 0 ? ` • Carisma +${charmGain}` : ''}.`);
+    return promptMainMenu(state, rng);
+  }
+
+  if (trainingId === 'attire_basic') {
+    if (house.resources.gold < 15) {
+      pushNarration(state, 'Ouro insuficiente até mesmo para roupas simples.');
+      return promptMainMenu(state, rng);
+    }
+    house.resources.gold -= 15;
+    const gain = rng.int(1, 3);
+    player.beauty = clamp(player.beauty + gain, 0, 100);
+    pushNarration(state, `Você melhora sua apresentação com roupas comuns, porém limpas e bem talhadas. Beleza +${gain}.`);
+    return promptMainMenu(state, rng);
+  }
+
   if (trainingId === 'attire') {
     if (house.resources.gold < 35) {
       pushNarration(state, 'Ouro insuficiente para um traje digno.');
@@ -2739,6 +2876,19 @@ export function applyTraining(state: GameState, rng: Rng, trainingId: string): v
     const gain = rng.int(3, 8);
     player.beauty = clamp(player.beauty + gain, 0, 100);
     pushNarration(state, `Você adquire um traje: “Veludo Sombrio de Lys” e “Fivela de Prata de Valdocaso”. Beleza +${gain}.`);
+    return promptMainMenu(state, rng);
+  }
+
+  if (trainingId === 'attire_noble') {
+    if (house.resources.gold < 90) {
+      pushNarration(state, 'Ouro insuficiente para vestes nobres de alto custo.');
+      return promptMainMenu(state, rng);
+    }
+    house.resources.gold -= 90;
+    const gain = rng.int(6, 12);
+    player.beauty = clamp(player.beauty + gain, 0, 100);
+    player.personalPrestige = clamp((player.personalPrestige ?? 0) + 1, 0, 100);
+    pushNarration(state, `Suas vestes chamam atenção em toda a região. Beleza +${gain} • Prestígio pessoal +1.`);
     return promptMainMenu(state, rng);
   }
 
@@ -3036,6 +3186,9 @@ export function advanceTurn(state: GameState, rng: Rng): void {
   // 3.5) Política: casamentos arranjados (IA)
   tickArrangedMarriages(state, rng);
 
+  // 3.75) Progressão pessoal natural (atributos e prestígio)
+  tickPersonalProgression(state, rng);
+
   // 4) Concepções e gravidez (15 turnos) + partos
   tickConceptions(state, rng);
   tickPregnancies(state, rng);
@@ -3272,6 +3425,51 @@ function deathChanceByAge(age: number): number {
   if (age < 55) return 0;
   const step = Math.floor((age - 55) / 5) + 1; // 55..59 =>1, 60..64=>2...
   return clamp(step * 0.05, 0.05, 0.95);
+}
+
+
+function tickPersonalProgression(state: GameState, rng: Rng): void {
+  for (const c of Object.values(state.characters)) {
+    if (!c.alive) continue;
+
+    const age = c.ageYears;
+    const growthPhase = age < 16 ? 1.0 : age <= 28 ? 0.7 : age <= 45 ? 0.35 : 0.12;
+    const declinePhase = age >= 56 ? (age >= 68 ? 0.45 : 0.25) : 0;
+
+    // Combate cresce mais em juventude e cai gradualmente com idade avançada.
+    if (rng.chance(0.22 * growthPhase)) {
+      c.martial = clamp(c.martial + rng.int(0, 2), 0, 100);
+    }
+    if (declinePhase > 0 && rng.chance(declinePhase)) {
+      c.martial = clamp(c.martial - rng.int(0, 2), 0, 100);
+    }
+
+    // Carisma amadurece com experiência; declínio suave apenas em idades muito altas.
+    if (rng.chance(age < 50 ? 0.18 : 0.08)) {
+      c.charm = clamp(c.charm + rng.int(0, 1), 0, 100);
+    }
+    if (age >= 72 && rng.chance(0.20)) {
+      c.charm = clamp(c.charm - 1, 0, 100);
+    }
+
+    // Apresentação acompanha idade e recursos pessoais (quem tem ouro tende a manter status visual).
+    if ((c.personalGold ?? 0) > 80 && rng.chance(0.16)) {
+      c.beauty = clamp(c.beauty + 1, 0, 100);
+      c.personalGold = Math.max(0, (c.personalGold ?? 0) - 5);
+    } else if (age >= 60 && rng.chance(0.17)) {
+      c.beauty = clamp(c.beauty - 1, 0, 100);
+    }
+
+    // Prestígio pessoal: cresce conforme conjunto de atributos, mais devagar no topo.
+    const build = Math.round((c.martial + c.charm + c.beauty) / 3);
+    const prestigeGainChance = build >= 72 ? 0.20 : build >= 56 ? 0.14 : 0.08;
+    if (rng.chance(prestigeGainChance)) {
+      const gain = c.personalPrestige >= 85 ? 0 : 1;
+      c.personalPrestige = clamp((c.personalPrestige ?? 0) + gain, 0, 100);
+    }
+
+    c.renownTier = renownFromMartial(c.martial);
+  }
 }
 
 function tickAgesAndDeaths(state: GameState, rng: Rng): void {
