@@ -21,23 +21,23 @@
 
 .map-image{
   width:100%;
-  max-width:720px;
+  max-width:860px;
   aspect-ratio: 3 / 4;
   margin:0 auto;
   position:relative;
   transform-origin:center center;
   transition:transform .2s ease;
-  border-radius:14px;
+  border-radius:20px;
   border:1px solid rgba(255,255,255,.18);
   background-image:
-    radial-gradient(circle at 48% 11%, rgba(142,197,252,.15), transparent 40%),
-    radial-gradient(circle at 15% 40%, rgba(40,74,95,.45), transparent 30%),
-    radial-gradient(circle at 80% 42%, rgba(40,74,95,.32), transparent 30%),
-    radial-gradient(circle at 50% 88%, rgba(120,84,52,.45), transparent 28%),
+    radial-gradient(circle at 50% 12%, rgba(134,189,236,.2), transparent 42%),
+    radial-gradient(circle at 18% 42%, rgba(21,44,66,.42), transparent 32%),
+    radial-gradient(circle at 80% 42%, rgba(21,44,66,.34), transparent 34%),
+    radial-gradient(circle at 55% 90%, rgba(129,86,48,.4), transparent 28%),
     url('/assets/westeros-map.svg');
   background-size:cover;
   background-position:center;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 12px 28px rgba(0,0,0,.35);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 18px 36px rgba(0,0,0,.42);
 }
 
 .pin{
@@ -53,24 +53,24 @@
   gap:4px;
 }
 .pin .dot{
-  width:12px;height:12px;border-radius:999px;
+  width:14px;height:14px;border-radius:999px;
   background:#a5d8ff;border:2px solid #0f2336;
-  box-shadow:0 0 0 4px rgba(165,216,255,.2);
+  box-shadow:0 0 0 5px rgba(165,216,255,.28), 0 3px 8px rgba(0,0,0,.35);
 }
 .pin .label{
-  font-size:11px;
+  font-size:12px;
   font-weight:700;
-  background:rgba(5,12,20,.72);
+  background:rgba(4,11,22,.78);
   border:1px solid rgba(255,255,255,.2);
   border-radius:8px;
-  padding:2px 7px;
+  padding:3px 8px;
   white-space:nowrap;
 }
 .pin.selected .dot{background:#ffd166;box-shadow:0 0 0 5px rgba(255,209,102,.25)}
 .pin.selected .label{border-color:#ffd166}
 .pin.player-here .dot{background:#9bff8a}
 
-.card{margin-top:10px;border:1px solid var(--line);border-radius:14px;padding:10px;background:rgba(16,26,44,.35)}
+.card{margin-top:10px;border:1px solid var(--line);border-radius:20px;padding:10px;background:rgba(16,26,44,.35)}
 .h3{font-weight:800}
 .areas{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .areas button{padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:rgba(16,26,44,.85);color:var(--text);cursor:pointer}
