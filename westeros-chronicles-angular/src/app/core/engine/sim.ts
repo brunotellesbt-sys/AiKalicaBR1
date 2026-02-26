@@ -2353,6 +2353,15 @@ export function applyTravel(state: GameState, rng: Rng, toLocationId: string): v
   // conhecer gente local automaticamente
   markLocalsKnown(state, rng, toLocationId);
 
+  // a distância define quantos turnos se passam durante a viagem
+  const travelTurns = Math.max(1, edge.distance);
+  for (let i = 0; i < travelTurns; i++) {
+    advanceTurn(state, rng, { silent: true });
+    if (state.game.over) return;
+  }
+
+  pushNarration(state, `🧭 A viagem consumiu ${travelTurns} turno(s), conforme a distância percorrida.`);
+  pushNarration(state, `⏳ Agora é Ano ${state.date.year} DC, Turno ${state.date.turn}/20.`);
   promptMainMenu(state, rng);
 }
 
@@ -3223,7 +3232,7 @@ Você também pode ver detalhes na aba “Crônicas”.`,
   );
 }
 
-export function advanceTurn(state: GameState, rng: Rng): void {
+export function advanceTurn(state: GameState, rng: Rng, options?: { silent?: boolean }): void {
   if (state.game.over) return;
 
   ensureCanonDefaults(state);
@@ -3316,10 +3325,12 @@ export function advanceTurn(state: GameState, rng: Rng): void {
     state.date.year += 1;
   }
 
-  pushNarration(state, `⏳ O tempo passa. Agora é Ano ${state.date.year} DC, Turno ${state.date.turn}/20.`);
+  if (!options?.silent) {
+    pushNarration(state, `⏳ O tempo passa. Agora é Ano ${state.date.year} DC, Turno ${state.date.turn}/20.`);
 
-  // 7) Menu
-  promptMainMenu(state, rng);
+    // 7) Menu
+    promptMainMenu(state, rng);
+  }
 }
 
 function armyMassCount(h: HouseState): number {

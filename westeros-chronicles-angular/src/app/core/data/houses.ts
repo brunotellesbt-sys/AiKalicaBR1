@@ -81,7 +81,7 @@ const BASE_HOUSES: HouseDef[] = [
 
   // Terras da Tempestade (vassalas de Baratheon)
   { id: 'dondarrion', name: 'Casa Dondarrion', regionId: 'stormlands', seatLocationId: 'blackhaven', prestigeBase: 50, suzerainId: 'baratheon' },
-  { id: 'tarth_house', name: 'Casa Tarth', regionId: 'stormlands', seatLocationId: 'evenfall_hall', prestigeBase: 52, suzerainId: 'baratheon' },
+  { id: 'tarth_house', name: 'Casa Tarth', regionId: 'stormlands', seatLocationId: 'tarth', prestigeBase: 52, suzerainId: 'baratheon' },
   { id: 'selmy', name: 'Casa Selmy', regionId: 'stormlands', seatLocationId: 'harvest_hall', prestigeBase: 44, suzerainId: 'baratheon' },
   { id: 'swann', name: 'Casa Swann', regionId: 'stormlands', seatLocationId: 'stonehelm', prestigeBase: 46, suzerainId: 'baratheon' },
   { id: 'connington', name: 'Casa Connington', regionId: 'stormlands', seatLocationId: 'griffins_roost', prestigeBase: 48, suzerainId: 'baratheon' },
