@@ -62,21 +62,6 @@
     <path d="M534 804 C640 892, 674 988, 670 1106"/>
   </g>
 
-  <g fill="#e9eef6" font-family="serif" font-size="30" opacity=".78">
-    <text x="860" y="180">Mar Estreito</text>
-    <text x="84" y="520" font-size="26">Mar do Poente</text>
-    <text x="790" y="1470" font-size="24">Mar de Dorne</text>
-  </g>
 
-  <g fill="#f7f0db" font-family="serif" font-size="20" opacity=".72">
-    <text x="492" y="274">Norte</text>
-    <text x="292" y="706">Ilhas de Ferro</text>
-    <text x="690" y="612">Vale</text>
-    <text x="520" y="760">Terras Fluviais</text>
-    <text x="354" y="860">Terras Ocidentais</text>
-    <text x="650" y="874">Terras da Coroa</text>
-    <text x="468" y="1082">Campina</text>
-    <text x="664" y="1088">Terras da Tempestade</text>
-    <text x="610" y="1420">Dorne</text>
-  </g>
+
 </svg>

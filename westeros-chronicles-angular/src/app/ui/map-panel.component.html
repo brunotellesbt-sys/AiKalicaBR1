@@ -18,8 +18,17 @@
     </div>
 
     <div class="map-shell">
-      <div class="map-image" [style.transform]="'scale(' + zoom + ')'">
-        <img class="map-base" src="/assets/westeros-map.svg" alt="Mapa de Westeros" />
+      <div
+        class="map-image"
+        [class.dragging]="isPanning"
+        [style.transform]="mapTransform()"
+        (pointerdown)="onPointerDown($event)"
+        (pointermove)="onPointerMove($event)"
+        (pointerup)="onPointerUp()"
+        (pointercancel)="onPointerUp()"
+        (pointerleave)="onPointerUp()"
+      >
+        <img class="map-base" src="assets/westeros-map.svg" alt="Mapa de Westeros sem rótulos" />
         <button
           *ngFor="let pin of regionPins"
           class="pin"
@@ -27,11 +36,11 @@
           [style.top.%]="pin.y"
           [class.selected]="pin.id === selectedRegionId"
           [class.player-here]="isPlayerRegion(pin.id)"
+          [attr.aria-label]="s.regions[pin.id]?.name"
           [title]="s.regions[pin.id]?.name"
           (click)="selectKingdom(pin.id)"
         >
           <span class="dot"></span>
-          <span class="label">{{s.regions[pin.id]?.name}}</span>
         </button>
       </div>
     </div>
