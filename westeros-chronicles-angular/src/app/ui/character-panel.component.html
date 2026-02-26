@@ -9,6 +9,7 @@
       <div class="card">
         <div class="h2">{{p.name}}</div>
         <div class="line muted">{{p.title || 'Nobre'}} • {{p.gender==='M'?'Masculino':'Feminino'}} • {{p.ageYears | number:'1.0-0'}} anos</div>
+        <div class="line">Estado civil: <b>{{maritalStatusLabel(p)}}</b></div>
         <div class="line">Casa: <b>{{s.houses[p.currentHouseId]?.name}}</b></div>
         <div class="line">Ouro pessoal: <b>{{p.personalGold ?? 0}}</b></div>
         <div class="line">Local: <b>{{s.locations[p.locationId].name}}</b></div>
@@ -29,6 +30,7 @@
           <div class="row" *ngFor="let c of relatedKnown(s, p.id)">
             <div class="nm">{{c.name}}</div>
             <div class="sm muted">{{s.houses[c.currentHouseId]?.name}}</div>
+            <div class="rl">Estado civil: <b>{{maritalStatusLabel(c)}}</b></div>
             <div class="rl">Parentesco: <b>{{kinshipLabel(s, c, p.id)}}</b></div>
             <div class="rl">Relação: <b>{{c.relationshipToPlayer}}</b></div>
           </div>
@@ -42,6 +44,7 @@
           <div class="row" *ngFor="let c of nearbyKnown(s, p.id)">
             <div class="nm">{{c.name}}</div>
             <div class="sm muted">{{s.houses[c.currentHouseId]?.name}}</div>
+            <div class="rl">Estado civil: <b>{{maritalStatusLabel(c)}}</b></div>
             <div class="rl">Parentesco: <b>{{kinshipLabel(s, c, p.id)}}</b></div>
             <div class="rl">Relação: <b>{{c.relationshipToPlayer}}</b></div>
           </div>
