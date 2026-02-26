@@ -17,6 +17,7 @@
   background:linear-gradient(180deg,#071325 0%,#10243c 38%,#1b3144 100%);
   padding:14px;
   margin-bottom:12px;
+  cursor:grab;
 }
 
 .map-image{
@@ -29,15 +30,19 @@
   transition:transform .2s ease;
   border-radius:20px;
   border:1px solid rgba(255,255,255,.18);
-  background-image:
-    radial-gradient(circle at 50% 12%, rgba(134,189,236,.2), transparent 42%),
-    radial-gradient(circle at 18% 42%, rgba(21,44,66,.42), transparent 32%),
-    radial-gradient(circle at 80% 42%, rgba(21,44,66,.34), transparent 34%),
-    radial-gradient(circle at 55% 90%, rgba(129,86,48,.4), transparent 28%),
-    url('/assets/westeros-map.svg');
-  background-size:cover;
-  background-position:center;
+  overflow:hidden;
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 18px 36px rgba(0,0,0,.42);
+  touch-action:none;
+}
+
+.map-image.dragging{cursor:grabbing}
+
+.map-base{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  user-select:none;
+  pointer-events:none;
 }
 
 .pin{
@@ -59,16 +64,9 @@
   box-shadow:0 0 0 5px rgba(165,216,255,.28), 0 3px 8px rgba(0,0,0,.35);
 }
 .pin .label{
-  font-size:12px;
-  font-weight:700;
-  background:rgba(4,11,22,.78);
-  border:1px solid rgba(255,255,255,.2);
-  border-radius:8px;
-  padding:3px 8px;
-  white-space:nowrap;
+  display:none;
 }
 .pin.selected .dot{background:#ffd166;box-shadow:0 0 0 5px rgba(255,209,102,.25)}
-.pin.selected .label{border-color:#ffd166}
 .pin.player-here .dot{background:#9bff8a}
 
 .card{margin-top:10px;border:1px solid var(--line);border-radius:20px;padding:10px;background:rgba(16,26,44,.35)}

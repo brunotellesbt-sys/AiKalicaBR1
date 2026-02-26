@@ -17,6 +17,14 @@ export class MapPanelComponent {
 
   selectedRegionId: string | null = null;
   zoom = 1;
+  panX = 0;
+  panY = 0;
+  isPanning = false;
+  private pointerId: number | null = null;
+  private dragStartX = 0;
+  private dragStartY = 0;
+  private panStartX = 0;
+  private panStartY = 0;
 
   readonly regionPins: RegionPin[] = [
     { id: 'north', x: 40, y: 18 },
@@ -54,6 +62,35 @@ export class MapPanelComponent {
 
   resetZoom(): void {
     this.zoom = 1;
+    this.panX = 0;
+    this.panY = 0;
+  }
+
+  mapTransform(): string {
+    return `translate(${this.panX}px, ${this.panY}px) scale(${this.zoom})`;
+  }
+
+  onPointerDown(event: PointerEvent): void {
+    if (!(event.target instanceof HTMLElement)) return;
+    if (event.target.closest('.pin')) return;
+
+    this.pointerId = event.pointerId;
+    this.isPanning = true;
+    this.dragStartX = event.clientX;
+    this.dragStartY = event.clientY;
+    this.panStartX = this.panX;
+    this.panStartY = this.panY;
+  }
+
+  onPointerMove(event: PointerEvent): void {
+    if (!this.isPanning || this.pointerId !== event.pointerId) return;
+    this.panX = this.panStartX + (event.clientX - this.dragStartX);
+    this.panY = this.panStartY + (event.clientY - this.dragStartY);
+  }
+
+  onPointerUp(): void {
+    this.isPanning = false;
+    this.pointerId = null;
   }
 
   selectKingdom(regionId: string): void {
