@@ -1029,7 +1029,7 @@ export function buildInitialState(seed: number, params: NewGameParams, baseState
   const characters: Record<string, Character> = {};
 
   function mkChar(houseId: string, gender: Gender, age: number, locationId: string, martialBase: number): Character {
-    const name = genFirstName(rng, gender) + maybeEpithet(rng);
+    const name = genFirstName(rng, gender) + maybeEpithet(rng, gender);
     const beauty = clamp(rng.int(25, 65) + (martialBase > 60 ? 8 : 0), 0, 100);
     const charm = clamp(rng.int(25, 70), 0, 100);
     const wellLiked = clamp(rng.int(25, 75), 0, 100);
@@ -2867,7 +2867,7 @@ export function applyDaenerysAction(state: GameState, rng: Rng, action: string):
 function spawnEnvoy(state: GameState, rng: Rng, houseId: string, locationId: string): Character {
   const id = uid('c');
   const gender: Gender = rng.chance(0.55) ? 'M' : 'F';
-  const name = genFirstName(rng, gender) + maybeEpithet(rng);
+  const name = genFirstName(rng, gender) + maybeEpithet(rng, gender);
   const c: Character = {
     id,
     name,
