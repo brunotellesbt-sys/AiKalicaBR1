@@ -76,6 +76,25 @@ function buildTravelGraph(regions: Region[], locations: Location[], base: Record
     addEdge(g, cap, loc.id, dist);
   }
 
+  // Regra de conforto: dentro da mesma região, qualquer local deve alcançar
+  // os demais sem obrigar sempre passar pela capital regional.
+  const byRegion: Record<string, Location[]> = {};
+  for (const loc of locations) {
+    byRegion[loc.regionId] = byRegion[loc.regionId] ?? [];
+    byRegion[loc.regionId].push(loc);
+  }
+  for (const list of Object.values(byRegion)) {
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const a = list[i];
+        const b = list[j];
+        const near = (a.kind === 'town' && b.kind === 'town') ? 2 : 3;
+        addEdge(g, a.id, b.id, near);
+        addEdge(g, b.id, a.id, near);
+      }
+    }
+  }
+
   // garante que todos os nós existam no mapa (mesmo que sem arestas)
   for (const loc of locations) g[loc.id] = g[loc.id] ?? [];
 

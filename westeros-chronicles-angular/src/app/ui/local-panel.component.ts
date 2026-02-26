@@ -25,10 +25,19 @@ export class LocalPanelComponent {
     return this.state.characters[this.state.playerId];
   }
 
+  private sameAreaLocationIds(locationId: string): Set<string> {
+    const same = new Set<string>([locationId]);
+    // Tarth no mapa representa a ilha; Evenfall Hall é o assento da Casa Tarth.
+    // Tratamos os dois pontos como a mesma área social para evitar "vazio" artificial.
+    if (locationId === 'tarth') same.add('evenfall_hall');
+    if (locationId === 'evenfall_hall') same.add('tarth');
+    return same;
+  }
+
   charsHere(): Character[] {
-    const here = this.player.locationId;
+    const areaIds = this.sameAreaLocationIds(this.player.locationId);
     return Object.values(this.state.characters)
-      .filter(c => c.alive && c.id !== this.player.id && c.locationId === here)
+      .filter(c => c.alive && c.id !== this.player.id && areaIds.has(c.locationId))
       .sort((a,b)=> (b.relationshipToPlayer ?? 0) - (a.relationshipToPlayer ?? 0))
       .slice(0, 40);
   }

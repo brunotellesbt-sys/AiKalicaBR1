@@ -349,7 +349,22 @@ export const CANON_EVENTS: CanonEventDef[] = [
   { title: 'Morte de Kevan', id: '300_kevan_death', year: 300, turn: 18, kind: 'chronicle', body: 'Kevan Lannister é morto por Varys em Porto Real.', tags: ['death', 'canon', 'lannister'], personCanonId: 'kevan' },
   { title: 'Cersei assume Casterly Rock', id: '300_lannister_cersei', year: 300, turn: 19, kind: 'succession', body: 'Com a morte de Tywin, a liderança Lannister recai em Cersei (na ausência de Tywin).', tags: ['succession', 'canon'], houseId: 'lannister', newLeaderCanonId: 'cersei' },
   { title: 'A Companhia Dourada aporta', id: '300_golden_company_lands', year: 300, turn: 12, kind: 'chronicle', body: 'A Companhia Dourada desembarca nos Terras da Tempestade.', tags: ['war', 'canon'] },
-  { title: 'Batalha da Muralha', id: '300_wildlings_wall', year: 300, turn: 6, kind: 'chronicle', body: 'Selvagens atacam Castelo Negro; Stannis chega e os derrota.', tags: ['war', 'canon', 'north'] }
+  { title: 'Batalha da Muralha', id: '300_wildlings_wall', year: 300, turn: 6, kind: 'chronicle', body: 'Selvagens atacam Castelo Negro; Stannis chega e os derrota.', tags: ['war', 'canon', 'north'] },
+  { title: 'Conspiração em Dorne', id: '300_dorne_arianne_plot', year: 300, turn: 10, kind: 'chronicle', body: 'Arianne Martell trama coroar Myrcella em Dorne, elevando a tensão com Porto Real.', tags: ['canon', 'dorne', 'politics'] },
+  { title: 'Batalha de Gelo', id: '301_battle_ice', year: 301, turn: 4, kind: 'chronicle', body: 'Stannis enfrenta forças Bolton e Frey no Norte em meio ao inverno brutal.', tags: ['war', 'canon', 'north'] },
+  { title: 'Cerco de Meereen', id: '301_meereen_siege', year: 301, turn: 6, kind: 'chronicle', body: 'A guerra de Daenerys em Meereen atinge seu auge entre doenças, traições e batalha aberta.', tags: ['war', 'canon', 'essos'] },
+  { title: 'Vitória naval de Euron', id: '301_euron_victories', year: 301, turn: 8, kind: 'chronicle', body: 'Euron amplia seu domínio marítimo e projeta guerra contra a Campina.', tags: ['war', 'canon', 'iron_islands'] },
+  { title: 'Queda de Winterfell para os Stark', id: '302_starks_retake_winterfell', year: 302, turn: 6, kind: 'chronicle', body: 'As forças Stark recuperam Winterfell após derrotarem os Bolton.', tags: ['war', 'canon', 'north'] },
+  { title: 'Rei no Norte', id: '302_jon_king_north', year: 302, turn: 8, kind: 'chronicle', body: 'Jon Snow é aclamado Rei no Norte por lordes e casas vassalas.', tags: ['canon', 'north', 'succession'] },
+  { title: 'Cersei consolida o poder', id: '302_cersei_rule_kl', year: 302, turn: 9, kind: 'chronicle', body: 'Após destruição no Septo de Baelor, Cersei concentra o poder da Coroa em Porto Real.', tags: ['canon', 'throne', 'kings_landing'] },
+  { title: 'Daenerys ruma a Westeros', id: '302_dany_sails_westeros', year: 302, turn: 12, kind: 'chronicle', body: 'Daenerys deixa Meereen e parte para Pedra do Dragão com aliados e frota.', tags: ['canon', 'targaryen', 'war'] },
+  { title: 'Daenerys desembarca em Pedra do Dragão', id: '303_dany_arrives_dragonstone', year: 303, turn: 2, kind: 'chronicle', body: 'Daenerys Targaryen estabelece sua base em Pedra do Dragão para iniciar a campanha em Westeros.', tags: ['canon', 'targaryen', 'throne'] },
+  { title: 'Aliança do Norte com Daenerys', id: '303_jon_dany_alliance', year: 303, turn: 8, kind: 'chronicle', body: 'Jon e Daenerys firmam cooperação diante da ameaça dos mortos.', tags: ['canon', 'north', 'targaryen'] },
+  { title: 'Conspiração e queda em Porto Real', id: '304_kl_upheaval', year: 304, turn: 6, kind: 'chronicle', body: 'Conflitos de corte e campanha militar enfraquecem o domínio de Cersei em Porto Real.', tags: ['canon', 'kings_landing', 'war'] },
+  { title: 'A Muralha é rompida', id: '304_wall_breached', year: 304, turn: 20, kind: 'chronicle', body: 'A Muralha é rompida e o Exército dos Mortos avança para o Norte.', tags: ['canon', 'north', 'endgame', 'anchor'] },
+  { title: 'Batalha de Winterfell', id: '305_battle_winterfell', year: 305, turn: 2, kind: 'chronicle', body: 'As forças dos vivos enfrentam os mortos em Winterfell e sobrevivem por pouco.', tags: ['canon', 'north', 'war', 'endgame', 'anchor'] },
+  { title: 'Queda de Porto Real', id: '305_fall_kings_landing', year: 305, turn: 12, kind: 'chronicle', body: 'A campanha final por Porto Real culmina em incêndio massivo e ruptura do reino.', tags: ['canon', 'kings_landing', 'war', 'endgame', 'anchor'] },
+  { title: 'Grande Conselho e novo rei', id: '305_great_council_new_king', year: 305, turn: 18, kind: 'chronicle', body: 'Um grande conselho redefine a sucessão e estabelece uma nova ordem política.', tags: ['canon', 'throne', 'politics', 'endgame', 'anchor'] }
 ];
 
 // -----------------------------
