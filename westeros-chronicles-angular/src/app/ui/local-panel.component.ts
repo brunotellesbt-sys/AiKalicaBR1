@@ -71,11 +71,6 @@ canDrinkWith(c: Character): boolean {
   return this.player.ageYears >= 18 && c.ageYears >= 18;
 }
 
-
-canDrinkWith(c: Character): boolean {
-  return this.player.ageYears >= 18 && c.ageYears >= 18;
-}
-
 canHuntWith(c: Character): boolean {
   // Regra: personagem do jogador deve ser homem; caça com homens.
   // Mulheres só entram quando têm habilidade marcial de guerreira.

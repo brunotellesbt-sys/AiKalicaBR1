@@ -4286,215 +4286,189 @@ export function applyLocalAction(
     return;
   }
 
-
-// Regras de etiqueta e preparo
-if (action === 'flowers') {
-  if (target.gender === 'M') {
-    pushNarration(state, 'Você não pode dar flores para um homem.');
-    return;
-  }
-  const flowersToParent = (target.id === player.fatherId) || (target.id === player.motherId);
-  const flowersToChild = (target.fatherId === player.id) || (target.motherId === player.id);
-  if (flowersToParent || flowersToChild) {
-    pushNarration(state, 'Dar flores para pai/mãe ou filhos não é permitido nesta campanha.');
-    return;
-  }
-}
-if (action === 'drink' && (player.ageYears < 18 || target.ageYears < 18)) {
-  pushNarration(state, 'Crianças e adolescentes não bebem (mínimo 18 anos).');
-  return;
-if (action === 'hunt') {
-  if (player.gender !== 'M') {
-    pushNarration(state, 'Pelas regras desta campanha, caçadas locais são para personagem masculino.');
-    return;
-  }
-  const canHunt = target.gender === 'M' || (target.martial ?? 0) >= 35;
-  if (!canHunt) {
-    pushNarration(state, 'Esta pessoa não parece preparada para caçar com segurança.');
-    return;
-  }
-}
-if (action === 'hunt') {
-  if (player.gender !== 'M') {
-    pushNarration(state, 'Pelas regras desta campanha, caçadas locais são para personagem masculino.');
-    return;
-  }
-  const canHunt = target.gender === 'M' || (target.martial ?? 0) >= 35;
-  if (!canHunt) {
-    pushNarration(state, 'Esta pessoa não parece preparada para caçar com segurança.');
-    return;
-  }
-}
-if (action === 'hunt') {
-  if (player.gender !== 'M') {
-    pushNarration(state, 'Pelas regras desta campanha, caçadas locais são para personagem masculino.');
-    return;
-  }
-  const canHunt = target.gender === 'M' || (target.martial ?? 0) >= 35;
-  if (!canHunt) {
-    pushNarration(state, 'Esta pessoa não parece preparada para caçar com segurança.');
-    return;
-  }
-}
-if (action === 'hunt') {
-  if (player.gender !== 'M') {
-    pushNarration(state, 'Pelas regras desta campanha, caçadas locais são para personagem masculino.');
-    return;
-  }
-  const canHunt = target.gender === 'M' || (target.martial ?? 0) >= 35;
-  if (!canHunt) {
-    pushNarration(state, 'Esta pessoa não parece preparada para caçar com segurança.');
-    return;
-  }
-}
-// Romance: bloqueia pai/mãe
-const isParent = (target.id === player.fatherId) || (target.id === player.motherId);
-const isChild = (target.fatherId === player.id) || (target.motherId === player.id);
-if ((action === 'kiss' || action === 'relations') && (isParent || isChild)) {
-  pushNarration(state, 'Isso não é permitido com pai/mãe ou filhos.');
-  return;
-}
-if (action === 'kiss') {
-  if ((target.relationshipToPlayer ?? 0) < 80) {
-    pushNarration(state, 'A relação ainda não é alta o suficiente para um beijo (mínimo 80).');
-    return;
-  }
-  const kissedIds = (player.kissedIds ??= []);
-  if (!kissedIds.includes(target.id)) kissedIds.push(target.id);
-  target.relationshipToPlayer = clamp(target.relationshipToPlayer + 2 + rng.int(-1, 2), 0, 100);
-  pushNarration(state, `Você beijou ${target.name}.`);
-  canonTouchIfCanonical(state, target, 'kiss', 2);
-  return;
-}
-if (action === 'relations') {
-  if ((target.relationshipToPlayer ?? 0) < 90) {
-    pushNarration(state, 'A relação ainda não é alta o suficiente para relações (mínimo 90).');
-    return;
-  }
-  const kissedIds = (player.kissedIds ??= []);
-  if (!kissedIds.includes(target.id)) {
-    pushNarration(state, 'Primeiro vocês precisam se beijar.');
-    return;
-  }
-
-  target.relationshipToPlayer = clamp(target.relationshipToPlayer + 1 + rng.int(-1, 2), 0, 100);
-  pushNarration(state, `Você teve relações com ${target.name}.`);
-  canonTouchIfCanonical(state, target, 'relations', 3);
-
-  // chance de concepção (se houver uma mulher fértil envolvida)
-  const a = player;
-  const b = target;
-  const mother: Character | undefined = a.gender === 'F' ? a : (b.gender === 'F' ? b : undefined);
-  const father: Character | undefined = a.gender === 'M' ? a : (b.gender === 'M' ? b : undefined);
-
-  if (mother && father) {
-    const isBastard = !(a.maritalStatus === 'married' && a.spouseId === b.id && b.maritalStatus === 'married');
-    if (isFertileFemale(mother) && isAdultMale(father) && !(mother as any).pregnancy) {
-      // chance padrão de concepção em relações: 25%
-      if (rng.chance(0.25)) {
-        beginPregnancy(state, rng, mother, father, isBastard);
-      } else if (mother.id === state.playerId || father.id === state.playerId) {
-        pushNarration(state, 'Nada acontece desta vez.');
-      }
+  // Regras de etiqueta e preparo
+  if (action === 'flowers') {
+    if (target.gender === 'M') {
+      pushNarration(state, 'Você não pode dar flores para um homem.');
+      return;
+    }
+    const flowersToParent = (target.id === player.fatherId) || (target.id === player.motherId);
+    const flowersToChild = (target.fatherId === player.id) || (target.motherId === player.id);
+    if (flowersToParent || flowersToChild) {
+      pushNarration(state, 'Dar flores para pai/mãe ou filhos não é permitido nesta campanha.');
+      return;
     }
   }
-  return;
-}
 
-if (action === 'marry') {
-  const p = player;
-  const t = target;
-  // regras básicas
-  if (p.maritalStatus === 'married') {
-    pushNarration(state, 'Você já é casado(a).');
+  if (action === 'drink' && (player.ageYears < 18 || target.ageYears < 18)) {
+    pushNarration(state, 'Crianças e adolescentes não bebem (mínimo 18 anos).');
     return;
   }
-  if (t.maritalStatus === 'married') {
-    pushNarration(state, 'Esta pessoa já é casada.');
-    return;
+
+  if (action === 'hunt') {
+    if (player.gender !== 'M') {
+      pushNarration(state, 'Pelas regras desta campanha, caçadas locais são para personagem masculino.');
+      return;
+    }
+    const canHunt = target.gender === 'M' || (target.martial ?? 0) >= 35;
+    if (!canHunt) {
+      pushNarration(state, 'Esta pessoa não parece preparada para caçar com segurança.');
+      return;
+    }
   }
-  if (p.ageYears < 16 || t.ageYears < 16) {
-    pushNarration(state, 'Casamento exige maioridade (16+).');
-    return;
-  }
-  if (!((p.gender === 'M' && t.gender === 'F') || (p.gender === 'F' && t.gender === 'M'))) {
-    pushNarration(state, 'Pelas regras desta campanha, casamentos são apenas heterossexuais.');
-    return;
-  }
-  // bloqueia pai/mãe/filhos
-  if (isParent || isChild) {
+
+  // Romance: bloqueia pai/mãe
+  const isParent = (target.id === player.fatherId) || (target.id === player.motherId);
+  const isChild = (target.fatherId === player.id) || (target.motherId === player.id);
+  if ((action === 'kiss' || action === 'relations') && (isParent || isChild)) {
     pushNarration(state, 'Isso não é permitido com pai/mãe ou filhos.');
     return;
   }
 
-  const rel = t.relationshipToPlayer ?? 0;
-  const kissed = (p.kissedIds ?? []).includes(t.id);
-  if (rel < 92 || !kissed) {
-    pushNarration(state, 'Para casar, é necessário relação 92+ e um beijo anterior.');
+  if (action === 'kiss') {
+    if ((target.relationshipToPlayer ?? 0) < 80) {
+      pushNarration(state, 'A relação ainda não é alta o suficiente para um beijo (mínimo 80).');
+      return;
+    }
+    const kissedIds = (player.kissedIds ??= []);
+    if (!kissedIds.includes(target.id)) kissedIds.push(target.id);
+    target.relationshipToPlayer = clamp(target.relationshipToPlayer + 2 + rng.int(-1, 2), 0, 100);
+    pushNarration(state, `Você beijou ${target.name}.`);
+    canonTouchIfCanonical(state, target, 'kiss', 2);
     return;
   }
 
-  const groom = p.gender === 'M' ? p : t;
-  const bride = p.gender === 'F' ? p : t;
-
-  // regra do usuário:
-  // - padrão: sobrenome/casa do homem (patrilinear)
-  // - exceção: se a mulher for a ÚLTIMA viva da sua casa, pode escolher preservar o sobrenome dela
-  const brideHouseId = bride.currentHouseId;
-  const brideIsLast = houseAliveCount(state, brideHouseId, bride.id) === 0;
-
-  const wantsMatri = (extra ?? '').toLowerCase() === 'matri';
-  const lineage: 'patri' | 'matri' = wantsMatri && brideIsLast ? 'matri' : 'patri';
-  const chosenHouseId = lineage === 'matri' ? brideHouseId : groom.currentHouseId;
-
-  // aplica casamento
-  groom.spouseId = bride.id;
-  bride.spouseId = groom.id;
-  groom.maritalStatus = 'married';
-  bride.maritalStatus = 'married';
-
-  if (lineage === 'patri') {
-    // mulher muda sobrenome
-    bride.keepsBirthName = false;
-    bride.currentHouseId = chosenHouseId;
-  } else {
-    // homem assume a casa da mulher
-    groom.currentHouseId = chosenHouseId;
-  }
-
-  // Atualiza a casa do jogador se o sobrenome dele(a) mudou
-  if (p.currentHouseId !== state.playerHouseId) {
-    state.playerHouseId = p.currentHouseId;
-  }
-
-  // melhora relações entre casas (leve)
-  const oldPhId = originalPlayerHouseId;
-  const otherHouseId = t.currentHouseId;
-  if (oldPhId && otherHouseId && oldPhId !== otherHouseId) {
-    const a = state.houses[oldPhId];
-    const b = state.houses[otherHouseId];
-    if (a && b) {
-      a.relations[b.id] = clamp((a.relations[b.id] ?? 50) + 6, 0, 100);
-      b.relations[a.id] = clamp((b.relations[a.id] ?? 50) + 4, 0, 100);
+  if (action === 'relations') {
+    if ((target.relationshipToPlayer ?? 0) < 90) {
+      pushNarration(state, 'A relação ainda não é alta o suficiente para relações (mínimo 90).');
+      return;
     }
+    const kissedIds = (player.kissedIds ??= []);
+    if (!kissedIds.includes(target.id)) {
+      pushNarration(state, 'Primeiro vocês precisam se beijar.');
+      return;
+    }
+
+    target.relationshipToPlayer = clamp(target.relationshipToPlayer + 1 + rng.int(-1, 2), 0, 100);
+    pushNarration(state, `Você teve relações com ${target.name}.`);
+    canonTouchIfCanonical(state, target, 'relations', 3);
+
+    // chance de concepção (se houver uma mulher fértil envolvida)
+    const a = player;
+    const b = target;
+    const mother: Character | undefined = a.gender === 'F' ? a : (b.gender === 'F' ? b : undefined);
+    const father: Character | undefined = a.gender === 'M' ? a : (b.gender === 'M' ? b : undefined);
+
+    if (mother && father) {
+      const isBastard = !(a.maritalStatus === 'married' && a.spouseId === b.id && b.maritalStatus === 'married');
+      if (isFertileFemale(mother) && isAdultMale(father) && !(mother as any).pregnancy) {
+        // chance padrão de concepção em relações: 25%
+        if (rng.chance(0.25)) {
+          beginPregnancy(state, rng, mother, father, isBastard);
+        } else if (mother.id === state.playerId || father.id === state.playerId) {
+          pushNarration(state, 'Nada acontece desta vez.');
+        }
+      }
+    }
+    return;
   }
 
-  // marca divergência canônica se aplicável
-  canonTouchIfCanonical(state, t, 'marry', 5);
-  canonTouchIfCanonical(state, p, 'marry', 5);
+  if (action === 'marry') {
+    const p = player;
+    const t = target;
 
-  const houseLabel = state.houses[chosenHouseId]?.name ?? chosenHouseId;
-  pushNarration(state, `💍 Casamento: você se casa com ${t.name}. Sobrenome/casa do casal: ${houseLabel}.`);
-  state.chronicle.unshift({
-    turn: state.date.absoluteTurn,
-    title: 'Casamento',
-    body: `${p.name} casa-se com ${t.name}. Casa do casal: ${houseLabel}.`,
-    tags: ['casamento'],
-  });
+    // regras básicas
+    if (p.maritalStatus === 'married') {
+      pushNarration(state, 'Você já é casado(a).');
+      return;
+    }
+    if (t.maritalStatus === 'married') {
+      pushNarration(state, 'Esta pessoa já é casada.');
+      return;
+    }
+    if (p.ageYears < 16 || t.ageYears < 16) {
+      pushNarration(state, 'Casamento exige maioridade (16+).');
+      return;
+    }
+    if (!((p.gender === 'M' && t.gender === 'F') || (p.gender === 'F' && t.gender === 'M'))) {
+      pushNarration(state, 'Pelas regras desta campanha, casamentos são apenas heterossexuais.');
+      return;
+    }
 
-  promptMainMenu(state, rng);
-  return;
-}
+    // bloqueia pai/mãe/filhos
+    if (isParent || isChild) {
+      pushNarration(state, 'Isso não é permitido com pai/mãe ou filhos.');
+      return;
+    }
+
+    const rel = t.relationshipToPlayer ?? 0;
+    const kissed = (p.kissedIds ?? []).includes(t.id);
+    if (rel < 92 || !kissed) {
+      pushNarration(state, 'Para casar, é necessário relação 92+ e um beijo anterior.');
+      return;
+    }
+
+    const groom = p.gender === 'M' ? p : t;
+    const bride = p.gender === 'F' ? p : t;
+
+    // regra do usuário:
+    // - padrão: sobrenome/casa do homem (patrilinear)
+    // - exceção: se a mulher for a ÚLTIMA viva da sua casa, pode escolher preservar o sobrenome dela
+    const brideHouseId = bride.currentHouseId;
+    const brideIsLast = houseAliveCount(state, brideHouseId, bride.id) === 0;
+
+    const wantsMatri = (extra ?? '').toLowerCase() === 'matri';
+    const lineage: 'patri' | 'matri' = wantsMatri && brideIsLast ? 'matri' : 'patri';
+    const chosenHouseId = lineage === 'matri' ? brideHouseId : groom.currentHouseId;
+
+    // aplica casamento
+    groom.spouseId = bride.id;
+    bride.spouseId = groom.id;
+    groom.maritalStatus = 'married';
+    bride.maritalStatus = 'married';
+
+    if (lineage === 'patri') {
+      // mulher muda sobrenome
+      bride.keepsBirthName = false;
+      bride.currentHouseId = chosenHouseId;
+    } else {
+      // homem assume a casa da mulher
+      groom.currentHouseId = chosenHouseId;
+    }
+
+    // Atualiza a casa do jogador se o sobrenome dele(a) mudou
+    if (p.currentHouseId !== state.playerHouseId) {
+      state.playerHouseId = p.currentHouseId;
+    }
+
+    // melhora relações entre casas (leve)
+    const oldPhId = originalPlayerHouseId;
+    const otherHouseId = t.currentHouseId;
+    if (oldPhId && otherHouseId && oldPhId !== otherHouseId) {
+      const aHouse = state.houses[oldPhId];
+      const bHouse = state.houses[otherHouseId];
+      if (aHouse && bHouse) {
+        aHouse.relations[bHouse.id] = clamp((aHouse.relations[bHouse.id] ?? 50) + 6, 0, 100);
+        bHouse.relations[aHouse.id] = clamp((bHouse.relations[aHouse.id] ?? 50) + 4, 0, 100);
+      }
+    }
+
+    // marca divergência canônica se aplicável
+    canonTouchIfCanonical(state, t, 'marry', 5);
+    canonTouchIfCanonical(state, p, 'marry', 5);
+
+    const houseLabel = state.houses[chosenHouseId]?.name ?? chosenHouseId;
+    pushNarration(state, `💍 Casamento: você se casa com ${t.name}. Sobrenome/casa do casal: ${houseLabel}.`);
+    state.chronicle.unshift({
+      turn: state.date.absoluteTurn,
+      title: 'Casamento',
+      body: `${p.name} casa-se com ${t.name}. Casa do casal: ${houseLabel}.`,
+      tags: ['casamento'],
+    });
+
+    promptMainMenu(state, rng);
+    return;
+  }
 
   // ações melhoram relação pessoal e, suavemente, relações entre casas
   const delta = action === 'flowers' ? 6 : action === 'talk' ? 4 : 5;
