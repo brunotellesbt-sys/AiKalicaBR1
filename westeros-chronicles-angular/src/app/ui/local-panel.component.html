@@ -9,7 +9,7 @@
       <div>
         <div class="name">{{displayNameWithSurname(c)}}</div>
         <div class="meta">
-          {{houseName(c.currentHouseId)}} • {{c.gender==='M'?'Homem':'Mulher'}} • Idade: {{c.ageYears | number:'1.0-0'}} anos <span *ngIf="kinshipLabel(c)" class="muted">• {{kinshipLabel(c)}}</span>
+          {{houseName(c.currentHouseId)}} • {{c.gender==='M'?'Homem':'Mulher'}} • {{maritalStatusLabel(c)}} • Idade: {{c.ageYears | number:'1.0-0'}} anos <span *ngIf="kinshipLabel(c)" class="muted">• {{kinshipLabel(c)}}</span>
         </div>
       </div>
       <div class="rel">Relação: <b>{{c.relationshipToPlayer}}</b>/100</div>
@@ -17,7 +17,7 @@
 
     <div class="actions">
       <button (click)="on('talk', c.id)">Conversar</button>
-      <button (click)="on('drink', c.id)">Beber</button>
+      <button *ngIf="canDrinkWith(c)" (click)="on('drink', c.id)">Beber</button>
       <button *ngIf="canHuntWith(c)" (click)="on('hunt', c.id)" title="Caça em grupo masculino; mulheres só quando guerreiras.">Caçar</button>
       <button *ngIf="canFlowers(c)" (click)="on('flowers', c.id)" title="Flores apenas para mulheres.">Dar flores</button>
       <button *ngIf="canKiss(c)" (click)="on('kiss', c.id)" title="Requer relação 80+ e não pode com pai/mãe/filhos.">Beijar</button>

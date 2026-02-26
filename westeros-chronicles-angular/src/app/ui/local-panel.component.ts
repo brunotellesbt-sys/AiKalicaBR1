@@ -56,6 +56,12 @@ export class LocalPanelComponent {
     return c.name?.includes(surname) ? c.name : `${c.name} ${surname}`.trim();
   }
 
+  maritalStatusLabel(c: Character): string {
+    if (c.maritalStatus === 'married') return 'Casado(a)';
+    if (c.maritalStatus === 'widowed') return 'Viúvo(a)';
+    return 'Solteiro(a)';
+  }
+
 kinshipLabel(c: Character): string | null {
   const p = this.player;
   if (c.id === p.fatherId) return 'Pai';

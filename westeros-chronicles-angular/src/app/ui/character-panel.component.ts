@@ -12,6 +12,12 @@ import { Character, GameState } from '../core/models';
 export class CharacterPanelComponent {
   @Input({ required: true }) state!: GameState;
 
+  maritalStatusLabel(c: Character): string {
+    if (c.maritalStatus === 'married') return 'Casado(a)';
+    if (c.maritalStatus === 'widowed') return 'Viúvo(a)';
+    return 'Solteiro(a)';
+  }
+
   nearbyKnown(state: GameState, playerId: string): Character[] {
     const p = state.characters[playerId];
     if (!p) return [];
