@@ -4325,7 +4325,12 @@ function tickAgesAndDeaths(state: GameState, rng: Rng): void {
   }
 }
 
-function computeSuccessor(state: GameState, rng: Rng, houseId: string): Character | null {
+function computeSuccessor(
+  state: GameState,
+  rng: Rng,
+  houseId: string,
+  opts?: { allowCadet?: boolean; allowGrant?: boolean }
+): Character | null {
   const house = state.houses[houseId];
   const currentLeader = state.characters[house.leaderId];
 
@@ -4358,7 +4363,10 @@ function computeSuccessor(state: GameState, rng: Rng, houseId: string): Characte
   if (chosen) return chosen;
 
   // Se a casa ficou sem herdeiros vivos, o suserano pode conceder o feudo a alguém de confiança.
-  if (house.suzerainId) {
+  // Isso mantém o mundo povoado, mas NÃO é sucessão de sangue: a busca pelo
+  // herdeiro do jogador desliga esta etapa, senão um vassalo do suserano
+  // "herdaria" a campanha de uma linhagem que se extinguiu.
+  if (house.suzerainId && opts?.allowGrant !== false) {
     const suz = state.houses[house.suzerainId];
     if (suz) {
       const pool = Object.values(state.characters).filter(c => c.alive && c.currentHouseId === suz.id && c.ageYears >= 16 && !(c as any).isBastard);
@@ -4383,9 +4391,12 @@ function computeSuccessor(state: GameState, rng: Rng, houseId: string): Characte
   //
   // Sem isto a função devolvia null e quem chamou deixava `leaderId` apontando
   // para um morto — o mundo inteiro assume que toda Casa tem um líder vivo.
-  // (Para a Casa do jogador isso não se aplica: a extinção da linhagem é uma
-  // condição de fim de jogo legítima e é tratada em handlePlayerDeath.)
-  if (houseId !== state.playerHouseId) {
+  //
+  // A busca pelo herdeiro DO JOGADOR passa `allowCadet: false`: a extinção da
+  // linhagem precisa ser decidida por sangue, não por um primo inventado na
+  // hora. Depois de decidida, a Casa recebe um cadete assim mesmo, para o
+  // mundo seguir consistente.
+  if (opts?.allowCadet !== false) {
     const cadet = spawnCadet(state, rng, houseId);
     if (cadet) {
       pushChronicle(state, {
@@ -5001,16 +5012,122 @@ export function applyIronBank(state: GameState, rng: Rng, cmd: string): void {
   }
 }
 
+/**
+ * Descendentes vivos de uma pessoa, em ordem de proximidade (filhos, netos...).
+ * Uma filha que casou em outra Casa mudou de sobrenome, mas não de sangue.
+ */
+function livingDescendants(state: GameState, rootId: string): Character[] {
+  const out: Character[] = [];
+  const seen = new Set<string>([rootId]);
+  let frontier = [rootId];
+
+  for (let depth = 0; depth < 6 && frontier.length; depth++) {
+    const next: string[] = [];
+    for (const c of Object.values(state.characters)) {
+      if (seen.has(c.id)) continue;
+      const parentInFrontier =
+        (c.fatherId && frontier.includes(c.fatherId)) ||
+        (c.motherId && frontier.includes(c.motherId));
+      if (!parentInFrontier) continue;
+      seen.add(c.id);
+      next.push(c.id);
+      if (c.alive) out.push(c);
+    }
+    frontier = next;
+  }
+  return out;
+}
+
+/**
+ * Herdeiro do jogador.
+ *
+ * A sucessão da Casa sozinha era estreita demais: só considerava quem carrega
+ * o sobrenome atual, então uma campanha acabava assim que a linha masculina
+ * daquele castelo secava — em Casas pequenas, quase sempre antes do ano 220,
+ * com a campanha desenhada para ir até 305. Agora a busca segue o sangue.
+ */
+function findPlayerHeir(state: GameState, rng: Rng): Character | null {
+  const player = state.characters[state.playerId];
+  if (!player) return null;
+
+  const usable = (c: Character | null): c is Character =>
+    !!c && c.alive && c.id !== state.playerId;
+
+  // 1) sucessão normal da Casa (sem inventar um cadete)
+  const byHouse = computeSuccessor(state, rng, state.playerHouseId, { allowCadet: false, allowGrant: false });
+  if (usable(byHouse)) return byHouse;
+
+  const rank = (c: Character) =>
+    (c.ageYears >= 14 ? 2 : c.ageYears >= 6 ? 1 : 0) * 1000 + (c.personalPrestige ?? 0);
+
+  // 2) descendentes diretos, mesmo que tenham mudado de Casa ao casar
+  const descendants = livingDescendants(state, player.id)
+    .filter(c => !c.isBastard)
+    .sort((a, b) => rank(b) - rank(a));
+  if (descendants.length) return descendants[0];
+
+  // 3) parentes de sangue nascidos na mesma Casa (irmãos e primos que casaram fora)
+  const kin = Object.values(state.characters)
+    .filter(c =>
+      c.alive &&
+      c.id !== player.id &&
+      !c.isBastard &&
+      c.birthHouseId === player.birthHouseId &&
+      c.ageYears >= 6
+    )
+    .sort((a, b) => rank(b) - rank(a));
+  if (kin.length) return kin[0];
+
+  return null;
+}
+
 export function handlePlayerDeath(state: GameState, rng: Rng, reason: string): void {
   const houseId = state.playerHouseId;
-  const next = computeSuccessor(state, rng, houseId);
+
+  // Garantia independente de quem chama: se estamos resolvendo a morte do
+  // jogador, ele está morto. Sem isso a busca de herdeiro podia devolver o
+  // próprio falecido, porque ele ainda constava como candidato vivo da Casa.
+  const dying = state.characters[state.playerId];
+  if (dying) dying.alive = false;
+
+  const next = findPlayerHeir(state, rng);
+
   if (next) {
     state.playerId = next.id;
     state.playerHouseId = next.currentHouseId;
+
+    // Se o herdeiro veio de fora da Casa original, o assento ainda precisa de
+    // um senhor — o mundo não pode ficar com um castelo sem liderança.
+    const oldHouse = state.houses[houseId];
+    if (oldHouse && oldHouse.leaderId !== next.id && !state.characters[oldHouse.leaderId]?.alive) {
+      const keeper = computeSuccessor(state, rng, houseId);
+      if (keeper) {
+        oldHouse.leaderId = keeper.id;
+        keeper.title = titleForHouse(houseId, keeper.gender);
+      }
+    }
+
     pushNarration(state, `🕯️ Controle transferido para ${next.name} (${state.houses[state.playerHouseId].name}). Motivo: ${reason}.`);
-  } else {
-    setGameOver(state, `Sua linhagem se apaga. Não há herdeiro elegível — fim de jogo. (${reason})`, false);
+    pushChronicle(state, {
+      absTurn: state.date.absoluteTurn,
+      title: 'A linhagem continua',
+      body: `${next.name} assume o lugar do falecido. (${reason})`,
+      tags: ['sucessao'],
+    });
+    return;
   }
+
+  // Extinção de fato: a Casa segue existindo no mundo, mas sem você.
+  const house = state.houses[houseId];
+  if (house && !state.characters[house.leaderId]?.alive) {
+    const keeper = computeSuccessor(state, rng, houseId);
+    if (keeper) {
+      house.leaderId = keeper.id;
+      keeper.title = titleForHouse(houseId, keeper.gender);
+    }
+  }
+
+  setGameOver(state, `Sua linhagem se apaga. Não há herdeiro elegível — fim de jogo. (${reason})`, false);
 }
 
 

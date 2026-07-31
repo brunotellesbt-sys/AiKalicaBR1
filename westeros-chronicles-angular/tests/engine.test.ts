@@ -8,6 +8,7 @@ import {
   buildInitialState,
   advanceTurn,
   applyLocalAction,
+  handlePlayerDeath,
   CANON_DIVERGENCE_THRESHOLD,
 } from '../src/app/core/engine/sim';
 
@@ -284,6 +285,60 @@ test('a campanha alcança o fim da era sem quebrar invariantes', () => {
     const age = state.date.absoluteTurn - c.startedAbsTurn;
     assert(age <= 61, `crise em ${c.houseId} aberta há ${age} turnos`);
   }
+});
+
+test('a linhagem do jogador segue o sangue, não só o sobrenome', () => {
+  const { state, rng } = newGame(20260731);
+  const player = state.characters[state.playerId];
+
+  // Uma filha do jogador que casou em outra Casa: mudou de sobrenome,
+  // mas continua sendo a linhagem dele.
+  const daughter: Character = {
+    ...player,
+    id: 'test_daughter',
+    name: 'Herdeira de Sangue',
+    gender: 'F',
+    ageYears: 22,
+    fatherId: player.id,
+    motherId: undefined,
+    currentHouseId: 'lannister', // casou fora
+    birthHouseId: player.birthHouseId,
+    spouseId: undefined,
+    maritalStatus: 'married',
+  };
+  state.characters[daughter.id] = daughter;
+
+  // Extingue todos os outros portadores do sobrenome da Casa do jogador.
+  for (const c of Object.values(state.characters)) {
+    if (c.id === player.id || c.id === daughter.id) continue;
+    if (c.currentHouseId === state.playerHouseId) c.alive = false;
+  }
+
+  handlePlayerDeath(state, rng, 'teste');
+
+  assert(!state.game.over, 'a campanha terminou apesar de existir descendente vivo');
+  assertEqual(state.playerId, daughter.id, 'o controle deveria ter passado à filha');
+  assertEqual(state.playerHouseId, 'lannister', 'a Casa do jogador deveria acompanhar o herdeiro');
+
+  // O assento abandonado não pode ficar com um líder morto.
+  const oldHouse = state.houses[player.currentHouseId];
+  const keeper = state.characters[oldHouse.leaderId];
+  assert(keeper?.alive, 'o assento original ficou com um líder morto');
+});
+
+test('sem nenhum parente de sangue, a linhagem realmente se extingue', () => {
+  const { state, rng } = newGame(555001);
+  const player = state.characters[state.playerId];
+
+  for (const c of Object.values(state.characters)) {
+    if (c.id === player.id) continue;
+    if (c.birthHouseId === player.birthHouseId || c.currentHouseId === state.playerHouseId) {
+      c.alive = false;
+    }
+  }
+
+  handlePlayerDeath(state, rng, 'teste');
+  assert(state.game.over, 'deveria ser fim de jogo sem qualquer parente vivo');
 });
 
 test('invariantes econômicas: nada fica negativo depois de 200 turnos', () => {
