@@ -78,6 +78,8 @@ export class GameService {
     (state as any).canon = (state as any).canon ?? { enabled: true, mode: 'strict', appliedEventIds: {} };
     (state as any).tournaments = (state as any).tournaments ?? [];
     (state as any).missions = (state as any).missions ?? [];
+    (state as any).claims = (state as any).claims ?? [];
+    (state as any).occupations = (state as any).occupations ?? {};
     state.ui = (state as any).ui ?? { activeTab: 'chat', showSetup: false, pendingNameQueue: [] };
     (state.ui as any).pendingNameQueue = (state.ui as any).pendingNameQueue ?? [];
     for (const c of Object.values(state.characters)) {

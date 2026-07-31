@@ -264,6 +264,12 @@ export interface GameState {
 
   missions?: Mission[];
 
+  /** Reivindicações formais sobre assentos (casamento, sangue, conquista). */
+  claims?: SeatClaim[];
+
+  /** Assentos ocupados militarmente, por id de local. */
+  occupations?: Record<string, Occupation>;
+
   // Sistema de empréstimo com o Banco de Ferro
   ironBankDebt: {
     principal: number;
@@ -360,15 +366,54 @@ warStates?: Record<
   };
 }
 
+/**
+ * De onde vem o direito de um pretendente ao assento.
+ * - incumbent: já está sentado nele
+ * - canon_heir: era quem o registro histórico coroaria
+ * - claim: reivindicação formal (casamento ou sangue) registrada em `claims`
+ * - blood: parente vivo da Casa, sem reivindicação formal
+ */
+export type PretenderBasis = 'incumbent' | 'canon_heir' | 'claim' | 'blood';
+
+export interface CrisisPretender {
+  characterId: string;
+  houseId: string;
+  basis: PretenderBasis;
+  support: number; // 0..100
+}
+
 export interface SuccessionCrisis {
   id: string;
   houseId: string;
-  incumbentId: string;   // quem está no poder (sobreviveu por divergência)
-  claimantId: string;    // quem deveria ter assumido pelo cânone
   startedAbsTurn: number;
-  supportIncumbent: number; // 0..100 (apoio político acumulado)
-  supportClaimant: number;  // 0..100
-  playerSide?: 'incumbent' | 'claimant';
+  pretenders: CrisisPretender[];
+  playerBackedId?: string;
   resolvedAbsTurn?: number;
-  outcome?: 'incumbent' | 'claimant';
+  winnerId?: string;
+}
+
+/**
+ * Reivindicação formal sobre um assento.
+ *
+ * Casar entre Casas cria direito; filhos desse casamento herdam esse direito
+ * pelo sangue. Quando uma linha se extingue ou é contestada, são estes os
+ * nomes que aparecem para disputar.
+ */
+export interface SeatClaim {
+  id: string;
+  seatHouseId: string;    // a Casa/assento reivindicado
+  claimantId: string;     // a pessoa que reivindica
+  claimantHouseId: string;// a Casa dela no momento do registro
+  origin: 'marriage' | 'blood' | 'conquest';
+  strength: number;       // 0..100
+  createdAbsTurn: number;
+}
+
+/** Assento tomado por outra Casa durante uma guerra. */
+export interface Occupation {
+  locationId: string;
+  seatHouseId: string;   // de quem é o assento
+  occupierHouseId: string;
+  sinceAbsTurn: number;
+  warId?: string;
 }

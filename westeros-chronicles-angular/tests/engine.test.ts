@@ -202,13 +202,64 @@ test('salvar um rei abre crise sucessória em vez de depor em silêncio', () => 
 
   const crisis = state.canon!.successionCrises!['targaryen_throne'];
   assert(crisis, 'nenhuma crise sucessória foi aberta');
-  assertEqual(crisis.incumbentId, aegon.id, 'o titular da crise deveria ser Aegon III');
-  if (daeron) assertEqual(crisis.claimantId, daeron.id, 'o pretendente deveria ser Daeron I');
+
+  const ids = crisis.pretenders.map(p => p.characterId);
+  assert(ids.includes(aegon.id), 'Aegon III deveria estar entre os pretendentes');
+  assert(
+    crisis.pretenders.some(p => p.basis === 'incumbent' && p.characterId === aegon.id),
+    'Aegon III deveria constar como titular'
+  );
+  if (daeron) assert(ids.includes(daeron.id), 'Daeron I deveria estar entre os pretendentes');
 
   // enquanto a crise corre, o pretendente não ocupa o trono automaticamente
   if (!crisis.resolvedAbsTurn && daeron) {
     assert(throne.leaderId !== daeron.id, 'Daeron assumiu o trono apesar da crise aberta');
   }
+});
+
+test('uma crise pode ter mais de dois pretendentes', () => {
+  const { state, rng } = newGame(4242);
+  forceDivergence(state, 'aegon_iii');
+  runUntil(state, rng, 158);
+
+  const crisis = state.canon!.successionCrises!['targaryen_throne'];
+  assert(crisis, 'nenhuma crise aberta');
+  assert(crisis.pretenders.length >= 2, `esperava 2+ pretendentes, veio ${crisis.pretenders.length}`);
+
+  // cada pretendente precisa ter uma base declarada e apoio na faixa
+  for (const p of crisis.pretenders) {
+    assert(!!state.characters[p.characterId], 'pretendente inexistente');
+    assert(p.support >= 0 && p.support <= 100, 'apoio fora de 0..100');
+  }
+});
+
+test('casamento entre Casas gera reivindicação sobre o assento', () => {
+  const { state, rng } = newGame(31415);
+  const player = state.characters[state.playerId];
+
+  const target = Object.values(state.characters).find(
+    c => c.alive && c.gender !== player.gender && c.currentHouseId !== player.currentHouseId
+      && c.maritalStatus === 'single' && c.ageYears >= 16
+  );
+  assert(target, 'nenhum par elegível encontrado');
+
+  const otherHouse = target!.currentHouseId;
+  const myBirthHouse = player.birthHouseId;
+
+  // atende os requisitos da ação de casamento
+  player.locationId = target!.locationId;
+  target!.relationshipToPlayer = 100;
+  (player.kissedIds ??= []).push(target!.id);
+
+  applyLocalAction(state, rng, 'marry', target!.id);
+
+  const claims = state.claims ?? [];
+  assert(claims.length > 0, 'o casamento não registrou nenhuma reivindicação');
+  assert(
+    claims.some(c => c.seatHouseId === myBirthHouse || c.seatHouseId === otherHouse),
+    'nenhuma reivindicação sobre os assentos envolvidos'
+  );
+  assert(claims.every(c => c.strength > 0 && c.strength <= 100), 'força de reivindicação fora da faixa');
 });
 
 test('cascata: sem Daeron I no trono, a Conquista de Dorne não acontece', () => {
