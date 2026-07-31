@@ -1,17 +1,18 @@
 # Westeros Chronicles (Angular)
 
-Fan-game **não oficial** (sem afiliação com HBO/George R.R. Martin).  
-Interface: **janelas de chat + painel de mapa**, sem imagens de personagens.
+Fan-game **não oficial** (sem afiliação com HBO/George R.R. Martin).
+Interface: **janelas de chat + mapa interativo**, sem imagens de personagens.
 
 ## Requisitos
 - Node 20+
 - npm 9+
-- Angular CLI (opcional) – o workflow do GitHub instala via dependência
 
 ## Rodar local
 ```bash
 npm install
-npm start
+npm start     # http://localhost:4200
+npm test      # suíte determinística do motor
+npm run build # build de produção
 ```
 
 ## Deploy no GitHub Pages (Actions)
@@ -21,25 +22,62 @@ O repositório já vem com workflow em `.github/workflows/deploy.yml`.
 2. Em **Settings → Pages**, selecione **Source: GitHub Actions**
 3. Faça push na branch `main`
 
-O workflow usa automaticamente:
-- `--base-href "/<nome-do-repo>/"`
+O workflow usa automaticamente `--base-href "/<nome-do-repo>/"`.
 
 ## Onde editar conteúdo do mundo
 - Casas: `src/app/core/data/houses.ts`
 - Regiões, locais e rotas: `src/app/core/data/regions.ts`
+- Geografia do mapa (litoral, regiões, coordenadas): `src/app/core/data/map-geo.ts`
 - Eventos agendados (rumores / fatos): `src/app/core/data/timeline.ts`
+- Cânone (pessoas, eventos, guerras, mandatos): `src/app/core/data/canon.ts`
 
-## Notas de design (como seu prompt pediu)
-- Turno = 1/20 de ano (20 turnos por ano)
-- Relações entre casas: 0..100
-  - 0 = guerra
-  - 50 = pode fazer aliança
-  - 80+ = aliança forte
+## Mecânicas centrais
+- Turno = 1/20 de ano (20 turnos por ano); campanha começa em **150 DC**
+- Você começa como o **último na linha de sucessão** — a gestão da Casa só abre
+  quando você herda a liderança
+- Relações entre casas: 0..100 (0 = guerra, 50 = aliança possível, 80+ = aliança forte)
 - Prestígio: 1..100 (Trono de Ferro ~98)
-- Produção/consumo de comida e ouro por turno
-- Viagens consomem comida e têm risco de emboscada
+- Produção/consumo de comida e ouro por turno; tributo feudal em recursos
+- Viagens consomem turnos **e mantimentos**, proporcionais à distância e ao
+  tamanho da comitiva, com risco de emboscada
 - Banco de Ferro: empréstimo com cobrança periódica e punições por inadimplência
 - 3 slots de save (localStorage)
 
-> Este projeto é um **alicerce jogável** com as mecânicas centrais, pronto para você aprofundar
-> com mais casas, eventos e decisões.
+## Cânone e divergência
+
+O diferencial do projeto: a história registrada de Westeros acontece sozinha,
+mas **responde às suas decisões**.
+
+- Cada figura histórica acumula um score de interferência por categoria
+  (social, corte, íntimo, vínculo, voto). Cada categoria **satura**, e só
+  envolvimento real atravessa o limiar — gentilezas repetidas não bastam.
+  Laços fracos **decaem** com o tempo; compromissos não.
+- Ao divergir, o motor para de forçar o destino daquela pessoa: ela pode
+  sobreviver à morte registrada.
+- **Cascata**: eventos e guerras declaram pré-condições (`requires`,
+  `instigatorCanonId`). Se o mundo não as comporta, o marco não acontece e uma
+  variante alternativa é publicada. Salvar Aegon III impede a coroação de
+  Daeron I, que por sua vez cancela a Conquista de Dorne.
+- **Crises sucessórias**: quem sobrevive à própria morte não é deposto em
+  silêncio. O herdeiro do cânone vira pretendente rival, as casas tomam
+  partido e você pode apoiar um lado (aba **Cânone**) — ganhando um aliado e
+  um inimigo permanente.
+- Dois modos: **strict** (todos os marcos) e **anchors** (só as âncoras
+  estruturais: guerras, tronos, fim de era).
+
+## Mapa
+
+Desenho vetorial **original** com a geografia canônica de Westeros — litoral,
+Muralha, a Mordida, o Pescoço, o Braço Partido, as nove regiões clicáveis e as
+ilhas. Cada um dos 295 locais tem posição no mapa: as referências conhecidas
+com coordenada canônica, o resto distribuído deterministicamente dentro da
+própria região.
+
+> O mapa oficial da HBO/GRRM é material protegido por direitos autorais e não é
+> redistribuído aqui; a geografia foi redesenhada em vetor para este projeto.
+
+## Testes
+
+`npm test` compila o motor (que não depende de Angular) e roda uma suíte
+determinística com RNG semeado: determinismo, tetos de divergência, a cascata
+canônica e invariantes de mundo ao longo de 150 anos simulados.
