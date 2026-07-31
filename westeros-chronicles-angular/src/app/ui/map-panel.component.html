@@ -1,20 +1,23 @@
 <div class="wrap">
   <div class="head">
     <div class="title">Mapa de Westeros</div>
-    <div class="sub">Clique em um reino no mapa e escolha um destino acessível</div>
+    <div class="sub">Clique num reino para explorá-lo; clique num destino destacado para viajar.</div>
   </div>
 
   <div class="body" *ngIf="state as s">
     <div class="where">
       Você está em <b>{{s.locations[s.characters[s.playerId].locationId].name}}</b>
-      <span class="muted">({{s.regions[s.locations[s.characters[s.playerId].locationId].regionId]?.name}})</span>
+      <span class="muted">({{regionName(playerRegionId())}})</span>
     </div>
 
     <div class="map-toolbar">
-      <button (click)="zoomOut()">−</button>
-      <button (click)="resetZoom()">100%</button>
-      <button (click)="zoomIn()">+</button>
+      <button (click)="zoomOut()" title="Afastar">−</button>
+      <button (click)="resetZoom()" title="Enquadrar">100%</button>
+      <button (click)="zoomIn()" title="Aproximar">+</button>
       <span class="muted small">Zoom {{(zoom*100) | number:'1.0-0'}}%</span>
+      <button class="toggle" [class.on]="showAllLocations" (click)="toggleAllLocations()">
+        {{showAllLocations ? 'Todos os locais' : 'Locais principais'}}
+      </button>
     </div>
 
     <div class="map-shell">
@@ -27,28 +30,134 @@
         (pointerup)="onPointerUp()"
         (pointercancel)="onPointerUp()"
         (pointerleave)="onPointerUp()"
+        (wheel)="onWheel($event)"
       >
-        <img class="map-base" src="assets/westeros-map.svg" alt="Mapa de Westeros sem rótulos" />
-        <button
-          *ngFor="let pin of regionPins"
-          class="pin"
-          [style.left.%]="pin.x"
-          [style.top.%]="pin.y"
-          [class.selected]="pin.id === selectedRegionId"
-          [class.player-here]="isPlayerRegion(pin.id)"
-          [attr.aria-label]="s.regions[pin.id]?.name"
-          [title]="s.regions[pin.id]?.name"
-          (click)="selectKingdom(pin.id)"
-        >
-          <span class="dot"></span>
-        </button>
+        <svg class="westeros" [attr.viewBox]="viewBox" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <linearGradient id="seaGrad" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stop-color="#0a2036"/>
+              <stop offset="55%" stop-color="#123049"/>
+              <stop offset="100%" stop-color="#17415f"/>
+            </linearGradient>
+            <linearGradient id="landGrad" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stop-color="#8d9b74"/>
+              <stop offset="45%" stop-color="#77875f"/>
+              <stop offset="100%" stop-color="#5f7150"/>
+            </linearGradient>
+            <filter id="coastGlow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#02121f" flood-opacity="0.55"/>
+            </filter>
+            <clipPath id="mainlandClip">
+              <path [attr.d]="mainlandPath"/>
+            </clipPath>
+          </defs>
+
+          <rect x="0" y="0" width="1000" height="1600" fill="url(#seaGrad)"/>
+
+          <!-- Terras Além da Muralha -->
+          <path class="beyond" [attr.d]="beyondWallPath"/>
+
+          <!-- Continente -->
+          <path class="landmass" [attr.d]="mainlandPath" filter="url(#coastGlow)"/>
+
+          <g clip-path="url(#mainlandClip)">
+            <!-- cor de base de cada reino -->
+            <ng-container *ngFor="let r of regionShapes">
+              <path *ngIf="r.clip" class="region-fill" [attr.d]="r.d" [attr.fill]="r.color"/>
+            </ng-container>
+
+            <path class="river" *ngFor="let d of rivers" [attr.d]="d"/>
+
+            <!-- camada interativa por cima (seleção e clique) -->
+            <ng-container *ngFor="let r of regionShapes">
+              <path
+                *ngIf="r.clip"
+                class="region"
+                [class.selected]="r.regionId === selectedRegionId"
+                [class.player-here]="isPlayerRegion(r.regionId)"
+                [attr.d]="r.d"
+                (click)="selectKingdom(r.regionId)"
+              >
+                <title>{{regionName(r.regionId)}}</title>
+              </path>
+            </ng-container>
+          </g>
+
+          <!-- Ilhas (fora do recorte do continente) -->
+          <ng-container *ngFor="let i of islands">
+            <path class="region-fill island-fill" [attr.d]="i.d" [attr.fill]="regionColor(i.regionId)"/>
+            <path
+              class="island region"
+              [class.selected]="i.regionId === selectedRegionId"
+              [class.player-here]="isPlayerRegion(i.regionId)"
+              [attr.d]="i.d"
+              (click)="selectKingdom(i.regionId)"
+            >
+              <title>{{i.label || regionName(i.regionId)}}</title>
+            </path>
+          </ng-container>
+
+          <!-- Contorno do litoral por cima -->
+          <path class="coastline" [attr.d]="mainlandPath"/>
+
+          <!-- A Muralha -->
+          <path class="wall" [attr.d]="wallPath"/>
+          <text class="wall-label" x="432" y="234">A MURALHA</text>
+
+          <!-- Rotas diretas -->
+          <line
+            class="route"
+            *ngFor="let r of routes()"
+            [attr.x1]="r.x1" [attr.y1]="r.y1"
+            [attr.x2]="r.x2" [attr.y2]="r.y2"
+          />
+
+          <!-- Rótulos de região -->
+          <text
+            class="region-label"
+            *ngFor="let k of regionLabelKeys()"
+            [attr.x]="regionLabels[k].x"
+            [attr.y]="regionLabels[k].y"
+            [class.active]="k === selectedRegionId"
+          >{{regionName(k)}}</text>
+
+          <!-- Locais -->
+          <g
+            class="marker"
+            *ngFor="let m of markers(); trackBy: trackMarker"
+            [class.reachable]="m.reachable"
+            [class.player]="m.isPlayer"
+            [class.seat]="m.isSeat"
+            (click)="onMarkerClick(m)"
+            (mouseenter)="onMarkerEnter(m.id)"
+            (mouseleave)="onMarkerLeave()"
+          >
+            <!-- área de clique generosa: o círculo visível é pequeno demais
+                 para ser alvo confiável, sobretudo em telas de toque -->
+            <circle class="hit" [attr.cx]="m.x" [attr.cy]="m.y" r="15"/>
+            <circle [attr.cx]="m.x" [attr.cy]="m.y" [attr.r]="markerRadius(m)"/>
+            <circle class="pulse" *ngIf="m.isPlayer" [attr.cx]="m.x" [attr.cy]="m.y" r="15"/>
+            <text
+              *ngIf="showLabel(m)"
+              [attr.x]="m.x + 11"
+              [attr.y]="m.y + 4"
+            >{{m.name}}</text>
+            <title>{{m.name}} — {{regionName(m.regionId)}}{{ m.distance !== null ? ' • distância ' + m.distance : '' }}</title>
+          </g>
+        </svg>
+      </div>
+
+      <div class="legend">
+        <span><i class="dot player"></i> você</span>
+        <span><i class="dot reachable"></i> destino direto</span>
+        <span><i class="dot seat"></i> assento de Casa</span>
       </div>
     </div>
 
     <div class="card">
       <div class="h3">Reino selecionado</div>
       <div class="muted small" *ngIf="selectedRegionId">
-        {{s.regions[selectedRegionId]?.name}} • Áreas disponíveis: {{areasInSelected().length}}
+        {{regionName(selectedRegionId)}} • Áreas: {{areasInSelected().length}}
       </div>
       <div class="muted small" *ngIf="!selectedRegionId">Selecione um reino no mapa.</div>
 

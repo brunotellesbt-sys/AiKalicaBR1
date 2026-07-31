@@ -4,7 +4,7 @@
     (tab)="setTab(state, $event)"
   />
 
-  <div class="grid">
+  <div class="grid" [class.map-focus]="state.ui.activeTab === 'map'">
     <section class="left">
       <app-map-panel [state]="state" (choose)="game.choose($event)"></app-map-panel>
     </section>
@@ -21,6 +21,7 @@
         <app-local-panel *ngSwitchCase="'local'" [state]="state" (choose)="game.choose($event)"></app-local-panel>
         <app-tournaments-panel *ngSwitchCase="'tournaments'" [state]="state" (choose)="game.choose($event)"></app-tournaments-panel>
         <app-canon-panel *ngSwitchCase="'canon'" [state]="state" (choose)="game.choose($event)"></app-canon-panel>
+        <app-character-panel *ngSwitchCase="'map'" [state]="state"></app-character-panel>
         <app-chronicle-panel *ngSwitchCase="'chronicle'" [state]="state"></app-chronicle-panel>
         <app-saves-panel *ngSwitchCase="'saves'" [state]="state" (loadState)="game.setState($event)"></app-saves-panel>
         <app-character-panel *ngSwitchDefault [state]="state"></app-character-panel>
