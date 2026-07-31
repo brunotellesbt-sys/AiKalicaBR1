@@ -85,14 +85,44 @@ tetos de divergência, a cascata canônica, a crise sucessória e invariantes de
 mundo em 150 anos simulados. Foram eles que encontraram os bugs de líder morto
 e de ordem dentro do turno.
 
+## 9) Cânone preenchido ano a ano
+
+De 47 anos com registro para **156 de 156** (258 eventos, contra 145). Marcos
+reais adicionados em todos os reinados — de Baelor caminhando descalço pela
+Estrada do Osso à fundação da Companhia Dourada, à morte de Aerys I em 221 (que
+faltava por completo) e ao desaparecimento de Bloodraven além da Muralha.
+
+Onde o material de origem é esparso, as entradas descrevem contexto de reino em
+vez de inventar fatos nomeados, e levam a tag `contexto`.
+
+## 10) Claims, pretendentes e ocupação
+
+- Casamentos entre Casas registram direito recíproco sobre os assentos; os
+  filhos herdam pelo sangue. `computeSuccessor` consulta os reivindicantes
+  antes de recorrer ao suserano.
+- Crises passam a ter **até quatro pretendentes**, cada um com a base do seu
+  direito declarada (titular, herdeiro do cânone, reivindicação, parentesco).
+- Sítios que derrubam muralhas **tomam o assento**: o ocupante cobra tributo, a
+  guarnição se desgasta, e a paz devolve a praça — salvo vitória decisiva.
+
+## 11) Linhagem do jogador
+
+Medido: 30 de 30 campanhas com Casa Manderly terminavam antes de 305, mediana
+no ano 214. A busca de herdeiro só olhava o sobrenome atual. Agora segue o
+sangue (descendentes e parentes nascidos na Casa), e 13 de 30 alcançam o fim da
+era, com mediana em 251.
+
+## 12) Motor separado por domínio
+
+`sim.ts` saiu de 5.714 para 4.004 linhas, com sete módulos extraídos:
+`narration`, `rules`, `claims`, `canon-divergence`, `economy`, `lifecycle` e
+`succession`.
+
 ## O que ainda falta
 
-1. **Cânone 150–305 preenchido ano a ano** — o motor suporta; o dataset ainda
-   tem lacunas grandes entre os marcos.
-2. **Claims formais e ocupação territorial** — hoje a vassalagem muda por
-   guerra decisiva, mas não há reivindicação por casamento nem ocupação de
-   assentos durante o conflito.
-3. **`sim.ts` continua grande** (~4.900 linhas). A separação natural seria
-   `canon`, `economy`, `social`, `combat`, `missions`.
-4. **Balanceamento da linhagem do jogador** — em Casas pequenas a extinção
-   antes de 200 DC é comum, o que encerra a campanha cedo.
+1. **Balanceamento fino do cânone tardio** — o período 298–305 concentra muitos
+   marcos e ainda não foi ajustado contra a simulação.
+2. **Guerras não canônicas** — o jogador não pode declarar guerra por conta
+   própria; só participa das que a história traz.
+3. **Cobertura de teste da UI** — o motor tem 15 testes; os componentes Angular
+   ainda dependem de verificação manual no navegador.

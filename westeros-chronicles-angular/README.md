@@ -76,6 +76,22 @@ própria região.
 > O mapa oficial da HBO/GRRM é material protegido por direitos autorais e não é
 > redistribuído aqui; a geografia foi redesenhada em vetor para este projeto.
 
+## Estrutura do motor
+
+O motor não depende de Angular e está separado por domínio em
+`src/app/core/engine/`:
+
+| Módulo | O que faz |
+|---|---|
+| `narration.ts` | chat, crônica e fim de partida |
+| `rules.ts` | tabelas puras (renome, títulos, mortalidade, tiers) |
+| `claims.ts` | reivindicações e ocupação de assentos |
+| `canon-divergence.ts` | placar de interferência, tetos e decaimento |
+| `economy.ts` | produção, tributo, IA econômica, Banco de Ferro |
+| `lifecycle.ts` | casamento, gestação, nascimento, idade e morte |
+| `succession.ts` | ordem de herança, herdeiro do jogador, crises |
+| `sim.ts` | estado inicial, motor canônico e ações do jogador |
+
 ## Testes
 
 `npm test` compila o motor (que não depende de Angular) e roda uma suíte
