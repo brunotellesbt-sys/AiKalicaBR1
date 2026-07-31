@@ -72,6 +72,31 @@ export interface CanonWarDef {
 
   intensity: 'low' | 'medium' | 'high';
   tags: string[];
+
+  /**
+   * Quem declara/conduz a guerra. Se este personagem não estiver vivo
+   * (ou não estiver no poder) quando a guerra deveria começar, ela não acontece.
+   * É o principal vetor de cascata: salvar/derrubar alguém cancela a guerra dele.
+   */
+  instigatorCanonId?: string;
+  /** Casa cuja liderança o instigador precisa ocupar para a guerra existir. */
+  instigatorHouseId?: string;
+  /** Texto publicado quando a guerra é cancelada por divergência. */
+  altBody?: string;
+}
+
+/**
+ * Pré-condições de um evento canônico.
+ * Se qualquer uma falhar, o evento não é imposto: publica-se a variante
+ * alternativa e a linha do tempo segue divergente a partir dali.
+ */
+export interface CanonRequires {
+  /** Estes personagens precisam estar vivos. */
+  aliveCanonIds?: string[];
+  /** Estes personagens precisam estar mortos (ex.: o antecessor do trono). */
+  deadCanonIds?: string[];
+  /** Esta pessoa precisa liderar esta casa. */
+  leaderOf?: { houseId: string; canonId: string };
 }
 
 export type CanonEventKind = 'chronicle' | 'birth' | 'death' | 'succession' | 'tournament' | 'dynasty_shift';
@@ -99,6 +124,16 @@ export interface CanonEventDef {
   dynasty?: {
     ironThroneHouseName: string;
   };
+
+  /**
+   * Pré-condições. Quando ausentes, o motor deriva automaticamente as óbvias
+   * (ex.: uma sucessão exige que o líder anterior daquela casa esteja morto).
+   */
+  requires?: CanonRequires;
+
+  /** Variante publicada quando as pré-condições falham. */
+  altTitle?: string;
+  altBody?: string;
 }
 
 /**
@@ -224,21 +259,21 @@ export const CANON_EVENTS: CanonEventDef[] = [
   { title: 'Morte do último dragão', id: '153_last_dragon', year: 153, turn: 10, kind: 'chronicle', body: 'O último dragão morre; a era dos dragões se encerra e restam apenas ovos não-eclodidos.', tags: ['canon', 'dragons'] },
   { title: 'Morte de Aegon III', id: '157_aegon_iii_death', year: 157, turn: 10, kind: 'chronicle', body: 'Morre Aegon III; o Trono de Ferro passa ao seu herdeiro.', tags: ['death', 'targaryen', 'throne', 'canon'], personCanonId: 'aegon_iii' },
   { title: 'Daeron I é coroado', id: '157_daeron_i_crowned', year: 157, turn: 10, kind: 'dynasty_shift', body: 'Daeron I assume o Trono de Ferro.', tags: ['succession', 'throne', 'targaryen', 'canon'], dynasty: { ironThroneHouseName: 'Casa Targaryen' } },
-  { title: 'Daeron I assume como rei', id: '157_daeron_i_leader', year: 157, turn: 10, kind: 'succession', body: 'Transição de governo no Trono de Ferro.', tags: ['succession', 'throne', 'canon'], houseId: 'targaryen_throne', newLeaderCanonId: 'daeron_i' },
+  { title: 'Daeron I assume como rei', id: '157_daeron_i_leader', year: 157, turn: 10, kind: 'succession', body: 'Transição de governo no Trono de Ferro.', tags: ['succession', 'throne', 'canon'], houseId: 'targaryen_throne', newLeaderCanonId: 'daeron_i', requires: { deadCanonIds: ['aegon_iii'] }, altBody: 'Aegon III segue vivo e no trono: Daeron I não é coroado, e a corte se divide.' },
   { title: 'Conquista de Dorne', id: '157_dorne_conquest', year: 157, turn: 12, kind: 'chronicle', body: 'Daeron I anuncia a invasão de Dorne e inicia a campanha.', tags: ['war', 'dorne', 'canon'] },
   { title: 'Submissão de Lançassolar', id: '158_sunspear_submission', year: 158, turn: 12, kind: 'chronicle', body: 'Após a tomada de Lançassolar, nobres dorneses se submetem temporariamente à coroa.', tags: ['dorne', 'canon', 'politics'] },
   { title: 'Casamento real', id: '160_baelor_daena_marriage', year: 160, turn: 8, kind: 'chronicle', body: 'Baelor casa-se com Daena, embora o casamento não seja consumado.', tags: ['marriage', 'targaryen', 'canon'] },
   { title: 'Retorno a Dorne', id: '160_return_dorne', year: 160, turn: 12, kind: 'chronicle', body: 'Daeron retorna a Dorne para conter a insurgência.', tags: ['war', 'dorne', 'canon'] },
   { title: 'Morte de Lyonel Tyrell', id: '160_lyonel_tyrell_death', year: 160, turn: 18, kind: 'chronicle', body: 'Lyonel Tyrell é assassinado em Sandstone.', tags: ['death', 'tyrell', 'canon'] },
   { title: 'Assassinato de Daeron I', id: '161_daeron_i_death', year: 161, turn: 12, kind: 'chronicle', body: 'Daeron I é morto traiçoeiramente durante um encontro sob bandeira de paz.', tags: ['death', 'targaryen', 'canon'], personCanonId: 'daeron_i' },
-  { title: 'Baelor torna-se rei', id: '161_baelor_crowned', year: 161, turn: 12, kind: 'succession', body: 'Baelor assume o Trono de Ferro e encerra a Conquista de Dorne.', tags: ['succession', 'throne', 'canon'], houseId: 'targaryen_throne', newLeaderCanonId: 'baelor_i' },
+  { title: 'Baelor torna-se rei', id: '161_baelor_crowned', year: 161, turn: 12, kind: 'succession', body: 'Baelor assume o Trono de Ferro e encerra a Conquista de Dorne.', tags: ['succession', 'throne', 'canon'], houseId: 'targaryen_throne', newLeaderCanonId: 'baelor_i', requires: { deadCanonIds: ['daeron_i'] }, altBody: 'Daeron I não morreu em Dorne: Baelor permanece príncipe.' },
   { title: 'Paz com Dorne', id: '161_baelor_peace_dorne', year: 161, turn: 14, kind: 'chronicle', body: 'Baelor caminha descalço até Lançassolar e firma paz com os dorneses.', tags: ['dorne', 'canon', 'peace'] },
   { title: 'Noivado político', id: '161_betrothal_daeron_myriah', year: 161, turn: 16, kind: 'chronicle', body: 'O jovem príncipe Daeron é prometido a Myriah Martell como parte do acordo.', tags: ['marriage', 'dorne', 'canon'] },
   { title: 'A Câmara das Donzelas', id: '161_maidenvault', year: 161, turn: 18, kind: 'chronicle', body: 'As irmãs de Baelor são confinadas no Maidenvault.', tags: ['canon', 'religion'] },
   { title: 'Morte de Baelor I', id: '171_baelor_death', year: 171, turn: 10, kind: 'chronicle', body: 'Morre Baelor I; abre-se a sucessão do Trono de Ferro.', tags: ['death', 'targaryen', 'canon'], personCanonId: 'baelor_i' },
-  { title: 'Viserys II é coroado', id: '171_viserys_ii_crowned', year: 171, turn: 10, kind: 'succession', body: 'Viserys II assume o Trono de Ferro.', tags: ['succession', 'throne', 'canon'], houseId: 'targaryen_throne', newLeaderCanonId: 'viserys_ii' },
+  { title: 'Viserys II é coroado', id: '171_viserys_ii_crowned', year: 171, turn: 10, kind: 'succession', body: 'Viserys II assume o Trono de Ferro.', tags: ['succession', 'throne', 'canon'], houseId: 'targaryen_throne', newLeaderCanonId: 'viserys_ii', requires: { deadCanonIds: ['baelor_i'] }, altBody: 'Baelor I continua vivo: Viserys II segue apenas como Mão.' },
   { title: 'Morte de Viserys II', id: '172_viserys_death', year: 172, turn: 10, kind: 'chronicle', body: 'Morre Viserys II; Aegon IV torna-se rei.', tags: ['death', 'canon', 'throne'], personCanonId: 'viserys_ii' },
-  { title: 'Aegon IV é coroado', id: '172_aegon_iv_crowned', year: 172, turn: 10, kind: 'succession', body: 'Aegon IV assume o Trono de Ferro.', tags: ['succession', 'throne', 'canon'], houseId: 'targaryen_throne', newLeaderCanonId: 'aegon_iv' },
+  { title: 'Aegon IV é coroado', id: '172_aegon_iv_crowned', year: 172, turn: 10, kind: 'succession', body: 'Aegon IV assume o Trono de Ferro.', tags: ['succession', 'throne', 'canon'], houseId: 'targaryen_throne', newLeaderCanonId: 'aegon_iv', requires: { deadCanonIds: ['viserys_ii'] }, altBody: 'Viserys II segue reinando: Aegon IV continua esperando.' },
   { title: 'Casamento de Daemon Blackfyre', id: '184_daemon_marriage', year: 184, turn: 6, kind: 'chronicle', body: 'Daemon Blackfyre casa-se com Rohanne de Tyrosh.', tags: ['marriage', 'blackfyre', 'canon'] },
   { title: 'Os Grandes Bastardos', id: '184_great_bastards', year: 184, turn: 10, kind: 'chronicle', body: 'No leito de morte, Aegon IV legitima seus bastardos, semeando futuras rebeliões.', tags: ['politics', 'canon'] },
   { title: 'Morte de Aegon IV', id: '184_aegon_iv_death', year: 184, turn: 10, kind: 'chronicle', body: 'Morre Aegon IV.', tags: ['death', 'targaryen', 'canon'], personCanonId: 'aegon_iv' },
@@ -296,7 +331,7 @@ export const CANON_EVENTS: CanonEventDef[] = [
   { title: 'Saque de Porto Real', id: '283_sack_kings_landing', year: 283, turn: 15, kind: 'chronicle', body: 'Porto Real é saqueada; Aerys II e os filhos de Rhaegar morrem.', tags: ['war', 'canon'] },
   { title: 'Morte de Aerys II', id: '283_aerys_death', year: 283, turn: 15, kind: 'chronicle', body: 'Aerys II é morto durante o saque de Porto Real.', tags: ['death', 'canon', 'throne'], personCanonId: 'aerys_ii' },
   { title: 'Robert é coroado', id: '283_robert_crowned', year: 283, turn: 18, kind: 'dynasty_shift', body: 'A dinastia no Trono de Ferro muda após a rebelião.', tags: ['succession', 'throne', 'canon'], dynasty: { ironThroneHouseName: 'Casa Baratheon' } },
-  { title: 'Robert assume o Trono', id: '283_robert_throne', year: 283, turn: 18, kind: 'succession', body: 'Robert I governa os Sete Reinos.', tags: ['succession', 'throne', 'canon'], houseId: 'targaryen_throne', newLeaderCanonId: 'robert' },
+  { title: 'Robert assume o Trono', id: '283_robert_throne', year: 283, turn: 18, kind: 'succession', body: 'Robert I governa os Sete Reinos.', tags: ['succession', 'throne', 'canon'], houseId: 'targaryen_throne', newLeaderCanonId: 'robert', requires: { deadCanonIds: ['aerys_ii'] }, altBody: 'Aerys II não caiu: o Trono de Ferro segue Targaryen.' },
   { title: 'Morte de Lyanna', id: '283_lyanna_death', year: 283, turn: 20, kind: 'chronicle', body: 'Lyanna Stark morre na Torre da Alegria.', tags: ['death', 'canon', 'stark'], personCanonId: 'lyanna_stark' },
   { title: 'Tempestade e nascimento de Daenerys', id: '284_storm_birth_dany', year: 284, turn: 18, kind: 'chronicle', body: 'Durante uma grande tempestade, Daenerys nasce em Pedra do Dragão; Rhaella morre no parto.', tags: ['birth', 'death', 'canon'], personCanonId: 'daenerys' },
   { title: 'Queda de Pedra do Dragão', id: '284_stannis_takes_dragonstone', year: 284, turn: 20, kind: 'chronicle', body: 'Stannis toma Pedra do Dragão após a fuga dos últimos Targaryen.', tags: ['war', 'canon'] },
@@ -413,6 +448,9 @@ export const CANON_WARS: CanonWarDef[] = [
     sideBHouseIds: ['martell', 'yronwood', 'dayne'],
     intensity: 'high',
     tags: ['dorne'],
+    instigatorCanonId: 'daeron_i',
+    instigatorHouseId: 'targaryen_throne',
+    altBody: 'Sem Daeron I no Trono de Ferro, a invasão de Dorne nunca é ordenada.',
   },
   {
     id: 'war_blackfyre_1',
@@ -425,6 +463,8 @@ export const CANON_WARS: CanonWarDef[] = [
     sideBHouseIds: ['blackfyre', 'bracken'],
     intensity: 'medium',
     tags: ['blackfyre'],
+    instigatorCanonId: 'daemon_blackfyre',
+    altBody: 'Sem Daemon Blackfyre vivo, a primeira rebelião não se levanta.',
   },
   {
     id: 'war_blackfyre_2',
@@ -485,6 +525,9 @@ export const CANON_WARS: CanonWarDef[] = [
     sideBHouseIds: ['targaryen_throne', 'martell', 'tyrell'],
     intensity: 'high',
     tags: ['civil_war'],
+    instigatorCanonId: 'robert',
+    instigatorHouseId: 'baratheon',
+    altBody: 'Sem Robert Baratheon à frente de Ponta Tempestade, a rebelião não encontra líder.',
   },
   {
     id: 'war_greyjoy_rebellion',
@@ -497,6 +540,8 @@ export const CANON_WARS: CanonWarDef[] = [
     sideBHouseIds: ['greyjoy', 'harlaw', 'goodbrother', 'drumm'],
     intensity: 'medium',
     tags: ['iron_islands'],
+    instigatorCanonId: 'balon',
+    altBody: 'Sem Balon Greyjoy em Pyke, as Ilhas não se erguem.',
   },
   {
     id: 'war_five_kings',
@@ -509,5 +554,8 @@ export const CANON_WARS: CanonWarDef[] = [
     sideBHouseIds: ['lannister', 'tyrell', 'greyjoy'],
     intensity: 'high',
     tags: ['wot5k'],
+    instigatorCanonId: 'joffrey',
+    instigatorHouseId: 'targaryen_throne',
+    altBody: 'Sem Joffrey no trono, a Guerra dos Cinco Reis não tem estopim.',
   },
 ];

@@ -292,11 +292,15 @@ export interface GameState {
 
     /**
      * Interferência do jogador em personagens canônicos.
-     * - score: soma ponderada (ex.: falar=1, beijar=2, casar=5)
+     * - score: soma ponderada das categorias (já com teto aplicado)
      * - reasons: rastreia os tipos de interação
+     * - detail: acumulado por categoria (social/corte/íntimo/vínculo/voto),
+     *   necessário para aplicar teto por categoria e decaimento seletivo.
      */
     playerTouchedCanonIds?: Record<string, number>;
     playerTouchedReasons?: Record<string, string[]>;
+    playerTouchedDetail?: Record<string, Record<string, number>>;
+    playerTouchedLastTurn?: Record<string, number>;
 
     /**
      * Quando um evento/morte canônica é "bypass" por divergência,
@@ -340,5 +344,31 @@ warStates?: Record<
     recentBattles: Array<{ absTurn: number; summary: string }>;
   }
 >;
+
+    /**
+     * Guerras canônicas canceladas porque a pré-condição falhou
+     * (ex.: o rei que a declararia não chegou ao trono).
+     */
+    cancelledWarIds?: Record<string, boolean>;
+
+    /**
+     * Crises sucessórias abertas por divergência: o titular canônico
+     * sobreviveu à própria morte registrada, então o sucessor do cânone
+     * vira um pretendente rival em vez de assumir automaticamente.
+     */
+    successionCrises?: Record<string, SuccessionCrisis>;
   };
+}
+
+export interface SuccessionCrisis {
+  id: string;
+  houseId: string;
+  incumbentId: string;   // quem está no poder (sobreviveu por divergência)
+  claimantId: string;    // quem deveria ter assumido pelo cânone
+  startedAbsTurn: number;
+  supportIncumbent: number; // 0..100 (apoio político acumulado)
+  supportClaimant: number;  // 0..100
+  playerSide?: 'incumbent' | 'claimant';
+  resolvedAbsTurn?: number;
+  outcome?: 'incumbent' | 'claimant';
 }

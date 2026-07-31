@@ -1,22 +1,13 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { GameState } from '../core/models';
-import { CANON_EVENTS, CANON_PEOPLE, CANON_EVENT_ONLY_PEOPLE, CANON_WARS, absTurn, CanonEventDef, CanonWarDef } from '../core/data/canon';
+import { GameState, SuccessionCrisis } from '../core/models';
+import { CANON_PEOPLE, CANON_EVENT_ONLY_PEOPLE, CANON_WARS, absTurn, CanonEventDef, CanonWarDef } from '../core/data/canon';
+// O painel usa exatamente as mesmas regras do motor — antes havia uma cópia
+// aqui que já tinha divergido da implementação real.
+import { CANON_DIVERGENCE_THRESHOLD, CANON_EVENTS_ALL, isAnchorCanonEvent } from '../core/engine/sim';
 
-const DIVERGENCE_THRESHOLD = 5;
-
-function canonIsAnchorEvent(e: CanonEventDef): boolean {
-  const tags = e.tags ?? [];
-  if (tags.includes('anchor')) return true;
-  const major = ['war', 'rebellion', 'throne', 'leaders', 'endgame', 'porto-real', 'corte', 'kings_landing'];
-  if (tags.some(t => major.includes(t))) return true;
-  // births/deaths de figuras maiores também contam como âncoras
-  if (tags.includes('birth') || tags.includes('death')) {
-    return true;
-  }
-  return false;
-}
+const DIVERGENCE_THRESHOLD = CANON_DIVERGENCE_THRESHOLD;
 
 @Component({
   selector: 'app-canon-panel',
@@ -96,11 +87,41 @@ export class CanonPanelComponent {
     return (ws?.recentBattles ?? []).slice().sort((a: any, b: any) => b.absTurn - a.absTurn).slice(0, 6);
   }
 
+  // --- Crises sucessórias abertas por divergência ---
+
+  crises(): SuccessionCrisis[] {
+    const all = Object.values(this.state.canon?.successionCrises ?? {});
+    return all
+      .filter((c): c is SuccessionCrisis => !!c && !c.resolvedAbsTurn)
+      .sort((a, b) => b.startedAbsTurn - a.startedAbsTurn);
+  }
+
+  charName(id: string): string {
+    return this.state.characters[id]?.name ?? '—';
+  }
+
+  houseName(id: string): string {
+    return this.state.houses[id]?.name ?? id;
+  }
+
+  crisisSupport(c: SuccessionCrisis, side: 'incumbent' | 'claimant'): number {
+    const raw = side === 'incumbent' ? c.supportIncumbent : c.supportClaimant;
+    return Math.round(raw);
+  }
+
+  canBackSide(c: SuccessionCrisis): boolean {
+    return !c.playerSide;
+  }
+
+  backSide(c: SuccessionCrisis, side: 'incumbent' | 'claimant'): void {
+    this.choose.emit(`crisis:${c.houseId}:${side}`);
+  }
+
   upcomingEvents(): Array<{ abs: number; e: CanonEventDef; isAnchor: boolean }> {
     const now = this.state.date.absoluteTurn;
     const q = (this.eventFilter || '').toLowerCase().trim();
-    return CANON_EVENTS
-      .map(e => ({ abs: absTurn(e.year, e.turn), e, isAnchor: canonIsAnchorEvent(e) }))
+    return CANON_EVENTS_ALL
+      .map(e => ({ abs: absTurn(e.year, e.turn), e, isAnchor: isAnchorCanonEvent(e) }))
       .filter(x => x.abs >= now)
       .filter(x => (q ? ((x.e.title + ' ' + (x.e.body ?? '')).toLowerCase().includes(q)) : true))
       .sort((a, b) => a.abs - b.abs)

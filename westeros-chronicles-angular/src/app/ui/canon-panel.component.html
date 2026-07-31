@@ -59,6 +59,43 @@
       </div>
     </div>
 
+    <div class="card" *ngIf="crises().length">
+      <div class="h2">Crises sucessórias</div>
+      <div class="muted small">
+        Alguém sobreviveu à própria morte registrada e o herdeiro do cânone não aceitou.
+        Apoiar um lado custa <b>60 recursos</b> e define inimigos permanentes.
+      </div>
+
+      <div class="war" *ngFor="let c of crises()">
+        <div class="war-top">
+          <div class="h3">{{houseName(c.houseId)}}</div>
+          <span class="badge warn" *ngIf="c.playerSide">Você apoiou: {{c.playerSide === 'incumbent' ? charName(c.incumbentId) : charName(c.claimantId)}}</span>
+        </div>
+
+        <div class="item">
+          <div class="left">
+            <div class="h4">{{charName(c.incumbentId)}} <span class="muted small">(titular)</span></div>
+            <div class="muted small">Apoio: {{crisisSupport(c, 'incumbent')}}/100</div>
+          </div>
+          <div class="right">
+            <button class="btn" *ngIf="canBackSide(c)" (click)="backSide(c, 'incumbent')">Apoiar</button>
+          </div>
+        </div>
+
+        <div class="item">
+          <div class="left">
+            <div class="h4">{{charName(c.claimantId)}} <span class="muted small">(pretendente)</span></div>
+            <div class="muted small">Apoio: {{crisisSupport(c, 'claimant')}}/100</div>
+          </div>
+          <div class="right">
+            <button class="btn" *ngIf="canBackSide(c)" (click)="backSide(c, 'claimant')">Apoiar</button>
+          </div>
+        </div>
+
+        <div class="muted small">Aberta desde o turno {{c.startedAbsTurn}}.</div>
+      </div>
+    </div>
+
     <div class="card">
       <div class="h2">Interferências em canônicos</div>
       <div class="muted small">Quando o score chega em <b>5</b>, o destino deixa de ser forçado (mortes/mandatos).</div>

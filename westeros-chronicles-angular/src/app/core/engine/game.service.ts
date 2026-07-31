@@ -4,7 +4,7 @@ import { BehaviorSubject } from 'rxjs';
 import { GameState, Gender, HouseState, Character } from '../models';
 import { REGIONS, LOCATIONS, TRAVEL_GRAPH } from '../data/regions';
 import { HOUSES } from '../data/houses';
-import { buildInitialState, applyChoice, applyTravel, applyDiplomacy, applyDiplomacyChoice, applyDaenerysAction, applyTraining, applyHouseMgmt, applyIronBank, applyLocalAction, applyTournamentAction, applyMissionAction, promptMainMenu } from './sim';
+import { buildInitialState, applyChoice, applyTravel, applyDiplomacy, applyDiplomacyChoice, applyDaenerysAction, applyTraining, applyHouseMgmt, applyIronBank, applyLocalAction, applyTournamentAction, applyMissionAction, applyCrisisAction, promptMainMenu } from './sim';
 import { Rng } from './rng';
 import { uid } from './utils';
 
@@ -103,8 +103,12 @@ export class GameService {
     // Divergência canônica por interferência do jogador
     (state.canon as any).playerTouchedCanonIds = (state.canon as any).playerTouchedCanonIds ?? {};
     (state.canon as any).playerTouchedReasons = (state.canon as any).playerTouchedReasons ?? {};
+    (state.canon as any).playerTouchedDetail = (state.canon as any).playerTouchedDetail ?? {};
+    (state.canon as any).playerTouchedLastTurn = (state.canon as any).playerTouchedLastTurn ?? {};
     (state.canon as any).bypassedDeathCanonIds = (state.canon as any).bypassedDeathCanonIds ?? {};
     (state.canon as any).pendingBirths = (state.canon as any).pendingBirths ?? {};
+    (state.canon as any).cancelledWarIds = (state.canon as any).cancelledWarIds ?? {};
+    (state.canon as any).successionCrises = (state.canon as any).successionCrises ?? {};
 
     // reseta rng a partir do "tempo" (mantém pseudo-determinismo)
     this.rng.setSeed(state.date.absoluteTurn * 2654435761 >>> 0);
@@ -161,6 +165,12 @@ export class GameService {
 
       // Recria menu para refletir no chat (sem avançar o turno)
       promptMainMenu(s, this.rng);
+      return this.state$.next({ ...s });
+    }
+
+    // crises sucessórias: crisis:<houseId>:<incumbent|claimant>
+    if (choiceId.startsWith('crisis:')) {
+      applyCrisisAction(s, this.rng, choiceId.substring('crisis:'.length));
       return this.state$.next({ ...s });
     }
 
