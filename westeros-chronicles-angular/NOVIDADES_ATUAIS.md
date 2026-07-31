@@ -1,79 +1,98 @@
-# O que foi completado / progredido agora
+# O que mudou nesta rodada
 
-## 1) ✅ UI para acompanhar “Cânone vs Divergência”
+## 1) Bugs corrigidos no motor canônico
 
-- Nova aba **Cânone** no topo.
-- Exibe:
-  - **Guerras canônicas ativas** + **placar** + **últimas batalhas**
-  - **Interferências em personagens canônicos** (score + motivos) e status de divergência
-  - **Nascimentos pendentes** (adiados) + prazo de expiração
-  - **Próximos eventos canônicos** com filtro de busca
+| Problema | Efeito no jogo |
+|---|---|
+| `dynasty_shift` exigia `houseId` **e** `newLeaderCanonId`; nenhum dos 3 eventos declara esses campos | Os três eventos de mudança de dinastia nunca executavam — a Casa Baratheon jamais assumia o Trono de Ferro em 283 |
+| Marcos de morte escritos como `kind: 'chronicle'` publicavam o texto sem consultar o resultado, e o aviso de divergência era suprimido | A crônica registrava "Morre Aegon III" com ele vivo no mapa |
+| Sucessões e mandatos instalavam o herdeiro sem olhar o titular vivo | Salvar alguém da morte canônica o depunha em silêncio, sem consequência nenhuma |
+| Eventos de sucessão coroavam personagens já mortos | Casas lideradas por cadáveres |
+| `computeSuccessor` podia devolver `null` sem que o chamador tratasse | `leaderId` apontando para um morto |
+| Liderança era resolvida antes das mortes dentro do turno | O rei salvo era substituído antes de o marco de morte rodar |
+| `travelFoodCost` era calculado e o resultado descartado | Distância não tinha peso econômico |
+| Painel Cânone tinha uma cópia própria da regra de âncora, já divergida do motor | Aba mostrava classificação diferente da real |
 
-## 2) ✅ Modo **Anchors** com comportamento real
+## 2) Divergência com peso real
 
-- Agora há diferença funcional entre os modos:
-  - **Strict:** aplica todos os marcos.
-  - **Anchors:** foca em âncoras grandes (guerras/mandatos/marcos) e reduz forçamento de micro-eventos.
-- Alternância feita pela aba **Cânone**, sem reiniciar campanha.
+Antes: soma bruta sem teto — **cinco cliques em "Conversar"** tiravam qualquer
+figura histórica do próprio destino, por acidente.
 
-## 3) ✅ Guerra com batalhas, desgaste e finalização
+Agora, por categoria e com teto:
 
-Além do desgaste por turno, o motor agora inclui:
+| Categoria | Ações | Peso | Teto |
+|---|---|---|---|
+| social | conversar, beber, caçar, flores | 1 | 2 |
+| corte | presentear | 2 | 2 |
+| íntimo | beijar | 2 | 4 |
+| vínculo | relações, apoiar guerra | 3 / 2 | 6 |
+| voto | casar, apoiar pretendente | 6 | — |
 
-- **Batalhas periódicas** por guerra canônica.
-- **Perdas reais de tropas** para vencedores/perdedores.
-- **Sítios** com dano em muralhas/ouro/comida.
-- **Placar persistente** em `canon.warStates`.
-- **Finalização de guerra** ao final do período canônico.
-- Registro em **Crônicas** e narração no chat quando relevante para a Casa do jogador.
+Limiar: **5**. Social + corte saturam em 4, então gentilezas sozinhas nunca
+divergem ninguém. Laços fracos decaem ~1 ponto/ano sem contato; votos não
+decaem. Atravessar o limiar agora é anunciado no chat e na crônica.
 
-## 4) ✅ Influência direta do jogador na guerra (quando líder)
+## 3) Cascata
 
-Na gestão da Casa, se sua Casa estiver em guerra canônica ativa:
+Eventos e guerras declaram pré-condições:
 
-- ação **“Apoiar guerra: X”**
-  - custo: **40 recursos + 80 levies**
-  - efeito: **+1 progresso** no placar da sua facção
+- `requires: { aliveCanonIds, deadCanonIds, leaderOf }` nos eventos
+- `instigatorCanonId` / `instigatorHouseId` nas guerras
 
-## 5) ✅ Mundo reagindo sozinho (casamentos IA + política leve)
+Quando falham, publica-se a variante alternativa e a linha do tempo segue
+divergente. Cadeia anotada: Aegon III → Daeron I → Conquista de Dorne →
+Baelor; e Aerys II → Robert.
 
-- Casamentos automáticos periódicos para:
-  - líderes solteiros/viúvos
-  - herdeiros de casas grandes/médias
-- Pareamento ponderado por **relações entre casas**.
-- **Dote simples** (transferência de goods/ouro respeitando reserva por tier).
-- Ajuste de relações entre casas após união.
+## 4) Crises sucessórias
 
-Regra de linhagem aplicada:
+Quem sobrevive à própria morte registrada disputa o assento com o herdeiro do
+cânone. As duas partes acumulam apoio por prestígio, marcialidade e carisma; a
+Casa sangra ouro e prestígio enquanto durar. Resolve em até 3 anos, e o
+perdedor raramente sobrevive. O jogador pode apoiar um lado por 60 recursos
+(aba **Cânone**), ganhando relação com um lado e inimizade com o outro.
 
-- padrão: **patrilinear** (casa do homem)
-- exceção: se a mulher for a **última viva da casa**, tende a preservar a casa dela (matrilinear)
+Enquanto um sobrevivente governa, os mandatos canônicos daquele assento ficam
+suspensos — a história daquela cadeira sai do trilho até ele morrer.
 
-## 6) ✅ Sucessão com reação política do suserano
+## 5) Guerras com consequência
 
-Quando uma casa fica sem herdeiros vivos:
+- Desfecho decisivo (margem ≥ 4) faz o principal derrotado **jurar** ao
+  principal vencedor, com imposto mínimo de 20%
+- Líderes do lado perdedor podem tombar (respeitando proteção canônica)
+- Espólio e perdas em recursos
+- Apoio do jogador em três escalas (destacamento / hoste / convocação geral),
+  com retorno proporcional e relação com os aliados
 
-- o suserano pode **conceder o feudo** para um nomeado da própria estrutura política
-- isso evita colapso precoce do mundo e gera crônicas de concessão
+## 6) Modo Anchors
 
-## 7) ✅ Sistema de rumores para preencher lacunas
+Classificava 91% das pessoas como âncora — era quase idêntico ao strict. Agora
+âncora é quem senta em um trono ou assento regional, e sucessões só contam
+quando envolvem uma âncora de fato.
 
-- Rumores leves aparecem entre marcos maiores (casamentos, tensões, tributos, conspirações).
-- O chat destaca mais quando envolve a Casa do jogador ou sua região.
+## 7) Mapa
 
----
+Silhueta genérica de 3 KB com alfinetes em porcentagem → desenho vetorial
+próprio com a geografia canônica, nove regiões clicáveis e os 295 locais
+posicionados. Três bugs de interação corrigidos no caminho: `*ngFor` sem
+`trackBy` destruindo os nós SVG antes do clique disparar, rótulo com
+`pointer-events:none` deixando o clique atravessar até o mar, e a aba "Mapa"
+que não abria mapa nenhum.
+
+## 8) Testes
+
+`npm test` — 11 testes determinísticos com RNG semeado, cobrindo determinismo,
+tetos de divergência, a cascata canônica, a crise sucessória e invariantes de
+mundo em 150 anos simulados. Foram eles que encontraram os bugs de líder morto
+e de ordem dentro do turno.
 
 ## O que ainda falta
 
-1. **Cânone 150–305 totalmente preenchido ano-a-ano**
-   - O motor suporta, mas o dataset completo ainda precisa ser expandido.
-
-2. **Política profunda de claims/ocupação territorial**
-   - Já existe: guerras com placar, batalhas/sítios, apoio do jogador, sucessão com concessão.
-   - Ainda faltam: claims formais, crises sucessórias com múltiplos pretendentes e ocupação de assentos no mapa.
-
-## Próximo passo sugerido
-
-- claims simples por casamento
-- crises sucessórias com 2+ candidatos fortes
-- ocupação temporária de assentos em guerra
+1. **Cânone 150–305 preenchido ano a ano** — o motor suporta; o dataset ainda
+   tem lacunas grandes entre os marcos.
+2. **Claims formais e ocupação territorial** — hoje a vassalagem muda por
+   guerra decisiva, mas não há reivindicação por casamento nem ocupação de
+   assentos durante o conflito.
+3. **`sim.ts` continua grande** (~4.900 linhas). A separação natural seria
+   `canon`, `economy`, `social`, `combat`, `missions`.
+4. **Balanceamento da linhagem do jogador** — em Casas pequenas a extinção
+   antes de 200 DC é comum, o que encerra a campanha cedo.

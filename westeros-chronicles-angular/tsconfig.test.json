@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "outDir": "./.test-build",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"]
+  },
+  "include": [
+    "tests/**/*.ts",
+    "src/app/core/**/*.ts"
+  ],
+  "exclude": [
+    "src/app/core/engine/game.service.ts",
+    "src/app/core/engine/save.service.ts"
+  ]
+}

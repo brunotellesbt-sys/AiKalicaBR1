@@ -7,7 +7,7 @@
     "build": "ng build --configuration production",
     "build:dev": "ng build",
     "lint": "echo \"(no lint configured)\"",
-    "test": "echo \"(no tests configured)\""
+    "test": "tsc -p tsconfig.test.json && node .test-build/tests/engine.test.js"
   },
   "dependencies": {
     "@angular/animations": "^17.3.0",
@@ -25,6 +25,7 @@
     "@angular-devkit/build-angular": "^17.3.0",
     "@angular/cli": "^17.3.0",
     "@angular/compiler-cli": "^17.3.0",
+    "@types/node": "^20.19.43",
     "typescript": "~5.4.5"
   }
 }

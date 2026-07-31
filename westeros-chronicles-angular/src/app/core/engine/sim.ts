@@ -27,8 +27,10 @@ import {
   CanonEventDef,
   CanonLeaderMandate,
   CanonPersonDef,
+  CanonRequires,
   CanonWarDef,
 } from '../data/canon';
+import { SuccessionCrisis } from '../models';
 
 export interface NewGameParams {
   playerHouseId: string;
@@ -61,9 +63,13 @@ function ensureCanonDefaults(state: GameState): void {
       activeWarIds: [],
       playerTouchedCanonIds: {},
       playerTouchedReasons: {},
+      playerTouchedDetail: {},
+      playerTouchedLastTurn: {},
       bypassedDeathCanonIds: {},
       pendingBirths: {},
       warStates: {},
+      cancelledWarIds: {},
+      successionCrises: {},
     };
   } else {
     state.canon.enabled = state.canon.enabled ?? true;
@@ -73,9 +79,22 @@ function ensureCanonDefaults(state: GameState): void {
     state.canon.activeWarIds = state.canon.activeWarIds ?? [];
     state.canon.playerTouchedCanonIds = state.canon.playerTouchedCanonIds ?? {};
     state.canon.playerTouchedReasons = state.canon.playerTouchedReasons ?? {};
+    state.canon.playerTouchedDetail = state.canon.playerTouchedDetail ?? {};
+    state.canon.playerTouchedLastTurn = state.canon.playerTouchedLastTurn ?? {};
     state.canon.bypassedDeathCanonIds = state.canon.bypassedDeathCanonIds ?? {};
     state.canon.pendingBirths = state.canon.pendingBirths ?? {};
     (state.canon as any).warStates = (state.canon as any).warStates ?? {};
+    state.canon.cancelledWarIds = state.canon.cancelledWarIds ?? {};
+    state.canon.successionCrises = state.canon.successionCrises ?? {};
+
+    // Migração de saves antigos: o placar era uma soma bruta sem categoria.
+    // Sem isto, um save antigo perderia o histórico ao recalcular.
+    for (const [canonId, score] of Object.entries(state.canon.playerTouchedCanonIds)) {
+      if (state.canon.playerTouchedDetail[canonId]) continue;
+      state.canon.playerTouchedDetail[canonId] = { bond: score };
+      state.canon.playerTouchedLastTurn[canonId] =
+        state.canon.playerTouchedLastTurn[canonId] ?? state.date.absoluteTurn;
+    }
   }
 }
 
@@ -86,15 +105,34 @@ const CANON_INDEX: Record<string, CanonPersonDef> = (() => {
   return idx;
 })();
 
+/**
+ * Normalização do dataset.
+ *
+ * Boa parte dos marcos de morte/nascimento foi escrita como `kind: 'chronicle'`
+ * com `personCanonId`. Nesse formato o motor publicava o texto ("Morre X") sem
+ * consultar se a morte realmente aconteceu — então um personagem salvo pelo
+ * jogador aparecia morto na crônica e vivo no mapa. Aqui promovemos esses
+ * eventos para o tipo correto, de modo que exista um único caminho de execução.
+ */
+function normalizeCanonEvent(e: CanonEventDef): CanonEventDef {
+  if (e.kind === 'chronicle' && e.personCanonId) {
+    if (e.tags?.includes('death')) return { ...e, kind: 'death' };
+    if (e.tags?.includes('birth')) return { ...e, kind: 'birth' };
+  }
+  return e;
+}
+
+export const CANON_EVENTS_ALL: CanonEventDef[] = CANON_EVENTS.map(normalizeCanonEvent);
+
 // Usado para evitar duplicar entradas quando já existe um evento canônico explícito
 // de nascimento/morte para a mesma pessoa no mesmo turno.
 const CANON_MANUAL_BIRTH_KEYS = new Set<string>();
 const CANON_MANUAL_DEATH_KEYS = new Set<string>();
-for (const e of CANON_EVENTS) {
+for (const e of CANON_EVENTS_ALL) {
   if (!e.personCanonId) continue;
   const key = `${e.personCanonId}:${absTurn(e.year, e.turn)}`;
-  if (e.tags?.includes('birth')) CANON_MANUAL_BIRTH_KEYS.add(key);
-  if (e.tags?.includes('death')) CANON_MANUAL_DEATH_KEYS.add(key);
+  if (e.kind === 'birth') CANON_MANUAL_BIRTH_KEYS.add(key);
+  if (e.kind === 'death') CANON_MANUAL_DEATH_KEYS.add(key);
 }
 
 // Divergência canônica por interferência do jogador.
@@ -113,18 +151,36 @@ const ANCHOR_HOUSE_IDS = new Set<string>([
   'greyjoy',
 ]);
 
+/**
+ * "Âncora" precisa ser raro para o modo significar alguma coisa.
+ *
+ * A regra anterior classificava 91% das pessoas como âncora (bastava pertencer
+ * a uma Grande Casa), então strict e anchors produziam praticamente o mesmo
+ * mundo. Agora âncora é apenas quem senta em um trono/assento regional.
+ */
 function isAnchorPerson(def: CanonPersonDef): boolean {
-  if (def.title && /Rei|Rainha|Pr[ií]ncipe|Princesa/i.test(def.title)) return true;
-  if (ANCHOR_HOUSE_IDS.has(def.currentHouseId)) return true;
+  if (def.title && /^(Rei|Rainha)\b/i.test(def.title)) return true;
   if (def.currentHouseId === 'targaryen_dany') return true;
+  if (def.title && /Lorde de|Senhor de|Príncipe de Dorne/i.test(def.title) && ANCHOR_HOUSE_IDS.has(def.currentHouseId)) {
+    return true;
+  }
   return false;
 }
 
-function isAnchorCanonEvent(e: CanonEventDef): boolean {
+export function isAnchorCanonEvent(e: CanonEventDef): boolean {
   const tags = e.tags ?? [];
   if (tags.includes('anchor')) return true;
-  const major = ['war', 'rebellion', 'throne', 'leaders', 'endgame', 'porto-real', 'corte', 'kings_landing'];
+
+  // Marcos estruturais: guerras, trocas de trono e o fim da era.
+  const major = ['war', 'rebellion', 'throne', 'endgame'];
   if (tags.some(t => major.includes(t))) return true;
+
+  // Sucessões só contam quando envolvem uma âncora de fato.
+  if (e.kind === 'succession' || e.kind === 'dynasty_shift') {
+    const def = e.newLeaderCanonId ? CANON_INDEX[e.newLeaderCanonId] : undefined;
+    return !!def && isAnchorPerson(def);
+  }
+
   if (e.personCanonId) {
     const def = CANON_INDEX[e.personCanonId];
     if (def && isAnchorPerson(def)) return true;
@@ -132,7 +188,50 @@ function isAnchorCanonEvent(e: CanonEventDef): boolean {
   return false;
 }
 
-const CANON_DIVERGENCE_THRESHOLD = 5;
+export const CANON_DIVERGENCE_THRESHOLD = 5;
+
+/**
+ * Categorias de interferência.
+ *
+ * O modelo antigo somava peso bruto sem teto: cinco cliques em "Conversar"
+ * bastavam para tirar qualquer figura histórica do próprio destino, por
+ * acidente. Agora cada categoria satura, e só envolvimento real (intimidade,
+ * vínculo, voto) consegue atravessar o limiar.
+ */
+export type CanonTouchCategory = 'social' | 'court' | 'intimate' | 'bond' | 'vow';
+
+const CANON_TOUCH_RULES: Record<string, { category: CanonTouchCategory; weight: number }> = {
+  talk: { category: 'social', weight: 1 },
+  drink: { category: 'social', weight: 1 },
+  hunt: { category: 'social', weight: 1 },
+  flowers: { category: 'social', weight: 1 },
+  diplomacy_talk: { category: 'social', weight: 1 },
+  gift: { category: 'court', weight: 2 },
+  diplomacy_gift: { category: 'court', weight: 2 },
+  kiss: { category: 'intimate', weight: 2 },
+  relations: { category: 'bond', weight: 3 },
+  marry: { category: 'vow', weight: 6 },
+  war_support: { category: 'bond', weight: 2 },
+  crisis_support: { category: 'vow', weight: 6 },
+};
+
+/** Teto por categoria (gentilezas repetidas saturam). */
+const CANON_TOUCH_CAPS: Record<CanonTouchCategory, number> = {
+  social: 2,
+  court: 2,
+  intimate: 4,
+  bond: 6,
+  vow: 99,
+};
+
+/** Decaimento por ano sem contato — laços fracos esfriam, votos não. */
+const CANON_TOUCH_DECAY: Record<CanonTouchCategory, number> = {
+  social: 1,
+  court: 1,
+  intimate: 0.5,
+  bond: 0.25,
+  vow: 0,
+};
 
 function canonTouchScore(state: GameState, canonId: string): number {
   ensureCanonDefaults(state);
@@ -145,13 +244,80 @@ function canonIsDiverged(state: GameState, canonId: string): boolean {
   return bypass || canonTouchScore(state, canonId) >= CANON_DIVERGENCE_THRESHOLD;
 }
 
+function recomputeCanonTouchScore(state: GameState, canonId: string): number {
+  const detail = state.canon!.playerTouchedDetail![canonId] ?? {};
+  let total = 0;
+  for (const [cat, val] of Object.entries(detail)) {
+    const cap = CANON_TOUCH_CAPS[cat as CanonTouchCategory] ?? 99;
+    total += Math.min(val, cap);
+  }
+  const rounded = Math.round(total * 100) / 100;
+  state.canon!.playerTouchedCanonIds![canonId] = rounded;
+  return rounded;
+}
+
 function markCanonTouched(state: GameState, canonId: string, reason: string, weight: number): void {
   ensureCanonDefaults(state);
-  const map = state.canon!.playerTouchedCanonIds!;
-  map[canonId] = (map[canonId] ?? 0) + Math.max(1, Math.floor(weight));
+
+  const rule = CANON_TOUCH_RULES[reason]
+    ?? { category: 'social' as CanonTouchCategory, weight: Math.max(1, Math.floor(weight)) };
+
+  const before = canonTouchScore(state, canonId);
+
+  const detailAll = state.canon!.playerTouchedDetail!;
+  const detail = (detailAll[canonId] = detailAll[canonId] ?? {});
+  detail[rule.category] = (detail[rule.category] ?? 0) + rule.weight;
+  state.canon!.playerTouchedLastTurn![canonId] = state.date.absoluteTurn;
+
   const r = state.canon!.playerTouchedReasons!;
   r[canonId] = r[canonId] ?? [];
   if (!r[canonId].includes(reason)) r[canonId].push(reason);
+
+  const after = recomputeCanonTouchScore(state, canonId);
+
+  // Atravessar o limiar é um acontecimento: o jogador precisa saber que
+  // acabou de tirar alguém da própria história.
+  if (before < CANON_DIVERGENCE_THRESHOLD && after >= CANON_DIVERGENCE_THRESHOLD) {
+    const c = state.characters[canonCharId(canonId)];
+    const name = c?.name ?? canonId;
+    pushNarration(state, `🕯️ O destino de ${name} deixa de estar escrito. O que vier agora depende de vocês.`);
+    pushChronicle(state, {
+      absTurn: state.date.absoluteTurn,
+      title: `Destino divergente: ${name}`,
+      body: `A proximidade com ${name} altera o curso previsto de sua vida.`,
+      tags: ['canon', 'divergence'],
+    });
+  }
+}
+
+/** Laços fracos esfriam com o tempo; compromissos não. */
+function tickCanonDivergenceDecay(state: GameState): void {
+  ensureCanonDefaults(state);
+  const detailAll = state.canon!.playerTouchedDetail!;
+  const lastAll = state.canon!.playerTouchedLastTurn!;
+  const now = state.date.absoluteTurn;
+
+  for (const canonId of Object.keys(detailAll)) {
+    const last = lastAll[canonId] ?? now;
+    const since = now - last;
+    if (since < 20) continue;
+
+    const years = Math.floor(since / 20);
+    const detail = detailAll[canonId];
+    let changed = false;
+
+    for (const cat of Object.keys(CANON_TOUCH_DECAY) as CanonTouchCategory[]) {
+      const perYear = CANON_TOUCH_DECAY[cat];
+      if (perYear <= 0) continue;
+      const cur = detail[cat] ?? 0;
+      if (cur <= 0) continue;
+      detail[cat] = Math.max(0, cur - perYear * years);
+      changed = true;
+    }
+
+    lastAll[canonId] = last + years * 20;
+    if (changed) recomputeCanonTouchScore(state, canonId);
+  }
 }
 
 function markCanonDeathBypassed(state: GameState, canonId: string): void {
@@ -453,6 +619,91 @@ function killCanonCharacter(state: GameState, rng: Rng, canonId: string, reason:
   return true;
 }
 
+/**
+ * Um personagem canônico "sobrevivente": o registro marcava a morte dele
+ * neste ponto da linha do tempo, mas a interferência do jogador impediu.
+ */
+function survivedOwnCanonDeath(state: GameState, c: Character | undefined): boolean {
+  if (!c || !c.alive || !c.isCanonical || !c.canonId) return false;
+  if (state.canon?.bypassedDeathCanonIds?.[c.canonId]) return true;
+  // Estritamente DEPOIS: os mandatos rodam antes das mortes dentro do mesmo
+  // turno, então `>=` marcaria como "sobrevivente" alguém que morre daqui a
+  // alguns passos deste próprio turno.
+  return typeof c.canonDeathAbsTurn === 'number' && state.date.absoluteTurn > c.canonDeathAbsTurn;
+}
+
+/** Avalia as pré-condições de um evento contra o estado real do mundo. */
+function canonRequiresSatisfied(state: GameState, req?: CanonRequires): { ok: boolean; why?: string } {
+  if (!req) return { ok: true };
+
+  for (const id of req.aliveCanonIds ?? []) {
+    const c = state.characters[canonCharId(id)];
+    if (!c || !c.alive) {
+      return { ok: false, why: `${CANON_INDEX[id]?.name ?? id} não está vivo para isso` };
+    }
+  }
+
+  for (const id of req.deadCanonIds ?? []) {
+    const c = state.characters[canonCharId(id)];
+    // Quem nunca existiu no mundo não bloqueia nada.
+    if (c && c.alive) return { ok: false, why: `${c.name} continua vivo` };
+  }
+
+  const lo = req.leaderOf;
+  if (lo) {
+    const h = state.houses[lo.houseId];
+    const c = state.characters[canonCharId(lo.canonId)];
+    if (!h || !c || !c.alive || h.leaderId !== c.id) {
+      const who = CANON_INDEX[lo.canonId]?.name ?? lo.canonId;
+      return { ok: false, why: `${who} não lidera ${h?.name ?? lo.houseId}` };
+    }
+  }
+
+  return { ok: true };
+}
+
+/** Publica a variante alternativa quando o cânone não pôde acontecer. */
+function publishCanonDivergence(state: GameState, e: CanonEventDef, why?: string): void {
+  const title = e.altTitle ?? `${e.title} (não aconteceu)`;
+  const body = e.altBody
+    ?? `O registro previa: “${e.body}” — mas o mundo mudou${why ? ` (${why})` : ''}.`;
+
+  pushChronicle(state, {
+    absTurn: state.date.absoluteTurn,
+    title,
+    body,
+    tags: Array.from(new Set([...(e.tags ?? []), 'divergence'])),
+  });
+  pushNarration(state, `📜 ${title}: ${body}`);
+}
+
+/**
+ * Se o assento visado pelo evento ainda está ocupado por alguém que deveria
+ * ter morrido, abre a disputa e devolve `true` (o evento não se aplica).
+ */
+function maybeOpenCrisisForSuccession(state: GameState, rng: Rng, e: CanonEventDef): boolean {
+  if (e.kind !== 'succession' && e.kind !== 'dynasty_shift') return false;
+  if (!e.newLeaderCanonId) return false;
+
+  const houseId = e.houseId ?? Object.values(state.houses).find(x => x.isIronThrone)?.id;
+  const house = houseId ? state.houses[houseId] : undefined;
+  if (!house) return false;
+
+  const incumbent = state.characters[house.leaderId];
+  if (!survivedOwnCanonDeath(state, incumbent)) return false;
+
+  const claimant = ensureCanonPerson(state, rng, e.newLeaderCanonId, e.year, e.turn);
+  if (!claimant || !claimant.alive || claimant.id === incumbent.id) return false;
+
+  // Disputa já decidida em favor do titular: o evento apenas registra que
+  // a coroação prevista não aconteceu.
+  const crisis = state.canon!.successionCrises?.[house.id];
+  if (crisis && crisis.incumbentId === incumbent.id) return false;
+
+  openSuccessionCrisis(state, house, incumbent, claimant, e);
+  return true;
+}
+
 function applyCanonEvent(state: GameState, rng: Rng, e: CanonEventDef): void {
   ensureCanonDefaults(state);
   if (state.canon!.appliedEventIds[e.id]) return;
@@ -460,6 +711,20 @@ function applyCanonEvent(state: GameState, rng: Rng, e: CanonEventDef): void {
 
   // marca como aplicado antes (evita loops se algo der erro e reentrar)
   state.canon!.appliedEventIds[e.id] = true;
+
+  // Caso especial, avaliado antes das pré-condições genéricas: quando o
+  // titular sobreviveu à própria morte registrada, a coroação prevista não
+  // "deixa de acontecer" — ela vira uma disputa aberta pelo assento.
+  if (maybeOpenCrisisForSuccession(state, rng, e)) return;
+
+  // Pré-condições: a história só se impõe se o mundo ainda a comporta.
+  // É daqui que sai a cascata — impedir uma morte cancela a coroação seguinte,
+  // que por sua vez cancela a guerra que aquele rei declararia.
+  const req = canonRequiresSatisfied(state, e.requires);
+  if (!req.ok) {
+    publishCanonDivergence(state, e, req.why);
+    return;
+  }
 
   switch (e.kind) {
     case 'chronicle': {
@@ -514,6 +779,13 @@ function applyCanonEvent(state: GameState, rng: Rng, e: CanonEventDef): void {
       const leader = ensureCanonPerson(state, rng, e.newLeaderCanonId, e.year, e.turn);
       if (!leader) break;
 
+      // ensureCanonPerson devolve o personagem mesmo morto: sem esta checagem
+      // o evento coroava um cadáver e a Casa ficava com um líder sem vida.
+      if (!leader.alive) {
+        publishCanonDivergence(state, e, `${leader.name} já está morto`);
+        break;
+      }
+
       // Se o jogador interferiu o suficiente com este personagem, não forçamos a sucessão.
       if (leader.canonId && canonIsDiverged(state, leader.canonId)) {
         state.chronicle.unshift({
@@ -526,6 +798,14 @@ function applyCanonEvent(state: GameState, rng: Rng, e: CanonEventDef): void {
         break;
       }
 
+      // Titular que sobreviveu à própria morte canônica não é deposto em
+      // silêncio: instala-se uma crise sucessória com dois pretendentes.
+      const incumbent = state.characters[h.leaderId];
+      if (incumbent && incumbent.id !== leader.id && survivedOwnCanonDeath(state, incumbent)) {
+        openSuccessionCrisis(state, h, incumbent, leader, e);
+        break;
+      }
+
       h.leaderId = leader.id;
       leader.title = titleForHouse(h.id, leader.gender);
       state.chronicle.unshift({ turn: state.date.absoluteTurn, title: e.title, body: e.body, tags: e.tags });
@@ -533,24 +813,36 @@ function applyCanonEvent(state: GameState, rng: Rng, e: CanonEventDef): void {
       break;
     }
     case 'dynasty_shift': {
-      if (!e.houseId || !e.newLeaderCanonId) break;
-      const h = state.houses[e.houseId];
+      // Estes eventos descrevem a troca de dinastia no Trono de Ferro e, no
+      // dataset, trazem apenas `dynasty`. O guard antigo exigia houseId E
+      // newLeaderCanonId, então nenhum deles jamais executava.
+      const houseId = e.houseId ?? Object.values(state.houses).find(x => x.isIronThrone)?.id;
+      const h = houseId ? state.houses[houseId] : undefined;
       if (!h) break;
 
-      const leader = ensureCanonPerson(state, rng, e.newLeaderCanonId, e.year, e.turn);
-      if (leader) {
-        if (leader.canonId && canonIsDiverged(state, leader.canonId)) {
-          state.chronicle.unshift({
-            turn: state.date.absoluteTurn,
-            title: `${e.title} (em aberto)`,
-            body: `A mudança dinástica canônica não é imposta porque o destino do líder divergiu por interferência do jogador.`,
-            tags: Array.from(new Set([...(e.tags ?? []), 'divergence'])),
-          });
-          pushNarration(state, `👑 Mudança dinástica em aberto: ${e.title}.`);
-          break;
+      if (e.newLeaderCanonId) {
+        const leader = ensureCanonPerson(state, rng, e.newLeaderCanonId, e.year, e.turn);
+        if (leader && leader.alive) {
+          if (leader.canonId && canonIsDiverged(state, leader.canonId)) {
+            state.chronicle.unshift({
+              turn: state.date.absoluteTurn,
+              title: `${e.title} (em aberto)`,
+              body: `A mudança dinástica canônica não é imposta porque o destino do líder divergiu por interferência do jogador.`,
+              tags: Array.from(new Set([...(e.tags ?? []), 'divergence'])),
+            });
+            pushNarration(state, `👑 Mudança dinástica em aberto: ${e.title}.`);
+            break;
+          }
+          const incumbent = state.characters[h.leaderId];
+          if (incumbent && incumbent.id !== leader.id && survivedOwnCanonDeath(state, incumbent)) {
+            openSuccessionCrisis(state, h, incumbent, leader, e);
+            break;
+          }
+          h.leaderId = leader.id;
+          leader.title = titleForHouse(h.id, leader.gender);
         }
-        h.leaderId = leader.id;
       }
+
       if (e.dynasty?.ironThroneHouseName) {
         h.name = e.dynasty.ironThroneHouseName;
       }
@@ -584,6 +876,232 @@ function applyCanonEvent(state: GameState, rng: Rng, e: CanonEventDef): void {
   }
 }
 
+
+// -----------------------
+// Crises sucessórias
+// -----------------------
+// Quando o jogador salva alguém da própria morte canônica, o sucessor histórico
+// não assume mais em silêncio: os dois passam a disputar o assento, e as demais
+// casas tomam partido. É aqui que "mudar a história" vira jogabilidade.
+
+// Apoio a guerra em escala: antes havia um único pacote caro que rendia
+// +1 num placar cujo prêmio final era ±2 de prestígio — ninguém usava duas vezes.
+export type WarAidSize = 'small' | 'medium' | 'large';
+
+const WAR_AID_COST: Record<WarAidSize, { goods: number; levies: number; points: number }> = {
+  small: { goods: 25, levies: 40, points: 1 },
+  medium: { goods: 60, levies: 110, points: 3 },
+  large: { goods: 130, levies: 240, points: 7 },
+};
+
+const WAR_AID_TIERS: Array<[WarAidSize, string]> = [
+  ['small', 'destacamento'],
+  ['medium', 'hoste'],
+  ['large', 'convocação geral'],
+];
+
+const SUCCESSION_CRISIS_TIMEOUT = 60; // 3 anos
+
+function crisisBaseSupport(c: Character): number {
+  return clamp(
+    28 + Math.round((c.personalPrestige ?? 0) / 4) + Math.round((c.martial ?? 0) / 6),
+    10,
+    70
+  );
+}
+
+function openSuccessionCrisis(
+  state: GameState,
+  house: HouseState,
+  incumbent: Character,
+  claimant: Character,
+  e?: CanonEventDef
+): void {
+  ensureCanonDefaults(state);
+  const crises = state.canon!.successionCrises!;
+  const existing = crises[house.id];
+  if (existing && !existing.resolvedAbsTurn) return;
+  // Uma disputa já decidida não se reabre com os mesmos nomes.
+  if (existing && existing.incumbentId === incumbent.id && existing.claimantId === claimant.id) return;
+
+  const crisis: SuccessionCrisis = {
+    id: uid('crisis'),
+    houseId: house.id,
+    incumbentId: incumbent.id,
+    claimantId: claimant.id,
+    startedAbsTurn: state.date.absoluteTurn,
+    supportIncumbent: crisisBaseSupport(incumbent),
+    supportClaimant: crisisBaseSupport(claimant),
+  };
+  crises[house.id] = crisis;
+
+  const title = `Crise sucessória: ${house.name}`;
+  const body =
+    `${incumbent.name} segue vivo quando o registro previa sua morte. ` +
+    `${claimant.name} reivindica o assento mesmo assim, e as casas começam a tomar partido.`;
+
+  pushChronicle(state, {
+    absTurn: state.date.absoluteTurn,
+    title,
+    body,
+    tags: Array.from(new Set([...(e?.tags ?? []), 'canon', 'divergence', 'sucessao'])),
+  });
+  pushNarration(state, `⚔️ ${title} — ${body}`);
+}
+
+function resolveSuccessionCrisis(
+  state: GameState,
+  rng: Rng,
+  crisis: SuccessionCrisis,
+  outcome: 'incumbent' | 'claimant',
+  why: string
+): void {
+  crisis.resolvedAbsTurn = state.date.absoluteTurn;
+  crisis.outcome = outcome;
+
+  const house = state.houses[crisis.houseId];
+  const winner = state.characters[outcome === 'incumbent' ? crisis.incumbentId : crisis.claimantId];
+  const loser = state.characters[outcome === 'incumbent' ? crisis.claimantId : crisis.incumbentId];
+  if (!house || !winner) return;
+
+  house.leaderId = winner.id;
+  winner.title = titleForHouse(house.id, winner.gender);
+  winner.personalPrestige = clamp((winner.personalPrestige ?? 0) + 8, 0, 100);
+
+  // O perdedor raramente sobrevive a uma disputa aberta pelo assento.
+  // A morte passa por handleDeathImmediate para que toda casa liderada por ele
+  // receba um sucessor — matar "na mão" deixava assentos com líderes mortos.
+  let loserFate = 'aceita o exílio';
+  if (loser && loser.alive) {
+    if (rng.chance(0.55)) {
+      loserFate = 'não sobrevive ao desfecho';
+      if (loser.canonId) markCanonDeathBypassed(state, loser.canonId);
+      handleDeathImmediate(state, rng, loser, `Derrota na crise sucessória de ${house.name}`);
+    } else {
+      loser.personalPrestige = clamp((loser.personalPrestige ?? 0) - 12, 0, 100);
+    }
+  }
+
+  house.prestige = clamp(house.prestige - 2, 1, 100);
+
+  pushChronicle(state, {
+    absTurn: state.date.absoluteTurn,
+    title: `Crise resolvida: ${house.name}`,
+    body: `${winner.name} garante o assento (${why}). ${loser ? `${loser.name} ${loserFate}.` : ''}`,
+    tags: ['canon', 'divergence', 'sucessao'],
+  });
+  pushNarration(state, `👑 ${winner.name} vence a disputa por ${house.name}. ${loser ? `${loser.name} ${loserFate}.` : ''}`);
+}
+
+function tickSuccessionCrises(state: GameState, rng: Rng): void {
+  ensureCanonDefaults(state);
+  const crises = state.canon!.successionCrises!;
+
+  for (const crisis of Object.values(crises)) {
+    if (!crisis || crisis.resolvedAbsTurn) continue;
+
+    const house = state.houses[crisis.houseId];
+    const inc = state.characters[crisis.incumbentId];
+    const cla = state.characters[crisis.claimantId];
+    if (!house || !inc || !cla) {
+      crisis.resolvedAbsTurn = state.date.absoluteTurn;
+      continue;
+    }
+
+    // A morte de um dos lados encerra a disputa sozinha.
+    if (!inc.alive) { resolveSuccessionCrisis(state, rng, crisis, 'claimant', 'morte do titular'); continue; }
+    if (!cla.alive) { resolveSuccessionCrisis(state, rng, crisis, 'incumbent', 'morte do pretendente'); continue; }
+
+    const pull = (c: Character, backed: boolean): number =>
+      1.5
+      + (c.personalPrestige ?? 0) / 28
+      + (c.martial ?? 0) / 45
+      + (c.charm ?? 0) / 60
+      + (backed ? 1.8 : 0);
+
+    crisis.supportIncumbent = clamp(
+      crisis.supportIncumbent + pull(inc, crisis.playerSide === 'incumbent') * rng.float(0.4, 1.3),
+      0, 100
+    );
+    crisis.supportClaimant = clamp(
+      crisis.supportClaimant + pull(cla, crisis.playerSide === 'claimant') * rng.float(0.4, 1.3),
+      0, 100
+    );
+
+    // Uma casa dividida sangra recursos e reputação.
+    house.resources.gold = Math.max(0, house.resources.gold - 3);
+    if (rng.chance(0.15)) house.prestige = clamp(house.prestige - 1, 1, 100);
+
+    const decided = crisis.supportIncumbent >= 100 || crisis.supportClaimant >= 100;
+    const timedOut = (state.date.absoluteTurn - crisis.startedAbsTurn) >= SUCCESSION_CRISIS_TIMEOUT;
+
+    if (decided || timedOut) {
+      const outcome = crisis.supportIncumbent >= crisis.supportClaimant ? 'incumbent' : 'claimant';
+      resolveSuccessionCrisis(state, rng, crisis, outcome, decided ? 'apoio decisivo' : 'exaustão das casas');
+    }
+  }
+}
+
+export function activeSuccessionCrises(state: GameState): SuccessionCrisis[] {
+  const crises = state.canon?.successionCrises ?? {};
+  return Object.values(crises).filter(c => c && !c.resolvedAbsTurn);
+}
+
+/** O jogador escolhe um lado — o gesto político mais forte do jogo. */
+export function applyCrisisAction(state: GameState, rng: Rng, cmd: string): void {
+  ensureCanonDefaults(state);
+  const [houseId, side] = cmd.split(':');
+  const crisis = state.canon!.successionCrises?.[houseId];
+
+  if (!crisis || crisis.resolvedAbsTurn) {
+    pushNarration(state, 'Não há crise sucessória em aberto nesta Casa.');
+    return promptMainMenu(state, rng);
+  }
+  if (side !== 'incumbent' && side !== 'claimant') return promptMainMenu(state, rng);
+  if (crisis.playerSide) {
+    pushNarration(state, 'Você já escolheu um lado nesta disputa. Trocar de lado agora custaria sua palavra.');
+    return promptMainMenu(state, rng);
+  }
+
+  const playerHouse = state.houses[state.playerHouseId];
+  const cost = 60;
+  if ((playerHouse.resources.goods ?? 0) < cost) {
+    pushNarration(state, `Apoiar um pretendente exige ${cost} recursos para sustentar a causa.`);
+    return promptMainMenu(state, rng);
+  }
+  playerHouse.resources.goods = (playerHouse.resources.goods ?? 0) - cost;
+
+  crisis.playerSide = side;
+  const backed = state.characters[side === 'incumbent' ? crisis.incumbentId : crisis.claimantId];
+  const against = state.characters[side === 'incumbent' ? crisis.claimantId : crisis.incumbentId];
+
+  if (side === 'incumbent') crisis.supportIncumbent = clamp(crisis.supportIncumbent + 12, 0, 100);
+  else crisis.supportClaimant = clamp(crisis.supportClaimant + 12, 0, 100);
+
+  if (backed?.canonId) markCanonTouched(state, backed.canonId, 'crisis_support', 6);
+
+  const target = state.houses[crisis.houseId];
+  if (target) {
+    target.relations[playerHouse.id] = clamp((target.relations[playerHouse.id] ?? 50) + 8, 0, 100);
+  }
+  // Tomar partido cria inimigos: quem apoia o outro lado não esquece.
+  if (against) {
+    const againstHouse = state.houses[against.currentHouseId];
+    if (againstHouse && againstHouse.id !== playerHouse.id) {
+      againstHouse.relations[playerHouse.id] = clamp((againstHouse.relations[playerHouse.id] ?? 50) - 10, 0, 100);
+    }
+  }
+
+  pushNarration(state, `🤝 Você declara apoio a ${backed?.name ?? 'um pretendente'} na disputa por ${target?.name ?? houseId}. Custo: ${cost} recursos.`);
+  pushChronicle(state, {
+    absTurn: state.date.absoluteTurn,
+    title: `Apoio declarado — ${target?.name ?? houseId}`,
+    body: `${playerHouse.name} declara apoio a ${backed?.name ?? 'um pretendente'}.`,
+    tags: ['canon', 'divergence', 'sucessao', 'politica'],
+  });
+
+  return promptMainMenu(state, rng);
+}
 
 function applyCanonAutoPeopleForTurn(state: GameState, rng: Rng): void {
   ensureCanonDefaults(state);
@@ -619,14 +1137,16 @@ function applyCanonAutoPeopleForTurn(state: GameState, rng: Rng): void {
     // Mortes automáticas (inclui intervalos)
     const dAbs = canonDeathAbsTurn(state, rng, def);
     if (typeof dAbs === 'number' && dAbs === abs) {
+      const manualKey = `${def.canonId}:${absTurn(state.date.year, state.date.turn)}`;
+      // Existe um evento explícito para esta morte neste turno: ele é a fonte
+      // única da verdade. Antes os dois caminhos rodavam e se contradiziam.
+      if (CANON_MANUAL_DEATH_KEYS.has(manualKey)) continue;
+
       const key = `auto_death:${def.canonId}`;
       if (!state.canon!.appliedEventIds[key]) {
         state.canon!.appliedEventIds[key] = true;
-        const manualKey = `${def.canonId}:${absTurn(state.date.year, state.date.turn)}`;
-        // mata de forma consistente; se já existe um evento manual, suprime narrativa duplicada
-        const silent = CANON_MANUAL_DEATH_KEYS.has(manualKey);
-        const killed = killCanonCharacter(state, rng, def.canonId, 'registro canônico', silent);
-        if (!killed && !silent) {
+        const killed = killCanonCharacter(state, rng, def.canonId, 'registro canônico');
+        if (!killed) {
           pushChronicle(state, {
             absTurn: state.date.absoluteTurn,
             title: `Morte canônica evitada: ${def.name}`,
@@ -660,6 +1180,19 @@ function applyCanonLeaderMandates(state: GameState, rng: Rng): void {
 
     // Se o destino do líder divergiu por interferência do jogador, não forçamos este mandato.
     if (leader.canonId && canonIsDiverged(state, leader.canonId)) {
+      continue;
+    }
+
+    // O mandato é o caminho que realmente instala líderes canônicos, e ele
+    // ignorava se o assento ainda estava ocupado por alguém que deveria ter
+    // morrido — o titular era deposto em silêncio. Agora isso abre disputa,
+    // e enquanto o sobrevivente governar, a linha canônica daquele assento
+    // permanece fora do trilho.
+    const incumbent = state.characters[h.leaderId];
+    if (incumbent && incumbent.id !== leader.id && survivedOwnCanonDeath(state, incumbent)) {
+      const crisis = state.canon!.successionCrises?.[h.id];
+      const alreadyHandled = !!crisis && crisis.incumbentId === incumbent.id;
+      if (!alreadyHandled) openSuccessionCrisis(state, h, incumbent, leader);
       continue;
     }
 
@@ -792,6 +1325,33 @@ function tickCanonWarBattles(state: GameState, rng: Rng, w: CanonWarDef): void {
   if (involved) pushNarration(state, `⚔️ ${summary}`);
 }
 
+/**
+ * Uma guerra precisa de quem a declare. Se o instigador morreu antes da hora
+ * — ou nunca chegou ao poder porque o jogador mudou a sucessão — o conflito
+ * simplesmente não acontece.
+ */
+function canonWarInstigatorOk(state: GameState, w: CanonWarDef): { ok: boolean; why?: string } {
+  if (!w.instigatorCanonId) return { ok: true };
+
+  const c = state.characters[canonCharId(w.instigatorCanonId)];
+  const who = CANON_INDEX[w.instigatorCanonId]?.name ?? w.instigatorCanonId;
+  if (!c || !c.alive) return { ok: false, why: `${who} não está vivo para conduzi-la` };
+
+  if (w.instigatorHouseId) {
+    const h = state.houses[w.instigatorHouseId];
+    if (!h || h.leaderId !== c.id) {
+      return { ok: false, why: `${c.name} não comanda ${h?.name ?? w.instigatorHouseId}` };
+    }
+  }
+  return { ok: true };
+}
+
+function topHouseOf(state: GameState, ids: string[]): HouseState | null {
+  const hs = ids.map(id => state.houses[id]).filter(Boolean) as HouseState[];
+  if (!hs.length) return null;
+  return hs.sort((a, b) => b.prestige - a.prestige)[0];
+}
+
 function finalizeEndedCanonWar(state: GameState, rng: Rng, w: CanonWarDef): void {
   const ws = canonWarState(state, w.id);
   const endKey = `war_end:${w.id}`;
@@ -802,29 +1362,66 @@ function finalizeEndedCanonWar(state: GameState, rng: Rng, w: CanonWarDef): void
   const winIds = result === 'A' ? w.sideAHouseIds : result === 'B' ? w.sideBHouseIds : [];
   const loseIds = result === 'A' ? w.sideBHouseIds : result === 'B' ? w.sideAHouseIds : [];
 
+  const margin = Math.abs(ws.scoreA - ws.scoreB);
+  const decisive = margin >= 4;
+
   for (const hid of winIds) {
     const h = state.houses[hid];
     if (!h) continue;
-    h.prestige = clamp(h.prestige + 2, 1, 100);
+    h.prestige = clamp(h.prestige + (decisive ? 4 : 2), 1, 100);
+    // espólio de guerra
+    h.resources.goods = (h.resources.goods ?? 0) + rng.int(20, 60);
   }
+
+  const consequences: string[] = [];
+
   for (const hid of loseIds) {
     const h = state.houses[hid];
     if (!h) continue;
-    h.prestige = clamp(h.prestige - 2, 1, 100);
+    h.prestige = clamp(h.prestige - (decisive ? 5 : 2), 1, 100);
+    h.resources.goods = Math.max(0, (h.resources.goods ?? 0) - rng.int(15, 45));
+
+    // Derrota real custa gente: o líder do lado perdedor pode tombar.
+    const leader = state.characters[h.leaderId];
+    if (leader?.alive && rng.chance(decisive ? 0.22 : 0.10)) {
+      const protectedByCanon =
+        leader.isCanonical && leader.canonId && !canonIsDiverged(state, leader.canonId) &&
+        typeof leader.canonDeathAbsTurn === 'number' && state.date.absoluteTurn < leader.canonDeathAbsTurn;
+
+      if (!protectedByCanon) {
+        if (leader.canonId) markCanonDeathBypassed(state, leader.canonId);
+        consequences.push(`${leader.name} tomba entre os derrotados`);
+        handleDeathImmediate(state, rng, leader, `Derrota em ${w.name}`);
+      }
+    }
+  }
+
+  // Guerra decisiva redesenha a política: o principal derrotado passa a
+  // responder ao principal vencedor.
+  if (decisive) {
+    const winTop = topHouseOf(state, winIds);
+    const loseTop = topHouseOf(state, loseIds);
+    if (winTop && loseTop && loseTop.suzerainId !== winTop.id && !loseTop.isIronThrone && loseTop.id !== winTop.id) {
+      loseTop.suzerainId = winTop.id;
+      loseTop.economy.taxRate = Math.max(loseTop.economy.taxRate ?? 0.15, 0.20);
+      consequences.push(`${loseTop.name} passa a jurar a ${winTop.name}`);
+    }
   }
 
   const outcomeText = result === 'empate'
     ? 'O conflito termina sem um vencedor claro.'
-    : `Vitória do lado ${result} (pontuação ${ws.scoreA}–${ws.scoreB}).`;
+    : `Vitória do lado ${result} (pontuação ${ws.scoreA}–${ws.scoreB})${decisive ? ', de forma decisiva' : ''}.`;
+
+  const full = consequences.length ? `${outcomeText} ${consequences.join('. ')}.` : outcomeText;
 
   pushChronicle(state, {
     absTurn: state.date.absoluteTurn,
     title: `Fim da guerra — ${w.name}`,
-    body: outcomeText,
+    body: full,
     tags: ['war', 'canon', 'end', ...w.tags],
   });
 
-  pushNarration(state, `🕊️ Fim da guerra: ${w.name}. ${outcomeText}`);
+  pushNarration(state, `🕊️ Fim da guerra: ${w.name}. ${full}`);
 }
 
 function applyCanonWarsForTurn(state: GameState, rng: Rng): void {
@@ -832,7 +1429,33 @@ function applyCanonWarsForTurn(state: GameState, rng: Rng): void {
   if (!state.canon!.enabled) return;
   const abs = state.date.absoluteTurn;
   const prevActiveWarIds = (state.canon!.activeWarIds ?? []).slice();
-  const active = CANON_WARS.filter(w => warActive(w, abs));
+  const cancelled = state.canon!.cancelledWarIds!;
+
+  // Uma guerra só existe se ainda houver quem a declare.
+  const scheduled = CANON_WARS.filter(w => warActive(w, abs));
+  const active: CanonWarDef[] = [];
+
+  for (const w of scheduled) {
+    if (cancelled[w.id]) continue;
+
+    const startedNow = !prevActiveWarIds.includes(w.id);
+    if (startedNow) {
+      const check = canonWarInstigatorOk(state, w);
+      if (!check.ok) {
+        cancelled[w.id] = true;
+        pushChronicle(state, {
+          absTurn: abs,
+          title: `Guerra que não houve — ${w.name}`,
+          body: w.altBody ?? `O conflito previsto não se materializa: ${check.why}.`,
+          tags: ['canon', 'war', 'divergence', ...w.tags],
+        });
+        pushNarration(state, `🕊️ ${w.name} não acontece: ${check.why}.`);
+        continue;
+      }
+    }
+    active.push(w);
+  }
+
   state.canon!.activeWarIds = active.map(w => w.id);
 
   // Efeitos leves por turno (o grosso vem de eventos/batalhas e decisões do jogador).
@@ -886,21 +1509,35 @@ function applyCanonEventsForTurn(state: GameState, rng: Rng): void {
   if (!state.canon!.enabled) return;
   const anchorsMode = state.canon!.mode === 'anchors';
 
-  // 0) tenta resolver nascimentos pendentes (tardios) antes de aplicar novos marcos
-  processPendingCanonBirths(state, rng);
+  const due = CANON_EVENTS_ALL.filter(e =>
+    e.year === state.date.year &&
+    e.turn === state.date.turn &&
+    (!anchorsMode || isAnchorCanonEvent(e))
+  );
 
-  // 0) births/deaths automáticos por registro (para não depender de eventos explícitos)
+  // A ordem dentro do turno importa: quem está vivo precisa estar decidido
+  // antes de decidir quem manda. Com liderança sendo resolvida primeiro, um
+  // rei salvo pelo jogador era deposto antes mesmo de o marco de morte rodar.
+
+  // 1) nascimentos pendentes e marcos explícitos de nascimento/morte
+  processPendingCanonBirths(state, rng);
+  for (const e of due) {
+    if (e.kind === 'birth' || e.kind === 'death') applyCanonEvent(state, rng, e);
+  }
+
+  // 2) nascimentos/mortes por registro (para quem não tem evento explícito)
   applyCanonAutoPeopleForTurn(state, rng);
 
-  // 0.5) liderança e guerras por cronologia (camadas históricas)
+  // 3) liderança e guerras por cronologia (camadas históricas)
   applyCanonLeaderMandates(state, rng);
   applyCanonWarsForTurn(state, rng);
 
-  for (const e of CANON_EVENTS) {
-    if (anchorsMode && !isAnchorCanonEvent(e)) continue;
-    if (e.year === state.date.year && e.turn === state.date.turn) {
-      applyCanonEvent(state, rng, e);
-    }
+  // 4) disputas abertas por divergência
+  tickSuccessionCrises(state, rng);
+
+  // 5) demais marcos (sucessões, dinastias, torneios, crônicas)
+  for (const e of due) {
+    if (e.kind !== 'birth' && e.kind !== 'death') applyCanonEvent(state, rng, e);
   }
 }
 
@@ -1479,25 +2116,38 @@ function promptTravel(state: GameState, rng: Rng): void {
     return promptMainMenu(state, rng);
   }
 
-  const armySize = getActiveArmySize(state, 1.0);
+  const armySize = getActiveArmySize(state, 0.6);
+  const house = state.houses[state.playerHouseId];
   const base = `Você está em **${here.name}**. Escolha um destino.
 ` +
-    `Levar mais exército reduz risco de emboscada. (Viagens não consomem comida.)`;
+    `Levar mais exército reduz risco de emboscada, mas encarece os mantimentos. ` +
+    `Comida no cofre: ${house.resources.food}.`;
 
   const choices: Choice[] = [];
   for (const opt of options) {
     const to = state.locations[opt.toLocationId];
     const foodCost = travelFoodCost(state, opt.distance, armySize);
-    choices.push({ id: `go:${to.id}`, label: `Ir para ${to.name}`, hint: `Distância ${opt.distance} • Custo ~${foodCost} comida` });
+    choices.push({
+      id: `go:${to.id}`,
+      label: `Ir para ${to.name}`,
+      hint: `Distância ${opt.distance} • ${opt.distance} turno(s) • ~${foodCost} comida`,
+    });
   }
   choices.push({ id: 'back', label: 'Voltar', hint: 'Retorna ao menu principal' });
 
   pushSystem(state, base, choices);
 }
 
+/**
+ * Custo de mantimentos da viagem.
+ *
+ * O valor era calculado e descartado (a chamada existia, o resultado nunca
+ * era usado), então distância não tinha peso econômico nenhum. Agora a comitiva
+ * consome comida proporcional ao tamanho da hoste e à distância.
+ */
 function travelFoodCost(state: GameState, distance: number, armySize: number): number {
-  // Regra do usuário: comida não é gasta para viajar.
-  return 0;
+  const escort = Math.max(12, armySize);
+  return Math.round(distance * (4 + escort * 0.05));
 }
 
 function getActiveArmySize(state: GameState, marchingRatio: number): number {
@@ -2331,14 +2981,22 @@ export function applyTravel(state: GameState, rng: Rng, toLocationId: string): v
     return promptMainMenu(state, rng);
   }
 
-  // custo (comida não é gasta para viajar)
   const armySize = getActiveArmySize(state, 0.6); // padrão: marcha com 60% (o resto fica)
   const cost = travelFoodCost(state, edge.distance, armySize);
   const house = state.houses[state.playerHouseId];
 
+  // Mantimentos da comitiva
+  const paid = Math.min(house.resources.food, cost);
+  house.resources.food -= paid;
+  if (paid < cost) {
+    // Sair sem mantimentos suficientes cobra o preço na estrada.
+    house.prestige = clamp(house.prestige - 1, 1, 100);
+    pushNarration(state, `⚠️ Mantimentos insuficientes para a jornada (${paid}/${cost}). A comitiva sofre na estrada. Prestígio -1.`);
+  }
+
   // encontro
   const risk = travelEncounterRisk(state, from.regionId, armySize, house.prestige);
-  pushNarration(state, `Você parte rumo a ${state.locations[toLocationId].name}.`);
+  pushNarration(state, `Você parte rumo a ${state.locations[toLocationId].name}. Mantimentos: -${paid} comida.`);
 
   if (rng.chance(risk)) {
     resolveEncounter(state, rng, armySize);
@@ -3084,7 +3742,14 @@ function promptHouseMgmt(state: GameState, rng: Rng): void {
   const wars = (state.canon?.activeWarIds ?? []).map(id => CANON_WARS.find(w => w.id === id)).filter(Boolean) as CanonWarDef[];
   const playerSideWars = wars.filter(w => w.sideAHouseIds.includes(house.id) || w.sideBHouseIds.includes(house.id));
   for (const w of playerSideWars.slice(0, 2)) {
-    choices.splice(choices.length - 1, 0, { id: `hm:warAid:${w.id}`, label: `Apoiar guerra: ${w.name}`, hint: 'Custo 40 recursos + 80 levies • +1 progresso' });
+    for (const [size, label] of WAR_AID_TIERS) {
+      const t = WAR_AID_COST[size];
+      choices.splice(choices.length - 1, 0, {
+        id: `hm:warAid:${w.id}:${size}`,
+        label: `Apoiar ${w.name} — ${label}`,
+        hint: `${t.goods} recursos + ${t.levies} levies • +${t.points} no placar`,
+      });
+    }
   }
 
   pushSystem(state, text, choices);
@@ -3102,34 +3767,47 @@ export function applyHouseMgmt(state: GameState, rng: Rng, action: string): void
 // Apoio de guerra canônica
 if (action.startsWith('warAid:')) {
   ensureCanonDefaults(state);
-  const warId = action.split(':')[1];
+  const parts = action.split(':');
+  const warId = parts[1];
+  const size = (parts[2] ?? 'medium') as WarAidSize;
   const w = CANON_WARS.find(x => x.id === warId);
   if (!w) {
     pushNarration(state, 'Guerra não encontrada.');
     return promptMainMenu(state, rng);
   }
 
-  const goods = house.resources.goods ?? 0;
-  if (goods < 40 || house.army.levies < 80) {
-    pushNarration(state, 'Recursos insuficientes (precisa 40 recursos e 80 levies).');
-    return promptMainMenu(state, rng);
-  }
-
-  house.resources.goods = goods - 40;
-  house.army.levies -= 80;
-
-  const ws = canonWarState(state, w.id);
   const onSideA = w.sideAHouseIds.includes(house.id);
   const onSideB = w.sideBHouseIds.includes(house.id);
-
-  if (onSideA) ws.scoreA += 1;
-  else if (onSideB) ws.scoreB += 1;
-  else {
+  if (!onSideA && !onSideB) {
     pushNarration(state, 'Sua Casa não está envolvida nesta guerra.');
     return promptMainMenu(state, rng);
   }
 
-  pushNarration(state, `🛡️ Você envia apoio à guerra: ${w.name}. Progresso agora ${ws.scoreA}–${ws.scoreB}.`);
+  const cost = WAR_AID_COST[size] ?? WAR_AID_COST.medium;
+  const goods = house.resources.goods ?? 0;
+  if (goods < cost.goods || house.army.levies < cost.levies) {
+    pushNarration(state, `Recursos insuficientes (precisa ${cost.goods} recursos e ${cost.levies} levies).`);
+    return promptMainMenu(state, rng);
+  }
+
+  house.resources.goods = goods - cost.goods;
+  house.army.levies -= cost.levies;
+
+  const ws = canonWarState(state, w.id);
+  if (onSideA) ws.scoreA += cost.points;
+  else ws.scoreB += cost.points;
+
+  // Sustentar um esforço de guerra é reconhecido pelos aliados.
+  const allies = onSideA ? w.sideAHouseIds : w.sideBHouseIds;
+  for (const hid of allies) {
+    if (hid === house.id) continue;
+    const ally = state.houses[hid];
+    if (!ally) continue;
+    ally.relations[house.id] = clamp((ally.relations[house.id] ?? 50) + cost.points, 0, 100);
+  }
+  house.prestige = clamp(house.prestige + (cost.points >= 3 ? 1 : 0), 1, 100);
+
+  pushNarration(state, `🛡️ Você envia apoio à guerra: ${w.name} (+${cost.points}). Progresso agora ${ws.scoreA}–${ws.scoreB}.`);
   pushChronicle(state, {
     absTurn: state.date.absoluteTurn,
     title: `Apoio de guerra — ${w.name}`,
@@ -3291,6 +3969,9 @@ export function advanceTurn(state: GameState, rng: Rng, options?: { silent?: boo
 
   // 1.5) Rumores (preenche lacunas)
   tickRumors(state, rng);
+
+  // 1.75) Laços fracos com figuras históricas esfriam com o tempo
+  tickCanonDivergenceDecay(state);
 
   // 2) Economia, tributos e consumo (todas as casas)
   tickEconomyAll(state, rng);
@@ -3698,7 +4379,62 @@ function computeSuccessor(state: GameState, rng: Rng, houseId: string): Characte
     }
   }
 
+  // Último recurso: um ramo distante reclama o assento.
+  //
+  // Sem isto a função devolvia null e quem chamou deixava `leaderId` apontando
+  // para um morto — o mundo inteiro assume que toda Casa tem um líder vivo.
+  // (Para a Casa do jogador isso não se aplica: a extinção da linhagem é uma
+  // condição de fim de jogo legítima e é tratada em handlePlayerDeath.)
+  if (houseId !== state.playerHouseId) {
+    const cadet = spawnCadet(state, rng, houseId);
+    if (cadet) {
+      pushChronicle(state, {
+        absTurn: state.date.absoluteTurn,
+        title: `Ramo distante: ${house.name}`,
+        body: `Sem herdeiros diretos, ${cadet.name} chega de um ramo distante para reclamar ${house.name}.`,
+        tags: ['politica', 'sucessao'],
+      });
+      return cadet;
+    }
+  }
+
   return null;
+}
+
+/** Cria um herdeiro de ramo colateral para manter uma Casa viva. */
+function spawnCadet(state: GameState, rng: Rng, houseId: string): Character | null {
+  const house = state.houses[houseId];
+  if (!house) return null;
+
+  const gender: Gender = rng.chance(0.62) ? 'M' : 'F';
+  const martial = clamp(rng.int(18, 55), 0, 100);
+  const c: Character = {
+    id: uid('c'),
+    name: genFirstName(rng, gender),
+    gender,
+    ageYears: rng.int(19, 38),
+    alive: true,
+    birthHouseId: houseId,
+    currentHouseId: houseId,
+    maritalStatus: 'single',
+    keepsBirthName: false,
+    locationId: house.seatLocationId,
+    martial,
+    charm: clamp(rng.int(20, 60), 0, 100),
+    beauty: clamp(rng.int(20, 60), 0, 100),
+    renownTier: renownFromMartial(martial),
+    fertility: rng.chance(0.05) ? 'sterile' : 'fertile',
+    wellLiked: clamp(rng.int(25, 60), 0, 100),
+    personalPrestige: clamp(rng.int(8, 28), 0, 100),
+    knownToPlayer: false,
+    relationshipToPlayer: 0,
+    personalGold: rng.int(10, 40),
+    kissedIds: [],
+    title: 'Ramo distante',
+  };
+
+  state.characters[c.id] = c;
+  return c;
 }
 
 function isFertileFemale(c: Character): boolean {

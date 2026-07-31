@@ -52,7 +52,7 @@
 
 ### 3.4 Viagem e mapa
 - Grafo de viagens entre locais importantes.
-- Distância influencia risco e custo estimado exibido (atualmente custo de comida está zerado por regra ativa).
+- Distância influencia risco, turnos gastos e custo de mantimentos (comida é efetivamente consumida).
 - Ao chegar em um local, o jogador “conhece” personagens locais automaticamente.
 
 ### 3.5 Diplomacia
@@ -146,14 +146,18 @@
 - Integração de economia + política + social + herança está consistente para evolução futura.
 
 ## 10) Riscos/débitos técnicos (para próximos passos)
-1. `sim.ts` está muito grande (manutenibilidade baixa).
-2. Sem suíte de testes automatizados.
-3. Balanceamento econômico/militar ainda manual.
-4. Dependência de pacote npm bloqueada no ambiente atual (impediu build local nesta análise).
+1. `sim.ts` está muito grande (~4.900 linhas, manutenibilidade baixa).
+2. Balanceamento econômico/militar ainda manual.
+3. Extinção precoce da linhagem do jogador em Casas pequenas encerra campanhas cedo.
+4. Ids de entidade (`uid`) usam `Math.random()`/`Date.now()`, então saves não são
+   reprodutíveis por seed — a simulação é determinística, a identidade não.
+
+> Atualizado: build e testes rodam (`npm run build`, `npm test`). A suíte
+> determinística cobre o motor canônico e invariantes de mundo.
 
 ## 11) Prioridade recomendada para evolução
 1. Modularizar `sim.ts` por domínios (`economy`, `diplomacy`, `canon`, `combat`, `social`).
-2. Criar testes determinísticos com semente fixa de RNG.
+2. ~~Criar testes determinísticos com semente fixa de RNG.~~ (feito — `npm test`)
 3. Adicionar telemetria de balanceamento por 200+ turnos simulados.
 4. Expandir UI de inspeção (tooltips de fórmula e log técnico por turno).
 5. Harden de validações anti-estado inválido em ações (commands payload).

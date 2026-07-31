@@ -12,6 +12,16 @@
   padding:14px;
 }
 
+/* Na aba "Mapa" o mapa vira o painel principal — a 320px ele era
+   pequeno demais para servir de mapa de verdade. */
+.grid.map-focus{
+  grid-template-columns: minmax(520px, 1fr) minmax(360px, 0.9fr) 340px;
+}
+
+@media (max-width: 1200px){
+  .grid, .grid.map-focus{ grid-template-columns: 1fr; }
+}
+
 .left,.center,.right{
   background:var(--panel);
   border:1px solid var(--line);
