@@ -115,6 +115,21 @@ que o reino aceite:
 | tributo negado | um vassalo seu parou de pagar |
 | conquista | sempre — mas custa 6 de prestígio e afasta todo o reino |
 
-O placar de guerra vai a 100. Acima de 85 o derrotado jura à Casa vencedora;
-abaixo disso, paga tributo. Muralhas derrubadas permitem ocupar o assento, e a
-paz devolve o que foi tomado — salvo vitória esmagadora.
+O placar de guerra vai a 100, e na mesa de paz cada exigência tem um preço:
+
+| Termo | Custo em pontuação |
+|---|---|
+| paz branca | 0 |
+| tributo de guerra | 25 |
+| cessão do assento ocupado | 60 |
+| vassalagem | 85 |
+
+Pedir mais do que se conquistou é recusado. As outras Casas também declaram
+guerras próprias (10 a 14 por século), sempre com motivo defensável.
+
+## Economia
+
+Fazendas são a alavanca de tudo: definem quanta gente a terra sustenta, quanto
+cabe nos celeiros e armazéns, e quanto ouro o salão guarda. A hoste é limitada a
+cerca de 1 em 8 camponeses, cavalaria a 8% da hoste, e soldo e corte são
+cobrados todo turno — cofre vazio faz tropa desertar.

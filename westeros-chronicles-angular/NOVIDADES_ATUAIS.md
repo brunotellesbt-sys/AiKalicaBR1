@@ -156,11 +156,58 @@ mapa desenhando regiões e Muralha, viagem por clique, seleção de reino, avan�
 de turno, o menu de guerra com sua restrição de liderança, e ausência de erros
 de console numa sessão típica.
 
+## 16) Histórias de casas menores
+
+O cânone cobria tronos e guerras grandes, mas as casas vassalas — a maioria das
+73 jogáveis — não tinham história nenhuma. **50 eventos novos, 31 casas**, em
+arcos que atravessam gerações: a rixa Bracken × Blackwood do moinho de 154 até
+a Guerra dos Cinco Reis, o enriquecimento e o silêncio de Castamere, os três
+cães dos Clegane e o fogo entre irmãos, a portagem das Gêmeas, o duelo desigual
+de Baelish e sua alfândega em Vila Gaivota, e ainda Dayne, Mormont,
+Osgrey/Webber, Whent, Umber, Karstark, Manderly, Hornwood, Hightower, Redwyne,
+Tarly, Florent, Yronwood, Royce, Corbray, Harlaw, Drumm, Swann, Dondarrion e
+Selmy.
+
+**Notícia local**: despejar 50 histórias de famílias que o jogador nunca
+encontrou viraria um mural. Eventos com a tag `local` só são narrados para quem
+está por perto (mesma região, sua Casa, laço feudal, ou relação ≥ 62). Todos
+continuam na crônica. Medido: 12% a 22% chegam ao chat conforme onde você
+começa.
+
+## 17) Economia com pressão real
+
+Medida a campanha inteira, a economia era acumulação pura:
+
+| grandeza   | ano 150 | ano 305 (antes) | fator   | ano 305 (agora) |
+|------------|---------|-----------------|---------|-----------------|
+| ouro       |     369 |       1.950.021 |  5.285x |           2.625 |
+| comida     |   1.180 |       7.350.128 |  6.229x |           4.200 |
+| recursos   |     384 |      23.794.624 | 61.965x |           4.187 |
+| camponeses |   2.629 |          67.284 |     26x |           2.134 |
+
+Uma fazenda custa 120 — no ano 200 toda Casa tinha 164 mil, e nenhum preço
+importava mais. Quatro tetos resolvem: população logística com capacidade vinda
+das fazendas, celeiros e armazéns com limite, hoste limitada a ~1 em 8
+camponeses (com dispensa de baixo para cima), e cavalaria no máximo 8% da hoste
+— era o soldo dos cavaleiros, que chegavam a 136 de 163 homens, que quebrava as
+Casas. Some-se soldo e corte cobrados por turno e um teto de tesouro: ouro vira
+vazão, não pilha.
+
+## 18) Termos de paz e IA agressiva
+
+A paz era binária. Agora o vencedor escolhe o que exigir, e cada termo custa
+pontuação: tributo (25), cessão do assento ocupado (60), vassalagem (85).
+Pedir além do conquistado é recusado.
+
+E as Casas passam a declarar as próprias guerras — 10 a 14 por século, sempre
+com motivo defensável. O jogador pode acordar em guerra sem ter feito nada.
+
 ## O que ainda falta
 
-1. **Diplomacia de guerra mais rica** — hoje a paz é aceita ou recusada; não há
-   negociação de termos específicos (reféns, cessão de um assento escolhido).
-2. **IA não declara guerra sozinha** — as Casas defendem-se e pedem paz, mas
-   quem inicia conflitos não canônicos é sempre o jogador.
-3. **Balanceamento econômico de campanha longa** — nada quebra em 155 anos,
-   mas as Casas grandes acumulam recursos sem teto prático.
+1. **Relações nunca caem o bastante** — o casus belli de rixa exige relação ≤ 20,
+   mas a mínima observada entre Casas na simulação é 49. Só reivindicação e
+   tributo geram guerras na prática.
+2. **Reféns e casamentos forçados na mesa de paz** — os termos hoje são
+   tributo, assento e vassalagem; faltam os laços pessoais.
+3. **Histórias de casas menores não são interativas** — chegam como notícia,
+   mas o jogador ainda não pode intervir numa rixa alheia.
