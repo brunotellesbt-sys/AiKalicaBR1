@@ -273,6 +273,9 @@ export interface GameState {
   /** Guerras declaradas em jogo (o jogador ou a IA). */
   wars?: War[];
 
+  /** Rixas ativas entre Casas. */
+  rivalries?: Rivalry[];
+
   // Sistema de empréstimo com o Banco de Ferro
   ironBankDebt: {
     principal: number;
@@ -443,6 +446,25 @@ export interface War {
   recentBattles: Array<{ absTurn: number; summary: string }>;
   endedAbsTurn?: number;
   outcome?: 'attacker' | 'defender' | 'white';
+}
+
+/**
+ * Rixa ativa entre duas Casas.
+ *
+ * Atrito difuso sobre todos os pares não funciona — são dezenas de milhares de
+ * pares e cada um seria tocado meia vez por campanha. Westeros tem feudos com
+ * nome, não antipatia uniforme: um punhado de rixas ativas que aprofundam com
+ * o tempo e podem explodir em guerra.
+ */
+export interface Rivalry {
+  id: string;
+  aHouseId: string;
+  bHouseId: string;
+  startedAbsTurn: number;
+  /** Motivo declarado (fronteira, primazia, sangue, insulto). */
+  cause: string;
+  /** O jogador tomou partido? */
+  playerFavors?: string;
 }
 
 /** Assento tomado por outra Casa durante uma guerra. */

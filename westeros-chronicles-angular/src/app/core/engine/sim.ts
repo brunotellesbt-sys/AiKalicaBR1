@@ -50,6 +50,7 @@ import {
   tickWars, warsOf, warBetween, activeWars, sideOf,
   affordableTerms, peaceTermLabel, PEACE_TERM_COST,
 } from './warfare';
+import { tickRivalries, tickWarGrudges, activeRivalries, applyRivalryIntervention } from './politics';
 import { SCHEDULED_EVENTS } from '../data/timeline';
 import {
   CANON_EVENTS,
@@ -71,6 +72,7 @@ export { renownFromMartial, titleForHouse } from './rules';
 export { CANON_DIVERGENCE_THRESHOLD } from './canon-divergence';
 export { handlePlayerDeath, activeSuccessionCrises, pretenderLabel } from './succession';
 export { activeWars, warsOf, casusBelliLabel } from './warfare';
+export { activeRivalries } from './politics';
 
 export interface NewGameParams {
   playerHouseId: string;
@@ -1574,6 +1576,7 @@ export function buildInitialState(seed: number, params: NewGameParams, baseState
     claims: [],
     occupations: {},
     wars: [],
+    rivalries: [],
 
     chronicle: [],
     chat: [],
@@ -2825,6 +2828,7 @@ ${lines}
       label: 'Daenerys Targaryen',
       hint: 'Negociar / atacar (condição especial de “vitória”)'
     }] as Choice[] : []),
+    { id: 'dip:rivalries', label: 'Rixas entre Casas', hint: 'Mediar ou tomar partido em desavenças alheias' },
     { id: 'dip:war', label: 'Guerra', hint: 'Declarar guerra ou negociar paz (apenas líderes)' },
     { id: 'dip:ironbank', label: 'Banco de Ferro', hint: 'Pedir empréstimo / pagar dívida' },
     { id: 'back', label: 'Voltar' },
@@ -2934,6 +2938,45 @@ export function applyDiplomacy(state: GameState, rng: Rng, action: string): void
       });
       choices.push({ id: 'back', label: 'Voltar' });
       pushSystem(state, 'Qual casa receberá a proposta? (mínimo relação 50)', choices);
+      return;
+    }
+    case 'rivalries': {
+      const minhaRegiao = state.locations[player.locationId]?.regionId;
+      const rixas = activeRivalries(state).filter(r => {
+        const a = state.houses[r.aHouseId];
+        return a && (a.regionId === minhaRegiao || a.regionId === house.regionId);
+      });
+
+      if (!rixas.length) {
+        pushNarration(state, 'Nenhuma rixa aberta ao seu alcance no momento.');
+        return promptMainMenu(state, rng);
+      }
+
+      const choices: Choice[] = [];
+      for (const r of rixas.slice(0, 4)) {
+        const a = state.houses[r.aHouseId]!;
+        const b = state.houses[r.bHouseId]!;
+        const rel = a.relations[b.id] ?? 50;
+        if (r.playerFavors) {
+          choices.push({
+            id: 'back',
+            label: `${a.name} × ${b.name} — você já se envolveu`,
+            hint: `Relação entre elas: ${rel}`,
+            disabled: true,
+          });
+          continue;
+        }
+        choices.push({
+          id: `rival:${r.id}:mediate`,
+          label: `Mediar ${a.name} × ${b.name}`,
+          hint: `Custo 45 recursos • relação entre elas ${rel} • prestígio +2`,
+        });
+        choices.push({ id: `rival:${r.id}:${a.id}`, label: `Apoiar ${a.name}`, hint: `Contra ${b.name}: aliado novo, inimigo novo` });
+        choices.push({ id: `rival:${r.id}:${b.id}`, label: `Apoiar ${b.name}`, hint: `Contra ${a.name}: aliado novo, inimigo novo` });
+      }
+      choices.push({ id: 'back', label: 'Voltar' });
+
+      pushSystem(state, 'Rixas abertas ao seu alcance. Mediar rende reputação; tomar partido rende um aliado — e um inimigo.', choices);
       return;
     }
     case 'war': {
@@ -3700,6 +3743,10 @@ export function advanceTurn(state: GameState, rng: Rng, options?: { silent?: boo
   // 4.5) Torneios (geração + expiração)
   tickTournaments(state, rng);
 
+  // 4.4) Deriva política entre Casas (atrito, afinidade e rancor)
+  tickRivalries(state, rng);
+  tickWarGrudges(state, rng);
+
   // 4.5) Guerras declaradas em jogo
   tickWars(state, rng);
 
@@ -4198,5 +4245,16 @@ export function applyWarAction(state: GameState, rng: Rng, cmd: string): void {
     return promptMainMenu(state, rng);
   }
 
+  return promptMainMenu(state, rng);
+}
+
+/** Mediar ou atiçar uma rixa entre outras Casas. */
+export function applyRivalryAction(state: GameState, rng: Rng, cmd: string): void {
+  const sep = cmd.indexOf(':');
+  const rivalryId = sep >= 0 ? cmd.slice(0, sep) : cmd;
+  const mode = sep >= 0 ? cmd.slice(sep + 1) : 'mediate';
+
+  const res = applyRivalryIntervention(state, rng, rivalryId, mode);
+  pushNarration(state, res.message);
   return promptMainMenu(state, rng);
 }

@@ -37,6 +37,23 @@
       </div>
     </div>
 
+    <div class="card" *ngIf="rivalries().length">
+      <div class="h3">Rixas na sua região</div>
+      <div class="muted small">
+        Desavenças entre outras Casas. Abaixo de 20 de relação viram motivo de guerra.
+        Use o Chat → “Diplomacia” → “Rixas entre Casas” para mediar ou tomar partido.
+      </div>
+
+      <div class="war" *ngFor="let r of rivalries()">
+        <div class="warTop">
+          <b>{{r.a}} × {{r.b}}</b>
+          <span class="badge">{{r.rel}}</span>
+        </div>
+        <div class="muted small">Causa: {{r.cause}}</div>
+        <div class="muted small" *ngIf="r.side">— {{r.side}}</div>
+      </div>
+    </div>
+
     <div class="card" *ngIf="otherWars().length">
       <div class="h3">Outras guerras no reino</div>
       <div class="muted small" *ngFor="let w of otherWars()">

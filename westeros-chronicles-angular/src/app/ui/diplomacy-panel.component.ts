@@ -2,6 +2,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { GameState, War } from '../core/models';
 import { activeWars, warsOf, casusBelliLabel, sideOf } from '../core/engine/warfare';
+import { activeRivalries } from '../core/engine/politics';
 
 @Component({
   selector: 'app-diplomacy-panel',
@@ -67,6 +68,30 @@ export class DiplomacyPanelComponent {
   isLeader(): boolean {
     const h = this.state.houses[this.state.playerHouseId];
     return h?.leaderId === this.state.playerId;
+  }
+
+  /** Rixas ao alcance do jogador (mesma região da Casa). */
+  rivalries(): Array<{ id: string; a: string; b: string; cause: string; rel: number; side: string }> {
+    const minha = this.state.houses[this.state.playerHouseId]?.regionId;
+    return activeRivalries(this.state)
+      .filter(r => this.state.houses[r.aHouseId]?.regionId === minha)
+      .map(r => {
+        const a = this.state.houses[r.aHouseId]!;
+        const b = this.state.houses[r.bHouseId]!;
+        return {
+          id: r.id,
+          a: a.name,
+          b: b.name,
+          cause: r.cause,
+          rel: a.relations[b.id] ?? 50,
+          side: r.playerFavors === 'peace'
+            ? 'você mediou'
+            : r.playerFavors
+              ? `você apoia ${this.houseName(r.playerFavors)}`
+              : '',
+        };
+      })
+      .slice(0, 6);
   }
 
   topRelations(): Array<{name: string, rel: number, prestige: number}> {

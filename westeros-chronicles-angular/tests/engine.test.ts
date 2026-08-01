@@ -14,6 +14,7 @@ import {
 import {
   availableCasusBelli, declareWar, warsOf, activeWars, affordableTerms,
 } from '../src/app/core/engine/warfare';
+import { applyRivalryIntervention } from '../src/app/core/engine/politics';
 
 // ---------------------------------------------------------------------------
 // Utilitários
@@ -551,6 +552,58 @@ test('termos de paz exigem pontuação para serem cobrados', () => {
   const comVitoria = affordableTerms(state, war, 'attacker');
   assert(comVitoria.includes('tribute'), 'tributo deveria estar disponível');
   assert(comVitoria.includes('vassalage'), 'vassalagem deveria estar disponível com 100');
+});
+
+test('rixas nascem, aprofundam e tornam a guerra por rixa alcançável', () => {
+  const { state, rng } = newGame(2024);
+  runWorldUntil(state, rng, 305);
+
+  const rixas = state.rivalries ?? [];
+  assert(rixas.length > 0, 'nenhuma rixa ativa no fim da campanha');
+
+  // O ponto todo: antes, de 83.232 pares apenas 24 chegavam a ≤20 em 155 anos,
+  // e todos vinham de guerras já ocorridas — o casus belli de rixa era
+  // inalcançável.
+  let hostis = 0;
+  for (const h of Object.values(state.houses)) {
+    for (const v of Object.values(h.relations)) if (v <= 20) hostis++;
+  }
+  assert(hostis >= 30, `apenas ${hostis} pares em rixa aberta: o casus belli segue inalcançável`);
+
+  // E não pode virar colapso geral: a mediana precisa continuar civilizada.
+  const todas: number[] = [];
+  for (const h of Object.values(state.houses)) todas.push(...Object.values(h.relations));
+  todas.sort((a, b) => a - b);
+  const mediana = todas[Math.floor(todas.length / 2)];
+  assert(mediana >= 40, `mediana das relações caiu para ${mediana}: o mundo inteiro virou inimigo`);
+
+  assert(chronicleHas(state, 'Rixa aberta') || chronicleHas(state, 'Atrito entre'), 'as rixas não viraram crônica');
+});
+
+test('o jogador pode mediar uma rixa alheia', () => {
+  const { state, rng } = newGame(9182);
+  runWorldUntil(state, rng, 200);
+
+  const rixa = (state.rivalries ?? []).find(r => !r.playerFavors);
+  assert(rixa, 'nenhuma rixa disponível para mediar');
+
+  const playerHouse = state.houses[state.playerHouseId];
+  playerHouse.resources.goods = 500;
+
+  const a = state.houses[rixa!.aHouseId];
+  const b = state.houses[rixa!.bHouseId];
+  const antes = a.relations[b.id] ?? 50;
+  const prestigioAntes = playerHouse.prestige;
+
+  const res = applyRivalryIntervention(state, rng, rixa!.id, 'mediate');
+  assert(res.ok, `mediação recusada: ${res.message}`);
+  assert((a.relations[b.id] ?? 50) > antes, 'a mediação não melhorou a relação entre elas');
+  assert(playerHouse.prestige > prestigioAntes, 'mediar não rendeu prestígio');
+  assertEqual(rixa!.playerFavors, 'peace', 'a rixa não registrou a mediação');
+
+  // Envolver-se duas vezes não vale.
+  const segunda = applyRivalryIntervention(state, rng, rixa!.id, 'mediate');
+  assert(!segunda.ok, 'foi possível se envolver duas vezes na mesma rixa');
 });
 
 test('a economia estabiliza em platô, não em explosão', () => {
