@@ -270,6 +270,9 @@ export interface GameState {
   /** Assentos ocupados militarmente, por id de local. */
   occupations?: Record<string, Occupation>;
 
+  /** Guerras declaradas em jogo (o jogador ou a IA). */
+  wars?: War[];
+
   // Sistema de empréstimo com o Banco de Ferro
   ironBankDebt: {
     principal: number;
@@ -407,6 +410,33 @@ export interface SeatClaim {
   origin: 'marriage' | 'blood' | 'conquest';
   strength: number;       // 0..100
   createdAbsTurn: number;
+}
+
+/**
+ * Justificativa para declarar guerra.
+ * - claim: sua Casa tem reivindicação sobre o assento do alvo
+ * - feud: relação no chão (rixa de fronteira)
+ * - tribute: um vassalo seu deixou de pagar
+ * - conquest: nenhuma — guerra de pura ambição, e o reino julga por isso
+ */
+export type CasusBelli = 'claim' | 'feud' | 'tribute' | 'conquest';
+
+/** Guerra entre Casas, declarada em jogo (distinta das guerras canônicas). */
+export interface War {
+  id: string;
+  attackerHouseId: string;
+  defenderHouseId: string;
+  attackerAllies: string[];
+  defenderAllies: string[];
+  casusBelli: CasusBelli;
+  startedAbsTurn: number;
+  /** Pontuação de guerra 0..100 de cada lado. */
+  scoreAttacker: number;
+  scoreDefender: number;
+  lastBattleAbsTurn: number;
+  recentBattles: Array<{ absTurn: number; summary: string }>;
+  endedAbsTurn?: number;
+  outcome?: 'attacker' | 'defender' | 'white';
 }
 
 /** Assento tomado por outra Casa durante uma guerra. */

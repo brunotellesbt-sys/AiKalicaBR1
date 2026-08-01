@@ -45,6 +45,10 @@ import {
   tickConceptions, tickPregnancies, spawnChild, tickPersonalProgression,
   tickAgesAndDeaths,
 } from './lifecycle';
+import {
+  availableCasusBelli, casusBelliLabel, declareWar, endWar,
+  tickWars, warsOf, warBetween, activeWars, sideOf,
+} from './warfare';
 import { SCHEDULED_EVENTS } from '../data/timeline';
 import {
   CANON_EVENTS,
@@ -65,6 +69,7 @@ import { SuccessionCrisis, CrisisPretender, PretenderBasis, SeatClaim, Occupatio
 export { renownFromMartial, titleForHouse } from './rules';
 export { CANON_DIVERGENCE_THRESHOLD } from './canon-divergence';
 export { handlePlayerDeath, activeSuccessionCrises, pretenderLabel } from './succession';
+export { activeWars, warsOf, casusBelliLabel } from './warfare';
 
 export interface NewGameParams {
   playerHouseId: string;
@@ -1517,6 +1522,7 @@ export function buildInitialState(seed: number, params: NewGameParams, baseState
     missions: [],
     claims: [],
     occupations: {},
+    wars: [],
 
     chronicle: [],
     chat: [],
@@ -2768,6 +2774,7 @@ ${lines}
       label: 'Daenerys Targaryen',
       hint: 'Negociar / atacar (condição especial de “vitória”)'
     }] as Choice[] : []),
+    { id: 'dip:war', label: 'Guerra', hint: 'Declarar guerra ou negociar paz (apenas líderes)' },
     { id: 'dip:ironbank', label: 'Banco de Ferro', hint: 'Pedir empréstimo / pagar dívida' },
     { id: 'back', label: 'Voltar' },
   ];
@@ -2876,6 +2883,53 @@ export function applyDiplomacy(state: GameState, rng: Rng, action: string): void
       });
       choices.push({ id: 'back', label: 'Voltar' });
       pushSystem(state, 'Qual casa receberá a proposta? (mínimo relação 50)', choices);
+      return;
+    }
+    case 'war': {
+      const isLeader = house.leaderId === player.id;
+      if (!isLeader) {
+        pushNarration(state, 'Só o líder da Casa pode declarar guerra ou assinar a paz.');
+        return promptMainMenu(state, rng);
+      }
+
+      const mine = warsOf(state, house.id);
+      const choices: Choice[] = [];
+
+      for (const w of mine) {
+        const other = w.attackerHouseId === house.id ? w.defenderHouseId : w.attackerHouseId;
+        const side = sideOf(w, house.id);
+        const mineScore = side === 'attacker' ? w.scoreAttacker : w.scoreDefender;
+        const theirScore = side === 'attacker' ? w.scoreDefender : w.scoreAttacker;
+        choices.push({
+          id: `war:peace:${w.id}`,
+          label: `Propor paz a ${state.houses[other]?.name ?? other}`,
+          hint: `Placar ${mineScore}–${theirScore} • termos seguem quem está à frente`,
+        });
+      }
+
+      // Alvos possíveis: casas alcançáveis com quem você ainda não está em guerra.
+      const targets = computeContactableHouses(state)
+        .filter(h => h.id !== house.id && !warBetween(state, house.id, h.id))
+        .slice(0, 8);
+
+      for (const t of targets) {
+        const cbs = availableCasusBelli(state, house.id, t.id);
+        const best = cbs[0];
+        const rel = house.relations[t.id] ?? 50;
+        choices.push({
+          id: `war:declare:${t.id}:${best}`,
+          label: `Declarar guerra a ${t.name}`,
+          hint: `${casusBelliLabel(best)} • prestígio ${t.prestige} • relação ${rel}`
+            + (best === 'conquest' ? ' • SEM justificativa: -6 prestígio e todo o reino se afasta' : ''),
+        });
+      }
+
+      choices.push({ id: 'back', label: 'Voltar' });
+      pushSystem(state,
+        mine.length
+          ? `Você está em ${mine.length} guerra(s). Escolha uma ação.`
+          : 'Nenhuma guerra em andamento. Escolha um alvo — e um motivo que o reino aceite.',
+        choices);
       return;
     }
     case 'ironbank': {
@@ -3590,6 +3644,9 @@ export function advanceTurn(state: GameState, rng: Rng, options?: { silent?: boo
   // 4.5) Torneios (geração + expiração)
   tickTournaments(state, rng);
 
+  // 4.5) Guerras declaradas em jogo
+  tickWars(state, rng);
+
   // 4.75) Assentos ocupados militarmente
   tickOccupations(state, rng);
 
@@ -4001,4 +4058,83 @@ export function applyIronBank(state: GameState, rng: Rng, cmd: string): void {
     pushNarration(state, `🏦 Você quita ${pay} ouro. Dívida encerrada. Prestígio +1.`);
     return promptMainMenu(state, rng);
   }
+}
+
+/** Declaração de guerra e pedido de paz (ações do líder da Casa). */
+export function applyWarAction(state: GameState, rng: Rng, cmd: string): void {
+  const player = state.characters[state.playerId];
+  const house = state.houses[state.playerHouseId];
+
+  if (house.leaderId !== player.id) {
+    pushNarration(state, 'Só o líder da Casa pode declarar guerra ou assinar a paz.');
+    return promptMainMenu(state, rng);
+  }
+
+  const parts = cmd.split(':');
+
+  if (parts[0] === 'declare') {
+    const targetId = parts[1];
+    const cb = (parts[2] ?? 'conquest') as any;
+    const target = state.houses[targetId];
+
+    if (!target) {
+      pushNarration(state, 'Casa inválida.');
+      return promptMainMenu(state, rng);
+    }
+    if (warBetween(state, house.id, targetId)) {
+      pushNarration(state, 'Vocês já estão em guerra.');
+      return promptMainMenu(state, rng);
+    }
+    if (!availableCasusBelli(state, house.id, targetId).includes(cb)) {
+      pushNarration(state, 'Esse motivo não se sustenta contra esta Casa.');
+      return promptMainMenu(state, rng);
+    }
+
+    // Uma hoste precisa existir antes de marchar.
+    if (house.army.levies < 60) {
+      pushNarration(state, 'Sua hoste é pequena demais para uma campanha (mínimo 60 levies).');
+      return promptMainMenu(state, rng);
+    }
+
+    const w = declareWar(state, rng, house.id, targetId, cb);
+    if (w && (w.attackerAllies.length || w.defenderAllies.length)) {
+      const mine = w.attackerAllies.map(id => state.houses[id]?.name).filter(Boolean).join(', ') || 'ninguém';
+      const theirs = w.defenderAllies.map(id => state.houses[id]?.name).filter(Boolean).join(', ') || 'ninguém';
+      pushNarration(state, `🤝 Ao seu lado: ${mine}. Ao lado deles: ${theirs}.`);
+    }
+    return promptMainMenu(state, rng);
+  }
+
+  if (parts[0] === 'peace') {
+    const warId = parts[1];
+    const w = activeWars(state).find(x => x.id === warId);
+    if (!w) {
+      pushNarration(state, 'Essa guerra já terminou.');
+      return promptMainMenu(state, rng);
+    }
+
+    const side = sideOf(w, house.id);
+    const mineScore = side === 'attacker' ? w.scoreAttacker : w.scoreDefender;
+    const theirScore = side === 'attacker' ? w.scoreDefender : w.scoreAttacker;
+
+    // O outro lado só aceita se não estiver claramente ganhando.
+    const gap = theirScore - mineScore;
+    const acceptChance = clamp(0.75 - gap / 90, 0.08, 0.95);
+
+    if (!rng.chance(acceptChance)) {
+      pushNarration(state, 'Sua proposta de paz é recusada. Eles ainda acreditam que podem vencer.');
+      return promptMainMenu(state, rng);
+    }
+
+    const outcome = mineScore === theirScore
+      ? 'white'
+      : (mineScore > theirScore
+          ? (side === 'attacker' ? 'attacker' : 'defender')
+          : (side === 'attacker' ? 'defender' : 'attacker'));
+
+    endWar(state, rng, w, outcome as any, 'paz negociada');
+    return promptMainMenu(state, rng);
+  }
+
+  return promptMainMenu(state, rng);
 }

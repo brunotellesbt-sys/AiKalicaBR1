@@ -7,7 +7,8 @@
     "build": "ng build --configuration production",
     "build:dev": "ng build",
     "lint": "echo \"(no lint configured)\"",
-    "test": "tsc -p tsconfig.test.json && node .test-build/tests/engine.test.js"
+    "test": "tsc -p tsconfig.test.json && node .test-build/tests/engine.test.js",
+    "test:ui": "ng serve --port 4300 & node tests/ui.spec.mjs; code=$?; pkill -f \"ng serve --port 4300\"; exit $code"
   },
   "dependencies": {
     "@angular/animations": "^17.3.0",
@@ -26,6 +27,7 @@
     "@angular/cli": "^17.3.0",
     "@angular/compiler-cli": "^17.3.0",
     "@types/node": "^20.19.43",
+    "playwright": "^1.48.0",
     "typescript": "~5.4.5"
   }
 }

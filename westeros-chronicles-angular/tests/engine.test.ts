@@ -11,6 +11,9 @@ import {
   handlePlayerDeath,
   CANON_DIVERGENCE_THRESHOLD,
 } from '../src/app/core/engine/sim';
+import {
+  availableCasusBelli, declareWar, warsOf, activeWars,
+} from '../src/app/core/engine/warfare';
 
 // ---------------------------------------------------------------------------
 // Utilitários
@@ -390,6 +393,69 @@ test('sem nenhum parente de sangue, a linhagem realmente se extingue', () => {
 
   handlePlayerDeath(state, rng, 'teste');
   assert(state.game.over, 'deveria ser fim de jogo sem qualquer parente vivo');
+});
+
+test('guerra declarada pelo jogador roda e termina com termos', () => {
+  const { state, rng } = newGame(90210);
+  const house = state.houses[state.playerHouseId];
+  const player = state.characters[state.playerId];
+
+  // o jogador precisa liderar e ter hoste
+  house.leaderId = player.id;
+  house.army.levies = 400;
+  house.army.menAtArms = 80;
+
+  const target = Object.values(state.houses).find(
+    h => h.id !== house.id && h.regionId === house.regionId && !h.isIronThrone
+  )!;
+  house.relations[target.id] = 10; // rixa de fronteira
+
+  const cbs = availableCasusBelli(state, house.id, target.id);
+  assert(cbs.includes('feud'), `esperava casus belli de rixa, veio ${cbs.join(',')}`);
+
+  const war = declareWar(state, rng, house.id, target.id, 'feud');
+  assert(war, 'a guerra não foi declarada');
+  assertEqual(warsOf(state, house.id).length, 1, 'a guerra não aparece na lista da Casa');
+
+  // roda até acabar (ou até a exaustão)
+  let guard = 0;
+  while (activeWars(state).length && guard++ < 400) {
+    advanceTurn(state, rng, { silent: true });
+    if (state.game.over) break;
+  }
+
+  const finished = (state.wars ?? []).find(w => w.id === war!.id);
+  assert(finished?.endedAbsTurn, 'a guerra nunca terminou');
+  assert(
+    ['attacker', 'defender', 'white'].includes(finished!.outcome!),
+    `desfecho inválido: ${finished!.outcome}`
+  );
+  assert(finished!.recentBattles.length > 0, 'nenhuma batalha foi travada');
+});
+
+test('guerra sem justificativa custa prestígio e relações', () => {
+  const { state, rng } = newGame(70707);
+  const house = state.houses[state.playerHouseId];
+  house.leaderId = state.playerId;
+
+  const target = Object.values(state.houses).find(
+    h => h.id !== house.id && !h.isIronThrone && (house.relations[h.id] ?? 50) > 40
+  )!;
+
+  const cbs = availableCasusBelli(state, house.id, target.id);
+  assertEqual(cbs[cbs.length - 1], 'conquest', 'conquista deveria estar sempre disponível');
+
+  const prestigeBefore = house.prestige;
+  const neutral = Object.values(state.houses).find(h => h.id !== house.id && h.id !== target.id)!;
+  const relBefore = neutral.relations[house.id] ?? 50;
+
+  declareWar(state, rng, house.id, target.id, 'conquest');
+
+  assert(house.prestige < prestigeBefore, 'agressão sem motivo não custou prestígio');
+  assert(
+    (neutral.relations[house.id] ?? 50) < relBefore,
+    'o resto do reino não reagiu à agressão sem motivo'
+  );
 });
 
 test('invariantes econômicas: nada fica negativo depois de 200 turnos', () => {

@@ -1,6 +1,7 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { GameState } from '../core/models';
+import { GameState, War } from '../core/models';
+import { activeWars, warsOf, casusBelliLabel, sideOf } from '../core/engine/warfare';
 
 @Component({
   selector: 'app-diplomacy-panel',
@@ -15,6 +16,57 @@ export class DiplomacyPanelComponent {
 
   onChoose(id: string): void {
     this.choose.emit(id);
+  }
+
+  // --- guerras ---
+
+  myWars(): War[] {
+    return warsOf(this.state, this.state.playerHouseId);
+  }
+
+  otherWars(): War[] {
+    const mine = new Set(this.myWars().map(w => w.id));
+    return activeWars(this.state).filter(w => !mine.has(w.id)).slice(0, 6);
+  }
+
+  houseName(id: string): string {
+    return this.state.houses[id]?.name ?? id;
+  }
+
+  warTitle(w: War): string {
+    return `${this.houseName(w.attackerHouseId)} × ${this.houseName(w.defenderHouseId)}`;
+  }
+
+  warReason(w: War): string {
+    return casusBelliLabel(w.casusBelli);
+  }
+
+  /** Placar sempre da perspectiva de quem lê. */
+  warScore(w: War): string {
+    const side = sideOf(w, this.state.playerHouseId);
+    if (!side) return `${w.scoreAttacker}–${w.scoreDefender}`;
+    const mine = side === 'attacker' ? w.scoreAttacker : w.scoreDefender;
+    const theirs = side === 'attacker' ? w.scoreDefender : w.scoreAttacker;
+    return `${mine}–${theirs}`;
+  }
+
+  warAllies(w: War): string {
+    const a = w.attackerAllies.map(id => this.houseName(id)).join(', ') || '—';
+    const d = w.defenderAllies.map(id => this.houseName(id)).join(', ') || '—';
+    return `Aliados do atacante: ${a} • do defensor: ${d}`;
+  }
+
+  lastBattles(w: War): Array<{ absTurn: number; summary: string }> {
+    return [...w.recentBattles].reverse().slice(0, 4);
+  }
+
+  suePeace(w: War): void {
+    this.choose.emit(`war:peace:${w.id}`);
+  }
+
+  isLeader(): boolean {
+    const h = this.state.houses[this.state.playerHouseId];
+    return h?.leaderId === this.state.playerId;
   }
 
   topRelations(): Array<{name: string, rel: number, prestige: number}> {

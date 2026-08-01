@@ -11,7 +11,36 @@
         0 = guerra • 50 = possível aliança • 80+ = aliança forte
       </div>
       <div class="muted small">
-        Para interagir (conversar/presentear/audiência/casamento/Banco de Ferro), use o Chat → “Diplomacia”.
+        Para interagir (conversar/presentear/audiência/casamento/guerra/Banco de Ferro), use o Chat → “Diplomacia”.
+      </div>
+    </div>
+
+    <div class="card" *ngIf="myWars().length">
+      <div class="h3">Suas guerras</div>
+      <div class="muted small">
+        O placar chega a 100 para impor termos. Acima de 85, o derrotado jura à Casa vencedora.
+      </div>
+
+      <div class="war" *ngFor="let w of myWars()">
+        <div class="warTop">
+          <b>{{warTitle(w)}}</b>
+          <span class="badge">{{warScore(w)}}</span>
+        </div>
+        <div class="muted small">Motivo: {{warReason(w)}}</div>
+        <div class="muted small">{{warAllies(w)}}</div>
+
+        <div class="muted small" *ngFor="let b of lastBattles(w)">
+          <span class="t">T{{b.absTurn}}</span> {{b.summary}}
+        </div>
+
+        <button class="btn" *ngIf="isLeader()" (click)="suePeace(w)">Propor paz</button>
+      </div>
+    </div>
+
+    <div class="card" *ngIf="otherWars().length">
+      <div class="h3">Outras guerras no reino</div>
+      <div class="muted small" *ngFor="let w of otherWars()">
+        {{warTitle(w)}} — {{w.scoreAttacker}}–{{w.scoreDefender}} ({{warReason(w)}})
       </div>
     </div>
 
