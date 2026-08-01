@@ -90,10 +90,31 @@ O motor não depende de Angular e está separado por domínio em
 | `economy.ts` | produção, tributo, IA econômica, Banco de Ferro |
 | `lifecycle.ts` | casamento, gestação, nascimento, idade e morte |
 | `succession.ts` | ordem de herança, herdeiro do jogador, crises |
+| `warfare.ts` | guerras declaradas em jogo: casus belli, batalhas, paz |
 | `sim.ts` | estado inicial, motor canônico e ações do jogador |
 
 ## Testes
 
-`npm test` compila o motor (que não depende de Angular) e roda uma suíte
-determinística com RNG semeado: determinismo, tetos de divergência, a cascata
-canônica e invariantes de mundo ao longo de 150 anos simulados.
+`npm test` compila o motor (que não depende de Angular) e roda 18 testes
+determinísticos com RNG semeado: determinismo, tetos de divergência, a cascata
+canônica, crises sucessórias, guerras e invariantes de mundo ao longo de 155
+anos simulados.
+
+`npm run test:ui` roda 9 testes de navegador (Playwright) sobre o app de pé:
+abas, mapa, viagem por clique, avanço de turno e ausência de erros de console.
+
+## Guerra
+
+Como líder da Casa você declara guerra pela Diplomacia, e precisa de um motivo
+que o reino aceite:
+
+| Casus belli | Quando existe |
+|---|---|
+| reivindicação | alguém da sua Casa reivindica o assento do alvo |
+| rixa de fronteira | relação ≤ 20 |
+| tributo negado | um vassalo seu parou de pagar |
+| conquista | sempre — mas custa 6 de prestígio e afasta todo o reino |
+
+O placar de guerra vai a 100. Acima de 85 o derrotado jura à Casa vencedora;
+abaixo disso, paga tributo. Muralhas derrubadas permitem ocupar o assento, e a
+paz devolve o que foi tomado — salvo vitória esmagadora.

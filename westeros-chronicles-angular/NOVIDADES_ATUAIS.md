@@ -118,11 +118,49 @@ era, com mediana em 251.
 `narration`, `rules`, `claims`, `canon-divergence`, `economy`, `lifecycle` e
 `succession`.
 
+## 13) Guerras declaradas pelo jogador
+
+Faltava um verbo inteiro: só dava para participar das guerras que a história
+trazia pronta. Agora o líder da Casa declara guerra pela Diplomacia, e toda
+guerra exige um motivo que o reino aceite — reivindicação, rixa de fronteira,
+tributo negado, ou **conquista** (sem desculpa: −6 de prestígio e todas as
+Casas se afastam de uma vez).
+
+Aliados entram por relação, batalhas gastam hoste e reservas, muralhas caídas
+permitem tomar o assento, e o placar vai a 100. Acima de 85 o derrotado jura ao
+vencedor; abaixo, paga tributo. A paz é negociável, mas só é aceita por quem
+não está claramente ganhando.
+
+## 14) Teste de cânone tardio — e o que ele revelou
+
+Medida da densidade: 298–305 tem **6,5 eventos/ano** contra 1,4 no resto da
+campanha. A diferença é fiel às fontes (a série cobre esses anos em detalhe),
+então não foi "corrigida".
+
+O problema real estava noutro lugar: em 298.1 há uma rajada de **9 eventos de
+sincronização** que instalam os senhores canônicos de oito Casas de uma vez —
+e o motor os aplicava mesmo quando o assento era do **jogador**, sem crise, sem
+aviso, desfazendo até 148 anos de campanha com um decreto.
+
+Agora um assento ocupado pelo jogador é sempre contestado, nunca reatribuído:
+o cânone pode retomá-lo, mas só vencendo a disputa. Verificado — onde antes
+Eddard Stark simplesmente aparecia em Winterfell, agora abre-se
+"Senhor do Norte vs Eddard Stark".
+
+## 15) Testes de UI
+
+`npm run test:ui` — 9 testes de navegador. Os três bugs mais caros desta base
+foram de interface e nenhum apareceria em teste de motor, então a suíte cobre
+exatamente esse território: início de campanha, as nove abas renderizando,
+mapa desenhando regiões e Muralha, viagem por clique, seleção de reino, avanço
+de turno, o menu de guerra com sua restrição de liderança, e ausência de erros
+de console numa sessão típica.
+
 ## O que ainda falta
 
-1. **Balanceamento fino do cânone tardio** — o período 298–305 concentra muitos
-   marcos e ainda não foi ajustado contra a simulação.
-2. **Guerras não canônicas** — o jogador não pode declarar guerra por conta
-   própria; só participa das que a história traz.
-3. **Cobertura de teste da UI** — o motor tem 15 testes; os componentes Angular
-   ainda dependem de verificação manual no navegador.
+1. **Diplomacia de guerra mais rica** — hoje a paz é aceita ou recusada; não há
+   negociação de termos específicos (reféns, cessão de um assento escolhido).
+2. **IA não declara guerra sozinha** — as Casas defendem-se e pedem paz, mas
+   quem inicia conflitos não canônicos é sempre o jogador.
+3. **Balanceamento econômico de campanha longa** — nada quebra em 155 anos,
+   mas as Casas grandes acumulam recursos sem teto prático.

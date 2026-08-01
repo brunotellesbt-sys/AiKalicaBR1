@@ -520,6 +520,21 @@ function publishCanonDivergence(state: GameState, e: CanonEventDef, why?: string
  * Se o assento visado pelo evento ainda está ocupado por alguém que deveria
  * ter morrido, abre a disputa e devolve `true` (o evento não se aplica).
  */
+/**
+ * Um assento que o cânone não tem direito de reatribuir em silêncio.
+ *
+ * Vale para quem sobreviveu à própria morte registrada e, principalmente,
+ * para o próprio jogador: a rajada de sincronização de 298 instalava os
+ * senhores canônicos de oito Casas de uma vez e podia tirar do jogador, sem
+ * uma linha de aviso, um assento conquistado ao longo de 148 anos de campanha.
+ * A presença dele ali já É uma divergência — então vira disputa, não decreto.
+ */
+function seatIsContested(state: GameState, incumbent: Character | undefined): boolean {
+  if (!incumbent || !incumbent.alive) return false;
+  if (incumbent.id === state.playerId) return true;
+  return survivedOwnCanonDeath(state, incumbent);
+}
+
 function maybeOpenCrisisForSuccession(state: GameState, rng: Rng, e: CanonEventDef): boolean {
   if (e.kind !== 'succession' && e.kind !== 'dynasty_shift') return false;
   if (!e.newLeaderCanonId) return false;
@@ -529,7 +544,7 @@ function maybeOpenCrisisForSuccession(state: GameState, rng: Rng, e: CanonEventD
   if (!house) return false;
 
   const incumbent = state.characters[house.leaderId];
-  if (!survivedOwnCanonDeath(state, incumbent)) return false;
+  if (!seatIsContested(state, incumbent)) return false;
 
   const claimant = ensureCanonPerson(state, rng, e.newLeaderCanonId, e.year, e.turn);
   if (!claimant || !claimant.alive || claimant.id === incumbent.id) return false;
@@ -640,7 +655,7 @@ function applyCanonEvent(state: GameState, rng: Rng, e: CanonEventDef): void {
       // Titular que sobreviveu à própria morte canônica não é deposto em
       // silêncio: instala-se uma crise sucessória com dois pretendentes.
       const incumbent = state.characters[h.leaderId];
-      if (incumbent && incumbent.id !== leader.id && survivedOwnCanonDeath(state, incumbent)) {
+      if (incumbent && incumbent.id !== leader.id && seatIsContested(state, incumbent)) {
         openSuccessionCrisis(state, h, incumbent, leader, e);
         break;
       }
@@ -673,7 +688,7 @@ function applyCanonEvent(state: GameState, rng: Rng, e: CanonEventDef): void {
             break;
           }
           const incumbent = state.characters[h.leaderId];
-          if (incumbent && incumbent.id !== leader.id && survivedOwnCanonDeath(state, incumbent)) {
+          if (incumbent && incumbent.id !== leader.id && seatIsContested(state, incumbent)) {
             openSuccessionCrisis(state, h, incumbent, leader, e);
             break;
           }
@@ -901,7 +916,7 @@ function applyCanonLeaderMandates(state: GameState, rng: Rng): void {
     // e enquanto o sobrevivente governar, a linha canônica daquele assento
     // permanece fora do trilho.
     const incumbent = state.characters[h.leaderId];
-    if (incumbent && incumbent.id !== leader.id && survivedOwnCanonDeath(state, incumbent)) {
+    if (incumbent && incumbent.id !== leader.id && seatIsContested(state, incumbent)) {
       const crisis = state.canon!.successionCrises?.[h.id];
       const alreadyHandled = !!crisis && crisis.pretenders.some(p => p.characterId === incumbent.id);
       if (!alreadyHandled) openSuccessionCrisis(state, h, incumbent, leader);

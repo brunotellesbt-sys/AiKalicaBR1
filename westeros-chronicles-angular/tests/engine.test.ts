@@ -458,6 +458,56 @@ test('guerra sem justificativa custa prestígio e relações', () => {
   );
 });
 
+test('a sincronização de 298 não tira o assento do jogador em silêncio', () => {
+  const { state, rng } = newGame(24680, 'stark');
+
+  // Leva o mundo até a véspera da rajada de sincronização canônica.
+  let guard = 0;
+  while (guard++ < 20000) {
+    if (state.date.year === 297 && state.date.turn >= 19) break;
+    state.game.over = false;
+    advanceTurn(state, rng, { silent: true });
+  }
+
+  // Um jogador NÃO canônico sentado em Winterfell — o caso que o cânone
+  // tentaria sobrescrever com Eddard Stark em 298.1.
+  const usurper: Character = {
+    ...state.characters[state.playerId],
+    id: 'test_usurper',
+    name: 'Senhor do Norte',
+    ageYears: 34,
+    alive: true,
+    isCanonical: false,
+    canonId: undefined,
+    canonDeathAbsTurn: undefined,
+    currentHouseId: 'stark',
+    birthHouseId: 'stark',
+  };
+  state.characters[usurper.id] = usurper;
+  state.playerId = usurper.id;
+  state.playerHouseId = 'stark';
+  state.houses['stark'].leaderId = usurper.id;
+
+  for (let i = 0; i < 4; i++) {
+    state.game.over = false;
+    advanceTurn(state, rng, { silent: true });
+  }
+
+  const stark = state.houses['stark'];
+  const crisis = state.canon!.successionCrises?.['stark'];
+
+  // O assento pode mudar de mãos — mas só por disputa, nunca por decreto.
+  const perdeuSemDisputa = stark.leaderId !== usurper.id && !crisis;
+  assert(!perdeuSemDisputa, 'o cânone tomou o assento do jogador sem abrir disputa');
+
+  if (crisis) {
+    assert(
+      crisis.pretenders.some(p => p.characterId === usurper.id),
+      'o jogador deveria constar como pretendente na própria disputa'
+    );
+  }
+});
+
 test('invariantes econômicas: nada fica negativo depois de 200 turnos', () => {
   const { state, rng } = newGame(555);
   runUntil(state, rng, 160);
