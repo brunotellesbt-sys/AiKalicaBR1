@@ -12,9 +12,10 @@ import {
   CANON_DIVERGENCE_THRESHOLD,
 } from '../src/app/core/engine/sim';
 import {
-  availableCasusBelli, declareWar, warsOf, activeWars, affordableTerms,
+  availableCasusBelli, declareWar, warsOf, activeWars, affordableTerms, endWar,
 } from '../src/app/core/engine/warfare';
 import { applyRivalryIntervention } from '../src/app/core/engine/politics';
+import { hostageCandidate, hostageFrom, takeHostage, tickHostages } from '../src/app/core/engine/hostages';
 
 // ---------------------------------------------------------------------------
 // Utilitários
@@ -604,6 +605,95 @@ test('o jogador pode mediar uma rixa alheia', () => {
   // Envolver-se duas vezes não vale.
   const segunda = applyRivalryIntervention(state, rng, rixa!.id, 'mediate');
   assert(!segunda.ok, 'foi possível se envolver duas vezes na mesma rixa');
+});
+
+/** Prepara o jogador em guerra vencida contra um vizinho, pronto para a paz. */
+function guerraVencida(seed: number) {
+  const { state, rng } = newGame(seed);
+  const house = state.houses[state.playerHouseId];
+  house.leaderId = state.playerId;
+  house.army.levies = 200;
+
+  const alvo = Object.values(state.houses).find(
+    h => h.id !== house.id && h.regionId === house.regionId && !h.isIronThrone
+  )!;
+  house.relations[alvo.id] = 10;
+
+  const war = declareWar(state, rng, house.id, alvo.id, 'feud')!;
+  war.scoreAttacker = 100;
+  return { state, rng, house, alvo, war };
+}
+
+test('o refém só entra na mesa quando há alguém para entregar', () => {
+  const { state, rng, house, alvo, war } = guerraVencida(5150);
+
+  // Sem candidato elegível, o termo não é oferecido — não se exige um refém
+  // que não existe.
+  const originais = Object.values(state.characters).filter(c => c.currentHouseId === alvo.id);
+  const idades = originais.map(c => c.ageYears);
+  for (const c of originais) c.ageYears = 60;
+  assert(!hostageCandidate(state, alvo.id), 'candidato apareceu numa Casa só de anciãos');
+  assert(!affordableTerms(state, war, 'attacker').includes('hostage'), 'refém oferecido sem ninguém para entregar');
+
+  originais.forEach((c, i) => { c.ageYears = idades[i]; });
+  const jovem = originais.find(c => c.alive && c.id !== state.characters[alvo.leaderId]?.id);
+  assert(jovem, 'a Casa alvo não tem ninguém além do líder');
+  jovem!.ageYears = 12;
+
+  assert(affordableTerms(state, war, 'attacker').includes('hostage'), 'refém deveria estar na mesa');
+
+  const refem = takeHostage(state, house, alvo)!;
+  assert(refem, 'nenhum refém foi tomado');
+  assertEqual(refem.hostage?.holderHouseId, house.id, 'o refém não ficou com o vencedor');
+  assertEqual(refem.locationId, house.seatLocationId, 'o refém não foi levado para o assento do vencedor');
+  assert(refem.hostage!.untilAbsTurn > state.date.absoluteTurn, 'refém sem prazo de devolução');
+
+  // Devolvido no prazo, o laço vale mais que o refém.
+  const antes = house.relations[alvo.id] ?? 50;
+  state.date.absoluteTurn = refem.hostage!.untilAbsTurn;
+  tickHostages(state, rng);
+  assert(!refem.hostage, 'o refém não foi devolvido no prazo');
+  assert((house.relations[alvo.id] ?? 50) > antes, 'devolver o refém não melhorou nada');
+  assert(chronicleHas(state, 'Refém devolvido'), 'a devolução não virou crônica');
+});
+
+test('atacar quem guarda o seu sangue mata o refém', () => {
+  const { state, rng, house, alvo } = guerraVencida(6621);
+
+  // Desta vez o jogador é quem entrega: o alvo guarda um parente seu.
+  const meu = Object.values(state.characters).find(
+    c => c.alive && c.currentHouseId === house.id && c.id !== state.playerId && c.id !== house.leaderId
+  )!;
+  meu.ageYears = 14;
+  const capturado = takeHostage(state, alvo, house)!;
+  assert(capturado, 'não foi possível entregar um refém');
+  assert(hostageFrom(state, alvo.id, house.id), 'o refém não consta sob a guarda do alvo');
+
+  // Guerra nova contra o guardião: não há blefe.
+  const outra = state.houses[alvo.id];
+  state.wars = [];
+  declareWar(state, rng, house.id, outra.id, 'conquest');
+
+  assert(!capturado.alive, 'o refém sobreviveu à quebra de fé');
+  assert(!hostageFrom(state, alvo.id, house.id), 'o refém morto continua registrado');
+  assert(chronicleHas(state, 'Refém executado'), 'a execução não virou crônica');
+});
+
+test('casamento de paz registra direito de sangue sobre o assento do derrotado', () => {
+  const { state, rng, house, alvo, war } = guerraVencida(8830);
+
+  if (!affordableTerms(state, war, 'attacker').includes('marriage')) return; // sem par elegível nesta seed
+
+  const antes = (state.claims ?? []).length;
+  endWar(state, rng, war, 'attacker', 'teste', 'marriage');
+
+  const depois = state.claims ?? [];
+  assert(depois.length > antes, 'o casamento imposto não gerou reivindicação nenhuma');
+
+  // O ponto do termo: a paz de hoje é a guerra de herança de amanhã.
+  const sobreOAlvo = depois.filter(c => c.seatHouseId === alvo.id);
+  assert(sobreOAlvo.length > 0, `nenhuma reivindicação sobre o assento de ${alvo.name}`);
+  assert((house.relations[alvo.id] ?? 50) > 10, 'o casamento não aproximou as duas Casas');
 });
 
 test('a economia estabiliza em platô, não em explosão', () => {

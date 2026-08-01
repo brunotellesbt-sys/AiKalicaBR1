@@ -112,6 +112,20 @@ export interface Character {
   knownToPlayer: boolean;
   relationshipToPlayer: number; // 0..100
 
+  /**
+   * Pupilo à força: criado na corte de outra Casa como garantia de paz.
+   *
+   * Não é prisão — o refém vive como parte da casa que o guarda. Enquanto
+   * durar, a Casa de origem não ataca o guardião; se atacar mesmo assim, o
+   * refém paga. E quem devolve o refém inteiro no fim ganha um amigo.
+   */
+  hostage?: {
+    holderHouseId: string;
+    homeHouseId: string;
+    sinceAbsTurn: number;
+    untilAbsTurn: number;
+  };
+
   personalGold?: number; // ouro pessoal (separado do ouro da Casa)
   kissedIds?: string[]; // ids de pessoas que já foram beijadas
 
@@ -428,7 +442,7 @@ export type CasusBelli = 'claim' | 'feud' | 'tribute' | 'conquest';
  * O que o vencedor exige na mesa de paz. Cada termo tem um preço em pontuação
  * de guerra — pedir mais do que se conquistou faz o outro lado recusar.
  */
-export type PeaceTerms = 'white' | 'tribute' | 'seat' | 'vassalage';
+export type PeaceTerms = 'white' | 'tribute' | 'seat' | 'vassalage' | 'hostage' | 'marriage';
 
 /** Guerra entre Casas, declarada em jogo (distinta das guerras canônicas). */
 export interface War {

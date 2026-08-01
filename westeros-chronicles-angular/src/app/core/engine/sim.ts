@@ -51,6 +51,7 @@ import {
   affordableTerms, peaceTermLabel, PEACE_TERM_COST,
 } from './warfare';
 import { tickRivalries, tickWarGrudges, activeRivalries, applyRivalryIntervention } from './politics';
+import { tickHostages, hostagesHeldBy, hostageFrom } from './hostages';
 import { SCHEDULED_EVENTS } from '../data/timeline';
 import {
   CANON_EVENTS,
@@ -3015,19 +3016,29 @@ export function applyDiplomacy(state: GameState, rng: Rng, action: string): void
         const cbs = availableCasusBelli(state, house.id, t.id);
         const best = cbs[0];
         const rel = house.relations[t.id] ?? 50;
+        // Um refém seu na corte deles é motivo para pensar duas vezes: quem
+        // declara sabendo disso o está condenando.
+        const nosso = hostageFrom(state, t.id, house.id);
         choices.push({
           id: `war:declare:${t.id}:${best}`,
           label: `Declarar guerra a ${t.name}`,
           hint: `${casusBelliLabel(best)} • prestígio ${t.prestige} • relação ${rel}`
-            + (best === 'conquest' ? ' • SEM justificativa: -6 prestígio e todo o reino se afasta' : ''),
+            + (best === 'conquest' ? ' • SEM justificativa: -6 prestígio e todo o reino se afasta' : '')
+            + (nosso ? ` • ⚠ ${nosso.name} está refém lá e será executado` : ''),
         });
       }
 
       choices.push({ id: 'back', label: 'Voltar' });
+
+      const guardados = hostagesHeldBy(state, house.id);
+      const nota = guardados.length
+        ? ` Sob sua guarda: ${guardados.map(c => `${c.name} (${state.houses[c.hostage!.homeHouseId]?.name ?? '?'})`).join(', ')}.`
+        : '';
+
       pushSystem(state,
-        mine.length
+        (mine.length
           ? `Você está em ${mine.length} guerra(s). Escolha uma ação.`
-          : 'Nenhuma guerra em andamento. Escolha um alvo — e um motivo que o reino aceite.',
+          : 'Nenhuma guerra em andamento. Escolha um alvo — e um motivo que o reino aceite.') + nota,
         choices);
       return;
     }
@@ -3752,6 +3763,9 @@ export function advanceTurn(state: GameState, rng: Rng, options?: { silent?: boo
 
   // 4.75) Assentos ocupados militarmente
   tickOccupations(state, rng);
+
+  // 4.8) Reféns tomados na paz: guarda, devolução e laço criado
+  tickHostages(state, rng);
 
   // 5) Pressão do Banco de Ferro
   tickIronBank(state, rng);

@@ -88,6 +88,7 @@ O motor não depende de Angular e está separado por domínio em
 | `claims.ts` | reivindicações e ocupação de assentos |
 | `canon-divergence.ts` | placar de interferência, tetos e decaimento |
 | `politics.ts` | rixas entre Casas, rancor de guerra e mediação |
+| `hostages.ts` | reféns e casamentos impostos na mesa de paz |
 | `economy.ts` | produção, tributo, IA econômica, Banco de Ferro |
 | `lifecycle.ts` | casamento, gestação, nascimento, idade e morte |
 | `succession.ts` | ordem de herança, herdeiro do jogador, crises |
@@ -96,7 +97,7 @@ O motor não depende de Angular e está separado por domínio em
 
 ## Testes
 
-`npm test` compila o motor (que não depende de Angular) e roda 23 testes
+`npm test` compila o motor (que não depende de Angular) e roda 26 testes
 determinísticos com RNG semeado: determinismo, tetos de divergência, a cascata
 canônica, crises sucessórias, guerras, rixas e invariantes de mundo ao longo de
 155 anos simulados.
@@ -121,12 +122,29 @@ O placar de guerra vai a 100, e na mesa de paz cada exigência tem um preço:
 | Termo | Custo em pontuação |
 |---|---|
 | paz branca | 0 |
+| refém | 20 |
 | tributo de guerra | 25 |
+| casamento de paz | 35 |
 | cessão do assento ocupado | 60 |
 | vassalagem | 85 |
 
-Pedir mais do que se conquistou é recusado. As outras Casas também declaram
-guerras próprias (10 a 14 por século), sempre com motivo defensável.
+Pedir mais do que se conquistou é recusado, e nada é oferecido sem como
+cumprir: sem criança elegível não há refém, sem par solteiro dos dois lados não
+há casamento. As outras Casas também declaram guerras próprias (10 a 14 por
+século), sempre com motivo defensável.
+
+**Refém**: alguém de 5 a 24 anos do lado derrotado vai viver no assento do
+vencedor por 10 a 20 anos. Enquanto durar, a IA não marcha contra quem guarda o
+próprio sangue — e quem marcha mesmo assim perde o refém, executado. Devolvido
+no prazo, o laço vale mais que o refém: +14 de relação.
+
+**Casamento de paz**: reconcilia de imediato, mas registra direito de sangue
+sobre os dois assentos, que pode voltar como reivindicação numa crise
+sucessória décadas depois.
+
+Toda paz imposta pode vir selada por um dos dois, mesmo quando o termo
+principal foi outro — em Westeros o refém não substitui a vassalagem, ele a
+garante.
 
 ## Rixas
 

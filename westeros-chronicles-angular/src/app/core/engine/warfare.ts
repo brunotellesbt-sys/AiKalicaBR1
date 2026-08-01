@@ -11,6 +11,9 @@ import { clamp, uid } from './utils';
 import { pushNarration, pushChronicle } from './narration';
 import { armyPower, applyArmyLoss } from './rules';
 import { claimsOnSeat, occupySeat, releaseSeat, ensureOccupations } from './claims';
+import {
+  forceMarriage, hostageCandidate, hostageFrom, marriagePair, punishBrokenFaith, takeHostage,
+} from './hostages';
 
 /** Depois disso, as duas partes estão exaustas demais para continuar. */
 const WAR_EXHAUSTION_TURNS = 80;
@@ -122,6 +125,10 @@ export function declareWar(
   };
   ensureWars(state).push(war);
 
+  // Marchar contra quem guarda o seu sangue tem um preço imediato, e a Casa
+  // que declarou sabia disso quando declarou.
+  punishBrokenFaith(state, rng, attackerId, defenderId);
+
   // Guerra sem justificativa é lembrada por todo o reino.
   if (cb === 'conquest') {
     attacker.prestige = clamp(attacker.prestige - 6, 1, 100);
@@ -215,9 +222,14 @@ function battle(state: GameState, rng: Rng, w: War): void {
  */
 export const PEACE_TERM_COST: Record<PeaceTerms, number> = {
   white: 0,
+  // Laços pessoais custam pouco: são baratos de exigir e caros de honrar.
+  // Casamento pede mais que refém porque entrega direito de sangue, não só
+  // uma garantia com prazo.
+  hostage: 20,
   tribute: 25,
-  vassalage: 85,
+  marriage: 35,
   seat: 60,
+  vassalage: 85,
 };
 
 export function peaceTermLabel(t: PeaceTerms): string {
@@ -225,15 +237,34 @@ export function peaceTermLabel(t: PeaceTerms): string {
     case 'tribute': return 'tributo de guerra';
     case 'vassalage': return 'vassalagem';
     case 'seat': return 'cessão do assento tomado';
+    case 'hostage': return 'refém';
+    case 'marriage': return 'casamento de paz';
     default: return 'paz branca';
   }
+}
+
+/** Quem perde, se estes termos forem assinados agora. */
+function loserOf(state: GameState, w: War, side: 'attacker' | 'defender'): HouseState | undefined {
+  return state.houses[side === 'attacker' ? w.defenderHouseId : w.attackerHouseId];
 }
 
 /** Termos que a pontuação atual sustenta, do mais brando ao mais duro. */
 export function affordableTerms(state: GameState, w: War, side: 'attacker' | 'defender'): PeaceTerms[] {
   const score = side === 'attacker' ? w.scoreAttacker : w.scoreDefender;
+  const winner = state.houses[side === 'attacker' ? w.attackerHouseId : w.defenderHouseId];
+  const loser = loserOf(state, w, side);
+
   const out: PeaceTerms[] = ['white'];
+
+  // Só oferece o que existe: sem criança elegível não há refém a exigir, e sem
+  // par solteiro dos dois lados não há casamento a impor.
+  if (score >= PEACE_TERM_COST.hostage && loser && hostageCandidate(state, loser.id)) out.push('hostage');
+
   if (score >= PEACE_TERM_COST.tribute) out.push('tribute');
+
+  if (score >= PEACE_TERM_COST.marriage && winner && loser && marriagePair(state, winner, loser)) {
+    out.push('marriage');
+  }
 
   // Cessão só faz sentido se este lado realmente segura algum assento.
   const holdsSeat = Object.values(state.occupations ?? {})
@@ -270,10 +301,13 @@ export function endWar(
     winner.prestige = clamp(winner.prestige + 4, 1, 100);
     loser.prestige = clamp(loser.prestige - 4, 1, 100);
 
-    // Sem termo explícito, aplica o mais duro que a pontuação sustenta.
+    // Sem termo explícito (guerra entre IAs), o vencedor leva o mais duro que
+    // a pontuação sustenta.
     const escolhido: PeaceTerms = terms
-      ?? (score >= PEACE_TERM_COST.vassalage ? 'vassalage'
-        : score >= PEACE_TERM_COST.tribute ? 'tribute' : 'white');
+      ?? affordableTerms(state, w, outcome)
+        .slice()
+        .sort((a, b) => PEACE_TERM_COST[b] - PEACE_TERM_COST[a])[0]
+      ?? 'white';
 
     if (escolhido === 'tribute' || escolhido === 'vassalage') {
       const tribute = Math.min(loser.resources.goods ?? 0, Math.round(score * 1.2));
@@ -286,6 +320,16 @@ export function endWar(
       loser.suzerainId = winner.id;
       loser.economy.taxRate = Math.max(loser.economy.taxRate ?? 0.15, 0.20);
       imposto.push(`${loser.name} passa a jurar a ${winner.name}`);
+    }
+
+    if (escolhido === 'hostage') {
+      const refem = takeHostage(state, winner, loser);
+      if (refem) imposto.push(`${refem.name} vai como refém para ${winner.name}`);
+    }
+
+    if (escolhido === 'marriage') {
+      const par = forceMarriage(state, rng, winner, loser);
+      if (par) imposto.push(`${par.groom.name} casa-se com ${par.bride.name}`);
     }
 
     if (escolhido === 'seat') {
@@ -301,6 +345,24 @@ export function endWar(
       }
     }
     keepSeats = escolhido === 'seat' || escolhido === 'vassalage';
+
+    // O selo da paz.
+    //
+    // Como termo isolado, o laço pessoal quase nunca saía da mesa: a IA leva o
+    // mais duro que pode, e com o placar em 100 a vassalagem ganha sempre —
+    // medido, 48% das pazes podiam exigir um refém e nenhuma exigia. Mas em
+    // Westeros o refém e o casamento não competem com a vassalagem, eles a
+    // selam: o derrotado jura E entrega um filho. Então qualquer paz imposta
+    // pode vir acompanhada, sem custo extra de pontuação.
+    if (escolhido !== 'white') {
+      if (escolhido !== 'hostage' && rng.chance(0.35)) {
+        const refem = takeHostage(state, winner, loser);
+        if (refem) imposto.push(`${refem.name} vai como refém para ${winner.name}`);
+      } else if (escolhido !== 'marriage' && rng.chance(0.25)) {
+        const par = forceMarriage(state, rng, winner, loser);
+        if (par) imposto.push(`${par.groom.name} casa-se com ${par.bride.name}`);
+      }
+    }
   }
 
   // Ocupações desta guerra são devolvidas, salvo quando os termos as mantêm.
@@ -365,6 +427,9 @@ function tickAiAggression(state: GameState, rng: Rng): void {
       !h.isIronThrone &&
       !warBetween(state, atacante.id, h.id) &&
       h.suzerainId !== atacante.id &&
+      // Um refém é uma garantia de verdade: a IA não marcha contra quem
+      // guarda o próprio sangue.
+      !hostageFrom(state, h.id, atacante.id) &&
       armyPower(h.army) < armyPower(atacante.army) * 0.8
     )
     .map(h => ({ casa: h, motivos: availableCasusBelli(state, atacante.id, h.id).filter(m => m !== 'conquest') }))

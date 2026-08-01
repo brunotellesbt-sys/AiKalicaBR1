@@ -80,7 +80,7 @@ que não abria mapa nenhum.
 
 ## 8) Testes
 
-`npm test` — 23 testes determinísticos com RNG semeado, cobrindo determinismo,
+`npm test` — 26 testes determinísticos com RNG semeado, cobrindo determinismo,
 tetos de divergência, a cascata canônica, a crise sucessória, guerras, rixas e
 invariantes de mundo em 155 anos simulados. Foram eles que encontraram os bugs
 de líder morto e de ordem dentro do turno.
@@ -114,9 +114,9 @@ era, com mediana em 251.
 
 ## 12) Motor separado por domínio
 
-`sim.ts` saiu de 5.714 para 4.260 linhas, com nove módulos extraídos:
+`sim.ts` saiu de 5.714 para 4.260 linhas, com dez módulos extraídos:
 `narration`, `rules`, `claims`, `canon-divergence`, `economy`, `lifecycle`,
-`succession`, `warfare` e `politics`.
+`succession`, `warfare`, `politics` e `hostages`.
 
 ## 13) Guerras declaradas pelo jogador
 
@@ -235,7 +235,40 @@ recursos em presentes e banquetes, melhora a relação entre as duas Casas, ganh
 partido, ganhando +14/+10 com o aliado e −18/−12 com o rival. A escolha é
 definitiva — voltar atrás custaria sua palavra.
 
+## 20) Reféns e casamentos na mesa de paz
+
+Os termos de paz eram todos institucionais — tributo, assento, vassalagem — e
+por isso a guerra não deixava marca em ninguém. Faltavam os dois laços que
+realmente amarram Casas em Westeros, e eles funcionam por mecanismos opostos:
+
+**Refém** (20 de pontuação). O derrotado entrega alguém de 5 a 24 anos,
+preferencialmente um filho do senhor, que vai viver no assento do vencedor por
+10 a 20 anos. Enquanto durar, a IA **não marcha** contra quem guarda o próprio
+sangue — é uma garantia de verdade, não um número. Quem declara guerra assim
+mesmo perde o refém: ele é executado, sem blefe. Devolvido no prazo, rende +14
+de relação entre as duas Casas — a única coisa na simulação que transforma ódio
+de guerra em confiança.
+
+**Casamento de paz** (35). Compra reconciliação imediata (+18) mas usa o mesmo
+`applyMarriage` dos casamentos arranjados, então o direito de sangue sobre os
+dois assentos fica registrado como qualquer outro — e volta décadas depois como
+reivindicação numa crise sucessória. Quem impõe casamento troca um inimigo hoje
+por uma guerra de herança amanhã.
+
+Nenhum dos dois é oferecido quando não há como cumpri-lo: sem criança elegível
+não há refém na mesa, sem par solteiro dos dois lados não há casamento.
+
+**O selo.** Como termo isolado, o laço pessoal quase nunca saía da mesa nas
+guerras entre IAs: o vencedor leva o mais duro que pode, e com o placar em 100 a
+vassalagem ganha sempre. Medido: **48% das pazes podiam exigir um refém e
+nenhuma exigia**. Mas em Westeros o refém não compete com a vassalagem, ele a
+sela — o derrotado jura *e* entrega um filho. Agora qualquer paz imposta pode
+vir acompanhada, sem custo extra de pontuação. Medido em três seeds: 2 a 4
+reféns e 0 a 2 casamentos de paz por campanha, todos os reféns devolvidos
+vivos — zero execuções, que é a dissuasão fazendo exatamente o seu trabalho.
+
 ## O que ainda falta
 
-1. **Reféns e casamentos forçados na mesa de paz** — os termos hoje são
-   tributo, assento e vassalagem; faltam os laços pessoais.
+Nada da lista original. As três pendências apontadas na rodada anterior
+(relações inertes, histórias de casas menores não interativas, laços pessoais
+ausentes da paz) estão fechadas.
