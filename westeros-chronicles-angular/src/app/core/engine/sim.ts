@@ -48,6 +48,7 @@ import {
 import {
   availableCasusBelli, casusBelliLabel, declareWar, endWar,
   tickWars, warsOf, warBetween, activeWars, sideOf,
+  affordableTerms, peaceTermLabel, PEACE_TERM_COST,
 } from './warfare';
 import { SCHEDULED_EVENTS } from '../data/timeline';
 import {
@@ -63,7 +64,7 @@ import {
   CanonRequires,
   CanonWarDef,
 } from '../data/canon';
-import { SuccessionCrisis, CrisisPretender, PretenderBasis, SeatClaim, Occupation } from '../models';
+import { SuccessionCrisis, CrisisPretender, PretenderBasis, SeatClaim, Occupation, PeaceTerms } from '../models';
 
 // Reexporta o que a UI e os testes já consumiam por este módulo.
 export { renownFromMartial, titleForHouse } from './rules';
@@ -2947,14 +2948,19 @@ export function applyDiplomacy(state: GameState, rng: Rng, action: string): void
 
       for (const w of mine) {
         const other = w.attackerHouseId === house.id ? w.defenderHouseId : w.attackerHouseId;
-        const side = sideOf(w, house.id);
+        const side = sideOf(w, house.id)!;
         const mineScore = side === 'attacker' ? w.scoreAttacker : w.scoreDefender;
         const theirScore = side === 'attacker' ? w.scoreDefender : w.scoreAttacker;
-        choices.push({
-          id: `war:peace:${w.id}`,
-          label: `Propor paz a ${state.houses[other]?.name ?? other}`,
-          hint: `Placar ${mineScore}–${theirScore} • termos seguem quem está à frente`,
-        });
+        const otherName = state.houses[other]?.name ?? other;
+
+        // Cada termo tem um preço em pontuação: exigir demais é ser recusado.
+        for (const t of affordableTerms(state, w, side)) {
+          choices.push({
+            id: `war:peace:${w.id}:${t}`,
+            label: `Paz com ${otherName} — ${peaceTermLabel(t)}`,
+            hint: `Placar ${mineScore}–${theirScore} • custa ${PEACE_TERM_COST[t]} de pontuação`,
+          });
+        }
       }
 
       // Alvos possíveis: casas alcançáveis com quem você ainda não está em guerra.
@@ -4141,8 +4147,8 @@ export function applyWarAction(state: GameState, rng: Rng, cmd: string): void {
     }
 
     // Uma hoste precisa existir antes de marchar.
-    if (house.army.levies < 60) {
-      pushNarration(state, 'Sua hoste é pequena demais para uma campanha (mínimo 60 levies).');
+    if (house.army.levies < 30) {
+      pushNarration(state, 'Sua hoste é pequena demais para uma campanha (mínimo 30 levies).');
       return promptMainMenu(state, rng);
     }
 
@@ -4157,32 +4163,38 @@ export function applyWarAction(state: GameState, rng: Rng, cmd: string): void {
 
   if (parts[0] === 'peace') {
     const warId = parts[1];
+    const termo = (parts[2] ?? 'white') as PeaceTerms;
     const w = activeWars(state).find(x => x.id === warId);
     if (!w) {
       pushNarration(state, 'Essa guerra já terminou.');
       return promptMainMenu(state, rng);
     }
 
-    const side = sideOf(w, house.id);
+    const side = sideOf(w, house.id)!;
     const mineScore = side === 'attacker' ? w.scoreAttacker : w.scoreDefender;
     const theirScore = side === 'attacker' ? w.scoreDefender : w.scoreAttacker;
 
-    // O outro lado só aceita se não estiver claramente ganhando.
-    const gap = theirScore - mineScore;
-    const acceptChance = clamp(0.75 - gap / 90, 0.08, 0.95);
-
-    if (!rng.chance(acceptChance)) {
-      pushNarration(state, 'Sua proposta de paz é recusada. Eles ainda acreditam que podem vencer.');
+    if (!affordableTerms(state, w, side).includes(termo)) {
+      pushNarration(state, 'Você não conquistou o suficiente para exigir isso.');
       return promptMainMenu(state, rng);
     }
 
-    const outcome = mineScore === theirScore
-      ? 'white'
-      : (mineScore > theirScore
-          ? (side === 'attacker' ? 'attacker' : 'defender')
-          : (side === 'attacker' ? 'defender' : 'attacker'));
+    // Quanto mais duro o termo, mais difícil de engolir — e quem está ganhando
+    // não assina nada.
+    const gap = theirScore - mineScore;
+    const dureza = PEACE_TERM_COST[termo] / 100;
+    const acceptChance = clamp(0.8 - gap / 90 - dureza, 0.05, 0.95);
 
-    endWar(state, rng, w, outcome as any, 'paz negociada');
+    if (!rng.chance(acceptChance)) {
+      pushNarration(state, `A proposta (${peaceTermLabel(termo)}) é recusada. Eles ainda acreditam que podem vencer.`);
+      return promptMainMenu(state, rng);
+    }
+
+    const outcome = termo === 'white' || mineScore === theirScore
+      ? 'white'
+      : (mineScore > theirScore ? side : (side === 'attacker' ? 'defender' : 'attacker'));
+
+    endWar(state, rng, w, outcome as any, 'paz negociada', termo);
     return promptMainMenu(state, rng);
   }
 

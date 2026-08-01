@@ -12,7 +12,7 @@ import {
   CANON_DIVERGENCE_THRESHOLD,
 } from '../src/app/core/engine/sim';
 import {
-  availableCasusBelli, declareWar, warsOf, activeWars,
+  availableCasusBelli, declareWar, warsOf, activeWars, affordableTerms,
 } from '../src/app/core/engine/warfare';
 
 // ---------------------------------------------------------------------------
@@ -506,6 +506,51 @@ test('a sincronização de 298 não tira o assento do jogador em silêncio', () 
       'o jogador deveria constar como pretendente na própria disputa'
     );
   }
+});
+
+test('a IA declara guerras próprias ao longo da campanha', () => {
+  const { state, rng } = newGame(778899);
+  runWorldUntil(state, rng, 260);
+
+  // A crônica é o registro permanente: `state.wars` guarda só os 20 anos mais
+  // recentes, então conflitos antigos não aparecem mais lá.
+  const declaracoes = state.chronicle.filter(e => /^Guerra declarada/.test(e.title));
+  assert(declaracoes.length > 0, 'nenhuma guerra foi declarada em 110 anos de mundo');
+
+  // A IA precisa de um motivo defensável — nunca agride sem desculpa.
+  const semMotivo = declaracoes.filter(e => /conquista/i.test(e.body));
+  assertEqual(semMotivo.length, 0, 'a IA declarou guerra de pura conquista');
+
+  // E os conflitos precisam terminar, não ficar abertos para sempre.
+  const fins = state.chronicle.filter(e => /^Fim da guerra/.test(e.title));
+  assert(fins.length > 0, 'nenhuma guerra chegou ao fim');
+});
+
+test('termos de paz exigem pontuação para serem cobrados', () => {
+  const { state, rng } = newGame(4711);
+  const house = state.houses[state.playerHouseId];
+  house.leaderId = state.playerId;
+  house.army.levies = 200;
+
+  const alvo = Object.values(state.houses).find(
+    h => h.id !== house.id && h.regionId === house.regionId && !h.isIronThrone
+  )!;
+  house.relations[alvo.id] = 10;
+
+  const war = declareWar(state, rng, house.id, alvo.id, 'feud')!;
+
+  // Sem nenhuma vitória, só resta a paz branca.
+  assertEqual(
+    affordableTerms(state, war, 'attacker').join(','),
+    'white',
+    'termos duros disponíveis sem pontuação nenhuma'
+  );
+
+  // Com o placar cheio, tudo entra na mesa.
+  war.scoreAttacker = 100;
+  const comVitoria = affordableTerms(state, war, 'attacker');
+  assert(comVitoria.includes('tribute'), 'tributo deveria estar disponível');
+  assert(comVitoria.includes('vassalage'), 'vassalagem deveria estar disponível com 100');
 });
 
 test('a economia estabiliza em platô, não em explosão', () => {

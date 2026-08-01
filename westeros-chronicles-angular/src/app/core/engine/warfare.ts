@@ -5,7 +5,7 @@
  * uma decisão — sua ou da IA — e precisam de um motivo que o reino aceite. Sem
  * justificativa, o resto de Westeros trata a agressão como o que ela é.
  */
-import { CasusBelli, GameState, HouseState, War } from '../models';
+import { CasusBelli, GameState, HouseState, PeaceTerms, War } from '../models';
 import { Rng } from './rng';
 import { clamp, uid } from './utils';
 import { pushNarration, pushChronicle } from './narration';
@@ -209,13 +209,49 @@ function battle(state: GameState, rng: Rng, w: War): void {
   if (involvesPlayer) pushNarration(state, `⚔️ ${summary} (placar ${w.scoreAttacker}–${w.scoreDefender})`);
 }
 
+/**
+ * O que o vencedor pode exigir, e o preço de cada coisa em pontuação de guerra.
+ * Exigir mais do que se conquistou faz o outro lado simplesmente recusar.
+ */
+export const PEACE_TERM_COST: Record<PeaceTerms, number> = {
+  white: 0,
+  tribute: 25,
+  vassalage: 85,
+  seat: 60,
+};
+
+export function peaceTermLabel(t: PeaceTerms): string {
+  switch (t) {
+    case 'tribute': return 'tributo de guerra';
+    case 'vassalage': return 'vassalagem';
+    case 'seat': return 'cessão do assento tomado';
+    default: return 'paz branca';
+  }
+}
+
+/** Termos que a pontuação atual sustenta, do mais brando ao mais duro. */
+export function affordableTerms(state: GameState, w: War, side: 'attacker' | 'defender'): PeaceTerms[] {
+  const score = side === 'attacker' ? w.scoreAttacker : w.scoreDefender;
+  const out: PeaceTerms[] = ['white'];
+  if (score >= PEACE_TERM_COST.tribute) out.push('tribute');
+
+  // Cessão só faz sentido se este lado realmente segura algum assento.
+  const holdsSeat = Object.values(state.occupations ?? {})
+    .some(o => o.warId === w.id && sideOf(w, o.occupierHouseId) === side);
+  if (score >= PEACE_TERM_COST.seat && holdsSeat) out.push('seat');
+
+  if (score >= PEACE_TERM_COST.vassalage) out.push('vassalage');
+  return out;
+}
+
 /** Impõe os termos de paz conforme quem venceu e por quanto. */
 export function endWar(
   state: GameState,
   rng: Rng,
   w: War,
   outcome: 'attacker' | 'defender' | 'white',
-  why: string
+  why: string,
+  terms?: PeaceTerms
 ): void {
   if (w.endedAbsTurn) return;
   w.endedAbsTurn = state.date.absoluteTurn;
@@ -223,7 +259,8 @@ export function endWar(
 
   const attacker = state.houses[w.attackerHouseId];
   const defender = state.houses[w.defenderHouseId];
-  const terms: string[] = [];
+  const imposto: string[] = [];
+  let keepSeats = false;
 
   if (outcome !== 'white' && attacker && defender) {
     const winner = outcome === 'attacker' ? attacker : defender;
@@ -233,26 +270,43 @@ export function endWar(
     winner.prestige = clamp(winner.prestige + 4, 1, 100);
     loser.prestige = clamp(loser.prestige - 4, 1, 100);
 
-    // Tributo de guerra
-    const tribute = Math.min(loser.resources.goods ?? 0, Math.round(score * 1.2));
-    loser.resources.goods = (loser.resources.goods ?? 0) - tribute;
-    winner.resources.goods = (winner.resources.goods ?? 0) + tribute;
-    if (tribute > 0) terms.push(`${tribute} recursos em tributo`);
+    // Sem termo explícito, aplica o mais duro que a pontuação sustenta.
+    const escolhido: PeaceTerms = terms
+      ?? (score >= PEACE_TERM_COST.vassalage ? 'vassalage'
+        : score >= PEACE_TERM_COST.tribute ? 'tribute' : 'white');
 
-    // Vitória esmagadora: vassalagem
-    if (score >= 85 && !loser.isIronThrone && loser.suzerainId !== winner.id) {
+    if (escolhido === 'tribute' || escolhido === 'vassalage') {
+      const tribute = Math.min(loser.resources.goods ?? 0, Math.round(score * 1.2));
+      loser.resources.goods = (loser.resources.goods ?? 0) - tribute;
+      winner.resources.goods = (winner.resources.goods ?? 0) + tribute;
+      if (tribute > 0) imposto.push(`${tribute} recursos em tributo`);
+    }
+
+    if (escolhido === 'vassalage' && !loser.isIronThrone && loser.suzerainId !== winner.id) {
       loser.suzerainId = winner.id;
       loser.economy.taxRate = Math.max(loser.economy.taxRate ?? 0.15, 0.20);
-      terms.push(`${loser.name} passa a jurar a ${winner.name}`);
+      imposto.push(`${loser.name} passa a jurar a ${winner.name}`);
     }
+
+    if (escolhido === 'seat') {
+      for (const o of Object.values(ensureOccupations(state))) {
+        if (o.warId !== w.id) continue;
+        if (sideOf(w, o.occupierHouseId) !== outcome) continue;
+        const seat = state.houses[o.seatHouseId];
+        if (seat && !seat.isIronThrone) {
+          seat.suzerainId = o.occupierHouseId;
+          seat.economy.taxRate = Math.max(seat.economy.taxRate ?? 0.15, 0.25);
+          imposto.push(`${seat.name} fica sob ${state.houses[o.occupierHouseId]?.name ?? 'o ocupante'}`);
+        }
+      }
+    }
+    keepSeats = escolhido === 'seat' || escolhido === 'vassalage';
   }
 
-  // Ocupações desta guerra são devolvidas, salvo vitória esmagadora do ocupante.
+  // Ocupações desta guerra são devolvidas, salvo quando os termos as mantêm.
   for (const o of Object.values(ensureOccupations(state))) {
     if (o.warId !== w.id) continue;
-    const occupierSide = sideOf(w, o.occupierHouseId);
-    const keep = outcome !== 'white' && occupierSide === outcome
-      && (outcome === 'attacker' ? w.scoreAttacker : w.scoreDefender) >= 85;
+    const keep = keepSeats && sideOf(w, o.occupierHouseId) === outcome;
     if (!keep) releaseSeat(state, o.locationId, 'a paz é assinada');
   }
 
@@ -263,17 +317,69 @@ export function endWar(
   pushChronicle(state, {
     absTurn: state.date.absoluteTurn,
     title: `Fim da guerra — ${attacker?.name} × ${defender?.name}`,
-    body: `${label} ${terms.join('. ')}${terms.length ? '.' : ''} (${why})`,
+    body: `${label} ${imposto.join('. ')}${imposto.length ? '.' : ''} (${why})`,
     tags: ['war', 'end', 'politica'],
   });
 
   if (sideOf(w, state.playerHouseId) !== null) {
-    pushNarration(state, `🕊️ Fim da guerra: ${label} ${terms.join('. ')}`);
+    pushNarration(state, `🕊️ Fim da guerra: ${label} ${imposto.join('. ')}`);
   }
+}
+
+
+/**
+ * Casas ambiciosas declaram as próprias guerras.
+ *
+ * Sem isto, todo conflito não canônico do mundo partia do jogador: as demais
+ * Casas só se defendiam. Uma Casa forte, com motivo e vizinho fraco, agora
+ * ataca por conta própria — e o jogador pode acordar em guerra sem ter feito
+ * nada.
+ */
+function tickAiAggression(state: GameState, rng: Rng): void {
+  // Raro por turno: ~uma guerra nova a cada poucos anos no reino inteiro.
+  if (!rng.chance(0.02)) return;
+  if (activeWars(state).length >= 5) return;
+
+  const candidatos = Object.values(state.houses).filter(h =>
+    h.id !== state.playerHouseId &&
+    !h.isIronThrone &&
+    warsOf(state, h.id).length === 0 &&
+    // Calibrado ao teto de hoste: com a terra limitando o recrutamento, a
+    // leva mediana de uma Casa fica na casa das dezenas, não das centenas.
+    h.army.levies >= 30 &&
+    h.prestige >= 45
+  );
+  if (!candidatos.length) return;
+
+  const atacante = candidatos[rng.int(0, candidatos.length - 1)];
+
+  // Alvos plausíveis: mesma região, sem guerra, mais fracos — e, sobretudo,
+  // contra quem exista um motivo defensável. Filtrar o motivo ANTES do sorteio
+  // é o que faz a agressão acontecer: apenas 5% dos vizinhos mais fracos dão
+  // casus belli, então sortear primeiro e checar depois quase nunca resultava
+  // em guerra nenhuma.
+  const alvos = Object.values(state.houses)
+    .filter(h =>
+      h.id !== atacante.id &&
+      h.regionId === atacante.regionId &&
+      !h.isIronThrone &&
+      !warBetween(state, atacante.id, h.id) &&
+      h.suzerainId !== atacante.id &&
+      armyPower(h.army) < armyPower(atacante.army) * 0.8
+    )
+    .map(h => ({ casa: h, motivos: availableCasusBelli(state, atacante.id, h.id).filter(m => m !== 'conquest') }))
+    .filter(x => x.motivos.length > 0);
+
+  if (!alvos.length) return;
+
+  const escolhido = alvos[rng.int(0, alvos.length - 1)];
+  declareWar(state, rng, atacante.id, escolhido.casa.id, escolhido.motivos[0]);
 }
 
 /** Roda as guerras ativas: batalhas, desgaste e o cansaço que leva à paz. */
 export function tickWars(state: GameState, rng: Rng): void {
+  tickAiAggression(state, rng);
+
   for (const w of activeWars(state)) {
     const atk = sideHouses(state, w, 'attacker');
     const def = sideHouses(state, w, 'defender');
@@ -312,7 +418,8 @@ export function tickWars(state: GameState, rng: Rng): void {
     }
   }
 
-  // Limpa guerras encerradas há muito tempo, mantendo histórico recente.
+  // Mantém o histórico recente (20 anos) para a crônica e os painéis; guerras
+  // mais antigas que isso só sobrevivem como entrada de crônica.
   state.wars = ensureWars(state).filter(w =>
-    !w.endedAbsTurn || (state.date.absoluteTurn - w.endedAbsTurn) <= 200);
+    !w.endedAbsTurn || (state.date.absoluteTurn - w.endedAbsTurn) <= 400);
 }

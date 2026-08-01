@@ -421,6 +421,12 @@ export interface SeatClaim {
  */
 export type CasusBelli = 'claim' | 'feud' | 'tribute' | 'conquest';
 
+/**
+ * O que o vencedor exige na mesa de paz. Cada termo tem um preço em pontuação
+ * de guerra — pedir mais do que se conquistou faz o outro lado recusar.
+ */
+export type PeaceTerms = 'white' | 'tribute' | 'seat' | 'vassalage';
+
 /** Guerra entre Casas, declarada em jogo (distinta das guerras canônicas). */
 export interface War {
   id: string;
