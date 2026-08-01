@@ -508,6 +508,48 @@ test('a sincronização de 298 não tira o assento do jogador em silêncio', () 
   }
 });
 
+test('a economia estabiliza em platô, não em explosão', () => {
+  const { state, rng } = newGame(31337);
+
+  const medianas = () => {
+    const hs = Object.values(state.houses);
+    const med = (xs: number[]) => xs.sort((a, b) => a - b)[Math.floor(xs.length / 2)];
+    return {
+      gold: med(hs.map(h => h.resources.gold)),
+      food: med(hs.map(h => h.resources.food)),
+      goods: med(hs.map(h => h.resources.goods ?? 0)),
+      peasants: med(hs.map(h => h.economy.peasants)),
+    };
+  };
+
+  runWorldUntil(state, rng, 200);
+  const em200 = medianas();
+  runWorldUntil(state, rng, 305);
+  const em305 = medianas();
+
+  // Sem tetos, cada uma destas grandezas multiplicava por milhares em 155 anos,
+  // e qualquer preço do jogo (fazenda 120, presente 35) virava irrelevante.
+  for (const [nome, a, b] of [
+    ['ouro', em200.gold, em305.gold],
+    ['comida', em200.food, em305.food],
+    ['recursos', em200.goods, em305.goods],
+    ['camponeses', em200.peasants, em305.peasants],
+  ] as Array<[string, number, number]>) {
+    const crescimento = b / Math.max(1, a);
+    assert(crescimento < 2, `${nome} cresceu ${crescimento.toFixed(1)}x entre 200 e 305 (esperado platô)`);
+  }
+
+  // E o platô precisa deixar as Casas solventes, não falidas.
+  assert(em305.gold > 200, `ouro mediano em 305 é ${em305.gold}: as Casas quebraram`);
+
+  // A hoste não pode passar do que a terra sustenta.
+  for (const h of Object.values(state.houses)) {
+    const mass = h.army.levies + h.army.menAtArms + h.army.squires + h.army.knights;
+    const teto = Math.round(h.economy.peasants * 0.12);
+    assert(mass <= teto + 60, `${h.name} mantém ${mass} homens para um teto de ${teto}`);
+  }
+});
+
 test('invariantes econômicas: nada fica negativo depois de 200 turnos', () => {
   const { state, rng } = newGame(555);
   runUntil(state, rng, 160);
