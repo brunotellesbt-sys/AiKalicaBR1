@@ -80,10 +80,10 @@ que não abria mapa nenhum.
 
 ## 8) Testes
 
-`npm test` — 11 testes determinísticos com RNG semeado, cobrindo determinismo,
-tetos de divergência, a cascata canônica, a crise sucessória e invariantes de
-mundo em 150 anos simulados. Foram eles que encontraram os bugs de líder morto
-e de ordem dentro do turno.
+`npm test` — 23 testes determinísticos com RNG semeado, cobrindo determinismo,
+tetos de divergência, a cascata canônica, a crise sucessória, guerras, rixas e
+invariantes de mundo em 155 anos simulados. Foram eles que encontraram os bugs
+de líder morto e de ordem dentro do turno.
 
 ## 9) Cânone preenchido ano a ano
 
@@ -114,9 +114,9 @@ era, com mediana em 251.
 
 ## 12) Motor separado por domínio
 
-`sim.ts` saiu de 5.714 para 4.004 linhas, com sete módulos extraídos:
-`narration`, `rules`, `claims`, `canon-divergence`, `economy`, `lifecycle` e
-`succession`.
+`sim.ts` saiu de 5.714 para 4.260 linhas, com nove módulos extraídos:
+`narration`, `rules`, `claims`, `canon-divergence`, `economy`, `lifecycle`,
+`succession`, `warfare` e `politics`.
 
 ## 13) Guerras declaradas pelo jogador
 
@@ -202,12 +202,40 @@ Pedir além do conquistado é recusado.
 E as Casas passam a declarar as próprias guerras — 10 a 14 por século, sempre
 com motivo defensável. O jogador pode acordar em guerra sem ter feito nada.
 
+## 19) Rixas nomeadas entre Casas
+
+Fora das ações do jogador as relações eram inertes. Medido na campanha inteira:
+de **83.232 pares de Casas, apenas 24** chegavam a 20 ou menos em 155 anos — e
+todos por guerras já acontecidas. Isso matava o casus belli de rixa (exige ≤ 20),
+que nunca era alcançável, e também as alianças fortes.
+
+A primeira tentativa foi atrito difuso sobre pares sorteados. **Falhou pela
+aritmética**: com dezenas de milhares de pares, cada um seria tocado meia vez
+numa campanha inteira — e medido deu 24 → 9 pares hostis, pior que antes.
+
+Westeros não funciona assim: tem feudos com nome. O modelo agora é um punhado de
+rixas ativas (máx. 9), entre vizinhos da mesma região e de porte parecido, com
+causa declarada — fronteira, primazia, insulto em banquete, casamento desfeito,
+portagem, sangue numa caçada. Cada uma se aprofunda devagar (~8 anos até virar
+inimizade pública), vira notícia regional ao romper, e esfria depois de ~45 anos
+quando quem começou a briga já morreu. Guerras terminadas deixam rancor: a
+recuperação é lenta e para em 40 — nunca volta à amizade.
+
+| pares hostis (≤ 20) | ano 180 | ano 240 | ano 305 |
+|---|---|---|---|
+| antes | 0 | 6 | 24 |
+| agora | 17 | 40 | 66 |
+
+A mediana das relações fica intacta em 45: o mundo não ficou mais hostil no
+geral, ele ficou hostil **onde tem motivo**.
+
+**E o jogador pode intervir** (Diplomacia → *Rixas do reino*): mediar custa 45
+recursos em presentes e banquetes, melhora a relação entre as duas Casas, ganha
++6 com ambas e +2 de prestígio, e freia a deterioração dali em diante; ou tomar
+partido, ganhando +14/+10 com o aliado e −18/−12 com o rival. A escolha é
+definitiva — voltar atrás custaria sua palavra.
+
 ## O que ainda falta
 
-1. **Relações nunca caem o bastante** — o casus belli de rixa exige relação ≤ 20,
-   mas a mínima observada entre Casas na simulação é 49. Só reivindicação e
-   tributo geram guerras na prática.
-2. **Reféns e casamentos forçados na mesa de paz** — os termos hoje são
+1. **Reféns e casamentos forçados na mesa de paz** — os termos hoje são
    tributo, assento e vassalagem; faltam os laços pessoais.
-3. **Histórias de casas menores não são interativas** — chegam como notícia,
-   mas o jogador ainda não pode intervir numa rixa alheia.

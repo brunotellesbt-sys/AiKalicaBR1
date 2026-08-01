@@ -87,6 +87,7 @@ O motor não depende de Angular e está separado por domínio em
 | `rules.ts` | tabelas puras (renome, títulos, mortalidade, tiers) |
 | `claims.ts` | reivindicações e ocupação de assentos |
 | `canon-divergence.ts` | placar de interferência, tetos e decaimento |
+| `politics.ts` | rixas entre Casas, rancor de guerra e mediação |
 | `economy.ts` | produção, tributo, IA econômica, Banco de Ferro |
 | `lifecycle.ts` | casamento, gestação, nascimento, idade e morte |
 | `succession.ts` | ordem de herança, herdeiro do jogador, crises |
@@ -95,10 +96,10 @@ O motor não depende de Angular e está separado por domínio em
 
 ## Testes
 
-`npm test` compila o motor (que não depende de Angular) e roda 18 testes
+`npm test` compila o motor (que não depende de Angular) e roda 23 testes
 determinísticos com RNG semeado: determinismo, tetos de divergência, a cascata
-canônica, crises sucessórias, guerras e invariantes de mundo ao longo de 155
-anos simulados.
+canônica, crises sucessórias, guerras, rixas e invariantes de mundo ao longo de
+155 anos simulados.
 
 `npm run test:ui` roda 9 testes de navegador (Playwright) sobre o app de pé:
 abas, mapa, viagem por clique, avanço de turno e ausência de erros de console.
@@ -126,6 +127,24 @@ O placar de guerra vai a 100, e na mesa de paz cada exigência tem um preço:
 
 Pedir mais do que se conquistou é recusado. As outras Casas também declaram
 guerras próprias (10 a 14 por século), sempre com motivo defensável.
+
+## Rixas
+
+O reino sustenta até nove rixas ativas ao mesmo tempo, entre vizinhos da mesma
+região e de porte parecido, cada uma com causa declarada — uma fronteira que
+ninguém cede, primazia regional, um insulto num banquete, um casamento desfeito,
+portagens numa estrada, sangue numa caçada chamado de acidente.
+
+Levam cerca de oito anos para virar inimizade pública (relação ≤ 20, que é
+quando o casus belli de rixa abre), viram notícia regional ao romper, e esfriam
+depois de umas quatro décadas, quando quem começou a briga já morreu. Guerras
+terminadas deixam rancor: a relação se recupera devagar e para na desconfiança,
+nunca volta à amizade.
+
+Pela Diplomacia dá para **intervir numa rixa alheia**: mediar (45 recursos em
+presentes e banquetes, +2 de prestígio, aproxima as duas Casas e freia a
+deterioração) ou tomar partido, ganhando um aliado e um inimigo. A escolha é
+definitiva.
 
 ## Economia
 
