@@ -558,6 +558,39 @@ function maybeOpenCrisisForSuccession(state: GameState, rng: Rng, e: CanonEventD
   return true;
 }
 
+/**
+ * Uma notícia chega ao jogador?
+ *
+ * Marcos do reino todo mundo ouve. Histórias de casas menores — uma rixa por
+ * um moinho, um herdeiro que some, uma casa que enriquece rápido demais — só
+ * chegam a quem está por perto ou tem laço com os envolvidos. Sem isso, o
+ * chat vira um mural de fatos de famílias que o jogador nunca encontrou.
+ */
+function canonNewsReachesPlayer(state: GameState, e: CanonEventDef): boolean {
+  const tags = e.tags ?? [];
+  if (!tags.includes('local')) return true;
+
+  const playerHouse = state.houses[state.playerHouseId];
+  const player = state.characters[state.playerId];
+  if (!playerHouse || !player) return true;
+
+  const playerRegion = state.locations[player.locationId]?.regionId;
+
+  if (e.regionId && (e.regionId === playerRegion || e.regionId === playerHouse.regionId)) return true;
+
+  if (e.houseId) {
+    if (e.houseId === playerHouse.id) return true;
+    const other = state.houses[e.houseId];
+    if (other) {
+      if (other.regionId === playerRegion || other.regionId === playerHouse.regionId) return true;
+      if (other.suzerainId === playerHouse.id || playerHouse.suzerainId === other.id) return true;
+      if ((playerHouse.relations[other.id] ?? 50) >= 62) return true;
+    }
+  }
+
+  return false;
+}
+
 function applyCanonEvent(state: GameState, rng: Rng, e: CanonEventDef): void {
   ensureCanonDefaults(state);
   if (state.canon!.appliedEventIds[e.id]) return;
@@ -583,7 +616,9 @@ function applyCanonEvent(state: GameState, rng: Rng, e: CanonEventDef): void {
   switch (e.kind) {
     case 'chronicle': {
       state.chronicle.unshift({ turn: state.date.absoluteTurn, title: e.title, body: e.body, tags: e.tags });
-      pushNarration(state, `📜 ${e.title}: ${e.body}`);
+      if (canonNewsReachesPlayer(state, e)) {
+        pushNarration(state, `📜 ${e.title}: ${e.body}`);
+      }
       break;
     }
     case 'birth': {

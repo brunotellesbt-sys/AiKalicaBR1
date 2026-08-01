@@ -134,6 +134,13 @@ export interface CanonEventDef {
   /** Variante publicada quando as pré-condições falham. */
   altTitle?: string;
   altBody?: string;
+
+  /**
+   * Região da notícia. Eventos com `local` nas tags só são narrados no chat
+   * para quem está por perto ou tem laço com a Casa envolvida — o resto do
+   * reino fica sabendo apenas pela crônica, se procurar.
+   */
+  regionId?: string;
 }
 
 /**
@@ -533,6 +540,91 @@ export const CANON_EVENTS: CanonEventDef[] = [
   { id: '273_joanna_dies', year: 273, turn: 10, kind: 'chronicle', title: 'Luto em Rochedo Casterly', body: 'Joanna Lannister morre no parto do terceiro filho. Tywin nunca mais e o mesmo.', tags: ['canon', 'lannister'] },
   { id: '275_king_hoards_fire', year: 275, turn: 10, kind: 'chronicle', title: 'O rei e o fogo', body: 'Piromantes ganham espaco na corte. O rei ouve-os mais do que aos conselheiros.', tags: ['canon', 'court', 'contexto'] },
   { id: '292_debts_mount', year: 292, turn: 10, kind: 'chronicle', title: 'As contas se acumulam', body: 'A Coroa pede mais ao Banco de Ferro e a Rochedo Casterly. Ninguem diz nao ao rei.', tags: ['canon', 'economia', 'contexto'] },
+
+  // ===== Histórias de casas menores =====
+  // Arcos que atravessam gerações e só chegam a quem está por perto.
+
+  // --- Bracken x Blackwood: a rixa mais antiga das Terras Fluviais ---
+  { id: '154_bracken_blackwood_mill', year: 154, turn: 8, kind: 'chronicle', title: 'Sangue por um moinho', body: 'Bracken e Blackwood voltam a disputar um moinho no Rio Vermelho. Ninguem lembra qual das duas casas o construiu.', tags: ['feud', 'riverlands', 'local'], houseId: 'bracken', regionId: 'riverlands' },
+  { id: '181_bracken_blackwood_ford', year: 181, turn: 12, kind: 'chronicle', title: 'Disputa pelo vau', body: 'Uma ponte destruida reacende a querela entre Bracken e Blackwood. O suserano manda calar os dois e nao e obedecido.', tags: ['feud', 'riverlands', 'local'], houseId: 'blackwood', regionId: 'riverlands' },
+  { id: '195_bracken_black_dragon', year: 195, turn: 10, kind: 'chronicle', title: 'Cores opostas', body: 'Os Bracken erguem o dragao negro; os Blackwood, o vermelho. A rixa antiga encontra uma guerra grande onde caber.', tags: ['feud', 'blackfyre', 'riverlands', 'local'], houseId: 'bracken', regionId: 'riverlands' },
+  { id: '198_bracken_pays', year: 198, turn: 10, kind: 'chronicle', title: 'O preco da escolha errada', body: 'Terminada a rebeliao, os Bracken pagam em terras o que apostaram no dragao negro. Os Blackwood assistem.', tags: ['feud', 'riverlands', 'local'], houseId: 'bracken', regionId: 'riverlands' },
+  { id: '241_bracken_blackwood_marriage', year: 241, turn: 10, kind: 'chronicle', title: 'Um casamento que nao pacifica', body: 'Tenta-se casar um Bracken com uma Blackwood. O banquete termina em armas sacadas.', tags: ['feud', 'riverlands', 'local'], houseId: 'blackwood', regionId: 'riverlands' },
+  { id: '299_bracken_blackwood_again', year: 299, turn: 6, kind: 'chronicle', title: 'A rixa aproveita a guerra', body: 'Com o Tridente em chamas, Bracken e Blackwood aproveitam para acertar contas de seculos.', tags: ['feud', 'riverlands', 'war', 'local'], houseId: 'bracken', regionId: 'riverlands' },
+
+  // --- Bolton: os que foram Reis do Norte ---
+  { id: '166_bolton_old_kings', year: 166, turn: 10, kind: 'chronicle', title: 'O Forte do Pavor lembra', body: 'Nos saloes dos Bolton ainda se fala nos Reis Vermelhos que disputaram o Norte com os Stark.', tags: ['north', 'local'], houseId: 'bolton', regionId: 'north' },
+  { id: '214_bolton_flaying', year: 214, turn: 14, kind: 'chronicle', title: 'A pratica proibida', body: 'Um Bolton e advertido por esfolar um cacador furtivo. A pratica e proibida ha seculos, e sobrevive assim mesmo.', tags: ['north', 'local'], houseId: 'bolton', regionId: 'north' },
+  { id: '268_bolton_quiet', year: 268, turn: 10, kind: 'chronicle', title: 'Silencio no Forte do Pavor', body: 'Os Bolton pagam seus tributos em dia e nao comparecem a corte. Winterfell prefere assim.', tags: ['north', 'local'], houseId: 'bolton', regionId: 'north' },
+
+  // --- Frey: a portagem das Gemeas ---
+  { id: '174_frey_toll', year: 174, turn: 10, kind: 'chronicle', title: 'A portagem das Gemeas', body: 'Os Frey cobram por cada carroca que cruza o Forcaverde. Os senhores mais antigos chamam-nos de novos-ricos.', tags: ['riverlands', 'local'], houseId: 'frey', regionId: 'riverlands' },
+  { id: '233_frey_walder', year: 233, turn: 10, kind: 'chronicle', title: 'Walder Frey assume as Gemeas', body: 'Um novo Lorde Frey toma as Gemeas e comeca a colecionar esposas e filhos com a mesma diligencia.', tags: ['riverlands', 'local'], houseId: 'frey', regionId: 'riverlands' },
+  { id: '272_frey_brood', year: 272, turn: 10, kind: 'chronicle', title: 'A ninhada das Gemeas', body: 'Contam-se dezenas de Frey entre filhos, netos e bastardos. Nenhuma outra casa cresce tao depressa.', tags: ['riverlands', 'local'], houseId: 'frey', regionId: 'riverlands' },
+
+  // --- Reyne e Tarbeck: os que desafiaram Rochedo Casterly ---
+  { id: '252_reyne_rich', year: 252, turn: 10, kind: 'chronicle', title: 'Ouro em Castamere', body: 'As minas dos Reyne rendem tanto que a casa passa a viver como se fosse a primeira do Oeste.', tags: ['westerlands', 'local'], houseId: 'house_westerlands_reyne', regionId: 'westerlands' },
+  { id: '257_tarbeck_defiance', year: 257, turn: 10, kind: 'chronicle', title: 'Os Tarbeck desafiam', body: 'Casados com os Reyne, os Tarbeck deixam de responder aos chamados de Rochedo Casterly.', tags: ['westerlands', 'local'], houseId: 'house_westerlands_tarbeck', regionId: 'westerlands' },
+  { id: '262_castamere_silence', year: 262, turn: 4, kind: 'chronicle', title: 'O silencio de Castamere', body: 'Depois das chuvas, ninguem mais mora em Castamere. A cancao viaja mais longe que a noticia.', tags: ['westerlands', 'local'], houseId: 'house_westerlands_reyne', regionId: 'westerlands' },
+
+  // --- Clegane: de cao de caca a terror ---
+  { id: '243_clegane_dogs', year: 243, turn: 10, kind: 'chronicle', title: 'Tres caes e um leao', body: 'Um canil salva a vida de um Lorde Lannister de uma leoa. O mestre dos caes ganha terras, e tres caes num escudo.', tags: ['westerlands', 'local'], houseId: 'clegane', regionId: 'westerlands' },
+  { id: '276_clegane_fire', year: 276, turn: 16, kind: 'chronicle', title: 'O fogo entre irmaos', body: 'Nas terras dos Clegane, um menino e queimado pelo proprio irmao mais velho. A casa chama aquilo de acidente.', tags: ['westerlands', 'local'], houseId: 'clegane', regionId: 'westerlands' },
+  { id: '296_clegane_tourneys', year: 296, turn: 10, kind: 'chronicle', title: 'O Monte nos torneios', body: 'O maior dos Clegane entra nas listas. Cavaleiros preferem pagar a multa a enfrenta-lo.', tags: ['westerlands', 'tournament', 'local'], houseId: 'clegane', regionId: 'westerlands' },
+
+  // --- Dayne: a Espada da Manha ---
+  { id: '159_dayne_dawn', year: 159, turn: 14, kind: 'chronicle', title: 'Alvorada em campo', body: 'Um Dayne empunha Alvorada contra as hostes da Coroa em Dorne. Poucos que o enfrentam voltam para contar.', tags: ['dorne', 'local'], houseId: 'dayne', regionId: 'dorne' },
+  { id: '217_dayne_starfall', year: 217, turn: 10, kind: 'chronicle', title: 'Marca-Estrela', body: 'A espada palida so passa a quem prova ser digno. Passam-se geracoes sem uma Espada da Manha.', tags: ['dorne', 'local'], houseId: 'dayne', regionId: 'dorne' },
+  { id: '279_dayne_arthur', year: 279, turn: 10, kind: 'chronicle', title: 'Uma nova Espada da Manha', body: 'Um jovem Dayne recebe Alvorada e o titulo que vem com ela. Falam dele antes mesmo de o verem lutar.', tags: ['dorne', 'local'], houseId: 'dayne', regionId: 'dorne' },
+
+  // --- Mormont: a Ilha do Urso ---
+  { id: '206_mormont_bears', year: 206, turn: 10, kind: 'chronicle', title: 'Mulheres de machado', body: 'Na Ilha do Urso, as mulheres aprendem a lutar cedo. Os homens vao ao mar e nem sempre voltam.', tags: ['north', 'local'], houseId: 'mormont', regionId: 'north' },
+  { id: '289_mormont_knighted', year: 289, turn: 14, kind: 'chronicle', title: 'Um Mormont armado cavaleiro', body: 'Nas Ilhas de Ferro, um Mormont e o primeiro a subir a muralha e recebe a espada no ombro pelo proprio rei.', tags: ['north', 'war', 'local'], houseId: 'mormont', regionId: 'north' },
+  { id: '296_mormont_disgrace', year: 296, turn: 12, kind: 'chronicle', title: 'A desgraca do Urso', body: 'Um Mormont vende homens a escravidao para sustentar uma esposa cara, e foge antes que o gelo o alcance.', tags: ['north', 'local'], houseId: 'mormont', regionId: 'north' },
+
+  // --- Osgrey e Webber: a agua enxadrezada (Dunk & Egg) ---
+  { id: '211_osgrey_dam', year: 211, turn: 12, kind: 'chronicle', title: 'A represa da Dama Vermelha', body: 'Uma represa seca o riacho enxadrezado. Osgrey e Webber vao as armas por um fio de agua.', tags: ['reach', 'local'], houseId: 'house_reach_osgrey', regionId: 'reach' },
+  { id: '211_osgrey_settled', year: 211, turn: 16, kind: 'chronicle', title: 'Julgamento por combate', body: 'A disputa do riacho termina em combate singular e casamento. A agua volta a correr para os dois lados.', tags: ['reach', 'local'], houseId: 'house_reach_webber', regionId: 'reach' },
+
+  // --- Peake e Lothston: Harrenhal muda de dono ---
+  { id: '212_whitewalls_after', year: 212, turn: 14, kind: 'chronicle', title: 'Depois de Whitewalls', body: 'Casas que brindaram ao dragao negro em Whitewalls perdem cargos e filhos como refens.', tags: ['blackfyre', 'reach', 'local'], houseId: 'house_reach_peake', regionId: 'reach' },
+  { id: '236_harrenhal_curse', year: 236, turn: 10, kind: 'chronicle', title: 'A maldicao de Harrenhal', body: 'Mais uma casa se extingue em Harrenhal. Os maesters chamam de coincidencia; o povo, de maldicao.', tags: ['riverlands', 'local'], houseId: 'whent', regionId: 'riverlands' },
+  { id: '281_whent_tourney_cost', year: 281, turn: 8, kind: 'chronicle', title: 'O custo do grande torneio', body: 'Os Whent gastam em um torneio mais do que Harrenhal rende em anos. Perguntam-se de onde veio o ouro.', tags: ['riverlands', 'tournament', 'local'], houseId: 'whent', regionId: 'riverlands' },
+
+  // --- Baelish: de nada a algo ---
+  { id: '282_baelish_duel', year: 282, turn: 10, kind: 'chronicle', title: 'Um duelo desigual', body: 'Um menino de nome pequeno desafia um herdeiro do Norte por uma Tully, e quase morre por isso.', tags: ['vale', 'local'], houseId: 'baelish', regionId: 'vale' },
+  { id: '289_baelish_gulltown', year: 289, turn: 10, kind: 'chronicle', title: 'Contas em Vila Gaivota', body: 'O mesmo menino recebe um cargo modesto de alfandega e triplica a arrecadacao no primeiro ano.', tags: ['vale', 'economia', 'local'], houseId: 'baelish', regionId: 'vale' },
+  { id: '293_baelish_coin', year: 293, turn: 10, kind: 'chronicle', title: 'O homem que faz ouro', body: 'A Coroa descobre que ha alguem em Vila Gaivota bom demais com numeros, e o chama para Porto Real.', tags: ['vale', 'economia', 'local'], houseId: 'baelish', regionId: 'vale' },
+
+  // --- Marcas Dornesas: Swann, Dondarrion, Caron, Selmy ---
+  { id: '163_marches_raids', year: 163, turn: 10, kind: 'chronicle', title: 'Ataques nas Marcas', body: 'Mesmo em paz, Marcas Dornesas e Dorne trocam incursoes. Os senhores da fronteira dormem armados.', tags: ['stormlands', 'dorne', 'local'], houseId: 'swann', regionId: 'stormlands' },
+  { id: '228_dondarrion_watch', year: 228, turn: 10, kind: 'chronicle', title: 'A vigilia de Refugio Negro', body: 'Os Dondarrion mantem fogueiras acesas nas passagens. E o que separa a Campina de uma noite ruim.', tags: ['stormlands', 'local'], houseId: 'dondarrion', regionId: 'stormlands' },
+  { id: '266_selmy_young', year: 266, turn: 10, kind: 'chronicle', title: 'O jovem Selmy', body: 'Um Selmy entra num torneio disfarcado de cavaleiro misterioso e derruba homens duas vezes maiores.', tags: ['stormlands', 'tournament', 'local'], houseId: 'selmy', regionId: 'stormlands' },
+
+  // --- Ilhas de Ferro: a Velha Rota ---
+  { id: '186_ironborn_old_way', year: 186, turn: 10, kind: 'chronicle', title: 'A Velha Rota', body: 'Nas Ilhas, capitaes ainda medem valor pelo que tomam e nao pelo que compram.', tags: ['iron_islands', 'local'], houseId: 'harlaw', regionId: 'iron_islands' },
+  { id: '244_drumm_redrain', year: 244, turn: 10, kind: 'chronicle', title: 'Chuva Vermelha', body: 'Os Drumm exibem uma espada valiriana tomada ha seculos e recusam-se a dizer de quem.', tags: ['iron_islands', 'local'], houseId: 'drumm', regionId: 'iron_islands' },
+  { id: '291_ironborn_after', year: 291, turn: 10, kind: 'chronicle', title: 'Depois da rebeliao', body: 'Sem saques, as Ilhas empobrecem. Capitaes jovens falam da Velha Rota como quem fala de comida.', tags: ['iron_islands', 'local'], houseId: 'goodbrother', regionId: 'iron_islands' },
+
+  // --- Vale: Royce e Corbray ---
+  { id: '201_royce_runes', year: 201, turn: 10, kind: 'chronicle', title: 'As runas de bronze', body: 'Os Royce guardam uma armadura coberta de runas que, dizem, protege quem a veste. Ninguem testou de propósito.', tags: ['vale', 'local'], houseId: 'royce', regionId: 'vale' },
+  { id: '258_corbray_lady', year: 258, turn: 10, kind: 'chronicle', title: 'Dama Desolada', body: 'A espada dos Corbray passa de pai para filho, e sempre ha um irmao mais novo que a queria.', tags: ['vale', 'local'], houseId: 'corbray', regionId: 'vale' },
+
+  // --- Norte: Manderly, Karstark, Umber, Hornwood ---
+  { id: '151_manderly_exile', year: 151, turn: 10, kind: 'chronicle', title: 'Memoria de exilio', body: 'Os Manderly ainda contam como foram expulsos do Dominio e acolhidos pelos Stark. Nao esqueceram nenhum dos dois lados.', tags: ['north', 'local'], houseId: 'manderly', regionId: 'north' },
+  { id: '178_karstark_kin', year: 178, turn: 10, kind: 'chronicle', title: 'Sangue de Stark', body: 'Os Karstark lembram a quem quiser ouvir que descendem dos Stark, e por isso se acham mal servidos.', tags: ['north', 'local'], houseId: 'karstark', regionId: 'north' },
+  { id: '227_umber_giants', year: 227, turn: 10, kind: 'chronicle', title: 'Os Umber e o gigante', body: 'Depois de Barba-Vermelha, os Umber juram guardar sozinhos o trecho mais frio da estrada.', tags: ['north', 'local'], houseId: 'umber', regionId: 'north' },
+  { id: '287_hornwood_heir', year: 287, turn: 10, kind: 'chronicle', title: 'Um herdeiro so', body: 'Os Hornwood tem um unico filho vivo. Meio Norte ja calcula o que acontece se ele cair de um cavalo.', tags: ['north', 'local'], houseId: 'hornwood', regionId: 'north' },
+
+  // --- Dominio: Hightower, Redwyne, Tarly, Florent ---
+  { id: '204_hightower_citadel', year: 204, turn: 10, kind: 'chronicle', title: 'A Torre e a Cidadela', body: 'Vila Velha vive de dois poderes: a Torre Alta e os maesters. Nem sempre concordam.', tags: ['reach', 'local'], houseId: 'hightower', regionId: 'reach' },
+  { id: '238_redwyne_fleet', year: 238, turn: 10, kind: 'chronicle', title: 'A frota do Arbor', body: 'A frota Redwyne cresce mais que a da Coroa. Ninguem em Porto Real comenta isso em voz alta.', tags: ['reach', 'local'], houseId: 'redwyne', regionId: 'reach' },
+  { id: '263_tarly_heartsbane', year: 263, turn: 10, kind: 'chronicle', title: 'Fome-de-Coracao', body: 'A espada valiriana dos Tarly so e erguida por quem lidera a casa em campo. Nao ha excecoes.', tags: ['reach', 'local'], houseId: 'tarly', regionId: 'reach' },
+  { id: '284_florent_claim', year: 284, turn: 10, kind: 'chronicle', title: 'A queixa dos Florent', body: 'Os Florent lembram que tinham direito melhor a Jardim de Cima do que quem se sentou nele.', tags: ['reach', 'claim', 'local'], houseId: 'florent', regionId: 'reach' },
+
+  // --- Dorne: Yronwood e Jordayne ---
+  { id: '170_yronwood_bloodroyal', year: 170, turn: 10, kind: 'chronicle', title: 'O Sangue Real', body: 'Os Yronwood lembram que foram reis quando os Martell ainda eram principes de areia.', tags: ['dorne', 'local'], houseId: 'yronwood', regionId: 'dorne' },
+  { id: '292_yronwood_duel', year: 292, turn: 10, kind: 'chronicle', title: 'Um duelo que nao devia ter sido', body: 'Um principe de Lancassolar e um Yronwood duelam por honra. A ferida infecciona e a paz entre as casas junto.', tags: ['dorne', 'local'], houseId: 'yronwood', regionId: 'dorne' },
 ];
 
 // -----------------------------
