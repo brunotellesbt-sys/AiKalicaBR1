@@ -4,7 +4,7 @@ import { BehaviorSubject } from 'rxjs';
 import { GameState, Gender, HouseState, Character } from '../models';
 import { REGIONS, LOCATIONS, TRAVEL_GRAPH } from '../data/regions';
 import { HOUSES } from '../data/houses';
-import { buildInitialState, applyChoice, applyTravel, applyDiplomacy, applyDiplomacyChoice, applyDaenerysAction, applyTraining, applyHouseMgmt, applyIronBank, applyLocalAction, applyTournamentAction, applyMissionAction, applyCrisisAction, promptMainMenu } from './sim';
+import { buildInitialState, applyChoice, applyTravel, applyDiplomacy, applyDiplomacyChoice, applyDaenerysAction, applyTraining, applyHouseMgmt, applyIronBank, applyLocalAction, applyTournamentAction, applyMissionAction, applyCrisisAction, applyWarAction, applyRivalryAction, promptMainMenu } from './sim';
 import { Rng } from './rng';
 import { uid } from './utils';
 
@@ -78,6 +78,10 @@ export class GameService {
     (state as any).canon = (state as any).canon ?? { enabled: true, mode: 'strict', appliedEventIds: {} };
     (state as any).tournaments = (state as any).tournaments ?? [];
     (state as any).missions = (state as any).missions ?? [];
+    (state as any).claims = (state as any).claims ?? [];
+    (state as any).occupations = (state as any).occupations ?? {};
+    (state as any).wars = (state as any).wars ?? [];
+    (state as any).rivalries = (state as any).rivalries ?? [];
     state.ui = (state as any).ui ?? { activeTab: 'chat', showSetup: false, pendingNameQueue: [] };
     (state.ui as any).pendingNameQueue = (state.ui as any).pendingNameQueue ?? [];
     for (const c of Object.values(state.characters)) {
@@ -168,7 +172,19 @@ export class GameService {
       return this.state$.next({ ...s });
     }
 
-    // crises sucessórias: crisis:<houseId>:<incumbent|claimant>
+    // rixas: rival:<rivalryId>:<mediate|houseId>
+    if (choiceId.startsWith('rival:')) {
+      applyRivalryAction(s, this.rng, choiceId.substring('rival:'.length));
+      return this.state$.next({ ...s });
+    }
+
+    // guerras: war:declare:<houseId>:<cb> | war:peace:<warId>
+    if (choiceId.startsWith('war:')) {
+      applyWarAction(s, this.rng, choiceId.substring('war:'.length));
+      return this.state$.next({ ...s });
+    }
+
+    // crises sucessórias: crisis:<houseId>:<pretendenteId>
     if (choiceId.startsWith('crisis:')) {
       applyCrisisAction(s, this.rng, choiceId.substring('crisis:'.length));
       return this.state$.next({ ...s });

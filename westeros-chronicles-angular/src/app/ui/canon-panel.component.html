@@ -62,37 +62,58 @@
     <div class="card" *ngIf="crises().length">
       <div class="h2">Crises sucessórias</div>
       <div class="muted small">
-        Alguém sobreviveu à própria morte registrada e o herdeiro do cânone não aceitou.
-        Apoiar um lado custa <b>60 recursos</b> e define inimigos permanentes.
+        Assentos em disputa. Apoiar um pretendente custa <b>60 recursos</b>,
+        rende relação com a Casa disputada e inimizade com todos os rivais.
       </div>
 
       <div class="war" *ngFor="let c of crises()">
         <div class="war-top">
           <div class="h3">{{houseName(c.houseId)}}</div>
-          <span class="badge warn" *ngIf="c.playerSide">Você apoiou: {{c.playerSide === 'incumbent' ? charName(c.incumbentId) : charName(c.claimantId)}}</span>
+          <span class="badge warn" *ngIf="c.playerBackedId">Você apoiou: {{backedName(c)}}</span>
         </div>
 
-        <div class="item">
+        <div class="item" *ngFor="let p of pretenders(c)">
           <div class="left">
-            <div class="h4">{{charName(c.incumbentId)}} <span class="muted small">(titular)</span></div>
-            <div class="muted small">Apoio: {{crisisSupport(c, 'incumbent')}}/100</div>
+            <div class="h4">
+              {{charName(p.characterId)}}
+              <span class="muted small">({{basisLabel(p)}} • {{houseName(p.houseId)}})</span>
+            </div>
+            <div class="muted small">Apoio: {{supportOf(p)}}/100</div>
           </div>
           <div class="right">
-            <button class="btn" *ngIf="canBackSide(c)" (click)="backSide(c, 'incumbent')">Apoiar</button>
-          </div>
-        </div>
-
-        <div class="item">
-          <div class="left">
-            <div class="h4">{{charName(c.claimantId)}} <span class="muted small">(pretendente)</span></div>
-            <div class="muted small">Apoio: {{crisisSupport(c, 'claimant')}}/100</div>
-          </div>
-          <div class="right">
-            <button class="btn" *ngIf="canBackSide(c)" (click)="backSide(c, 'claimant')">Apoiar</button>
+            <span class="badge ok" *ngIf="isBacked(c, p)">apoiado</span>
+            <button class="btn" *ngIf="canBackSide(c)" (click)="backSide(c, p)">Apoiar</button>
           </div>
         </div>
 
         <div class="muted small">Aberta desde o turno {{c.startedAbsTurn}}.</div>
+      </div>
+    </div>
+
+    <div class="card" *ngIf="claims().length">
+      <div class="h2">Reivindicações sobre assentos</div>
+      <div class="muted small">
+        Casamentos entre Casas criam direito; os filhos herdam esse direito pelo sangue.
+        Quando uma linha se extingue, são estes os nomes que se apresentam.
+      </div>
+
+      <div class="item" *ngFor="let c of claims()">
+        <div class="left">
+          <div class="h4">{{c.seat}}</div>
+          <div class="muted small">{{c.who}} — por {{c.origin}} • força {{c.strength}}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" *ngIf="occupations().length">
+      <div class="h2">Assentos ocupados</div>
+      <div class="muted small">Tomados durante guerras. Rendem tributo a quem ocupa até a paz.</div>
+
+      <div class="item" *ngFor="let o of occupations()">
+        <div class="left">
+          <div class="h4">{{o.where}}</div>
+          <div class="muted small">{{o.seat}} sob {{o.by}} desde o turno {{o.since}}</div>
+        </div>
       </div>
     </div>
 

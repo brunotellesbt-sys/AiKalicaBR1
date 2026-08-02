@@ -128,6 +128,7 @@
             [class.reachable]="m.reachable"
             [class.player]="m.isPlayer"
             [class.seat]="m.isSeat"
+            [class.occupied]="!!m.occupiedBy"
             (click)="onMarkerClick(m)"
             (mouseenter)="onMarkerEnter(m.id)"
             (mouseleave)="onMarkerLeave()"
@@ -142,7 +143,7 @@
               [attr.x]="m.x + 11"
               [attr.y]="m.y + 4"
             >{{m.name}}</text>
-            <title>{{m.name}} — {{regionName(m.regionId)}}{{ m.distance !== null ? ' • distância ' + m.distance : '' }}</title>
+            <title>{{m.name}} — {{regionName(m.regionId)}}{{ m.distance !== null ? ' • distância ' + m.distance : '' }}{{ m.occupiedBy ? ' • OCUPADO por ' + m.occupiedBy : '' }}</title>
           </g>
         </svg>
       </div>
@@ -151,6 +152,7 @@
         <span><i class="dot player"></i> você</span>
         <span><i class="dot reachable"></i> destino direto</span>
         <span><i class="dot seat"></i> assento de Casa</span>
+        <span><i class="dot occupied"></i> assento ocupado</span>
       </div>
     </div>
 

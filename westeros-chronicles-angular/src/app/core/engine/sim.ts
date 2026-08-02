@@ -16,6 +16,42 @@ import {
 import { Rng } from './rng';
 import { clamp, uid } from './utils';
 import { genFirstName, maybeEpithet } from './names';
+import {
+  pushSystem, pushNarration, pushNpc, pushChronicle, setGameOver, setVictory,
+} from './narration';
+import {
+  renownFromMartial, titleForHouse, deathChanceByAge, econTierGold,
+  armyPower, computeArmyPower, armyMassCount, foodNeedMin,
+  prestigeToTournamentSize, categoriesForSize, applyArmyLoss,
+} from './rules';
+import {
+  CANON_DIVERGENCE_THRESHOLD, canonTouchScore, canonIsDiverged,
+  markCanonTouched, tickCanonDivergenceDecay, markCanonDeathBypassed,
+  canonTouchIfCanonical, canonCharId, ensureCanonDefaults,
+} from './canon-divergence';
+import {
+  addClaim, registerMarriageClaims, registerBirthClaims, claimsOnSeat,
+  ensureOccupations, occupySeat, releaseSeat, tickOccupations,
+} from './claims';
+import {
+  openSuccessionCrisis, pretenderLabel, tickSuccessionCrises, activeSuccessionCrises,
+  computeSuccessor, handleDeathImmediate, handlePlayerDeath, survivedOwnCanonDeath,
+} from './succession';
+import {
+  tickEconomyAll, tickRumors, tickIronBank, pickMany,
+} from './economy';
+import {
+  isFertileFemale, isAdultMale, beginPregnancy, tickArrangedMarriages,
+  tickConceptions, tickPregnancies, spawnChild, tickPersonalProgression,
+  tickAgesAndDeaths,
+} from './lifecycle';
+import {
+  availableCasusBelli, casusBelliLabel, declareWar, endWar,
+  tickWars, warsOf, warBetween, activeWars, sideOf,
+  affordableTerms, peaceTermLabel, PEACE_TERM_COST,
+} from './warfare';
+import { tickRivalries, tickWarGrudges, activeRivalries, applyRivalryIntervention } from './politics';
+import { tickHostages, hostagesHeldBy, hostageFrom } from './hostages';
 import { SCHEDULED_EVENTS } from '../data/timeline';
 import {
   CANON_EVENTS,
@@ -30,7 +66,14 @@ import {
   CanonRequires,
   CanonWarDef,
 } from '../data/canon';
-import { SuccessionCrisis } from '../models';
+import { SuccessionCrisis, CrisisPretender, PretenderBasis, SeatClaim, Occupation, PeaceTerms } from '../models';
+
+// Reexporta o que a UI e os testes já consumiam por este módulo.
+export { renownFromMartial, titleForHouse } from './rules';
+export { CANON_DIVERGENCE_THRESHOLD } from './canon-divergence';
+export { handlePlayerDeath, activeSuccessionCrises, pretenderLabel } from './succession';
+export { activeWars, warsOf, casusBelliLabel } from './warfare';
+export { activeRivalries } from './politics';
 
 export interface NewGameParams {
   playerHouseId: string;
@@ -53,50 +96,6 @@ const ENDGAME_BURN_TURN = 12;
 // Canon (história real)
 // -----------------------
 
-function ensureCanonDefaults(state: GameState): void {
-  if (!state.canon) {
-    state.canon = {
-      enabled: true,
-      mode: 'strict',
-      appliedEventIds: {},
-      resolvedAbsTurns: {},
-      activeWarIds: [],
-      playerTouchedCanonIds: {},
-      playerTouchedReasons: {},
-      playerTouchedDetail: {},
-      playerTouchedLastTurn: {},
-      bypassedDeathCanonIds: {},
-      pendingBirths: {},
-      warStates: {},
-      cancelledWarIds: {},
-      successionCrises: {},
-    };
-  } else {
-    state.canon.enabled = state.canon.enabled ?? true;
-    state.canon.mode = state.canon.mode ?? 'strict';
-    state.canon.appliedEventIds = state.canon.appliedEventIds ?? {};
-    state.canon.resolvedAbsTurns = state.canon.resolvedAbsTurns ?? {};
-    state.canon.activeWarIds = state.canon.activeWarIds ?? [];
-    state.canon.playerTouchedCanonIds = state.canon.playerTouchedCanonIds ?? {};
-    state.canon.playerTouchedReasons = state.canon.playerTouchedReasons ?? {};
-    state.canon.playerTouchedDetail = state.canon.playerTouchedDetail ?? {};
-    state.canon.playerTouchedLastTurn = state.canon.playerTouchedLastTurn ?? {};
-    state.canon.bypassedDeathCanonIds = state.canon.bypassedDeathCanonIds ?? {};
-    state.canon.pendingBirths = state.canon.pendingBirths ?? {};
-    (state.canon as any).warStates = (state.canon as any).warStates ?? {};
-    state.canon.cancelledWarIds = state.canon.cancelledWarIds ?? {};
-    state.canon.successionCrises = state.canon.successionCrises ?? {};
-
-    // Migração de saves antigos: o placar era uma soma bruta sem categoria.
-    // Sem isto, um save antigo perderia o histórico ao recalcular.
-    for (const [canonId, score] of Object.entries(state.canon.playerTouchedCanonIds)) {
-      if (state.canon.playerTouchedDetail[canonId]) continue;
-      state.canon.playerTouchedDetail[canonId] = { bond: score };
-      state.canon.playerTouchedLastTurn[canonId] =
-        state.canon.playerTouchedLastTurn[canonId] ?? state.date.absoluteTurn;
-    }
-  }
-}
 
 const CANON_INDEX: Record<string, CanonPersonDef> = (() => {
   const all = [...CANON_PEOPLE, ...CANON_EVENT_ONLY_PEOPLE];
@@ -188,147 +187,6 @@ export function isAnchorCanonEvent(e: CanonEventDef): boolean {
   return false;
 }
 
-export const CANON_DIVERGENCE_THRESHOLD = 5;
-
-/**
- * Categorias de interferência.
- *
- * O modelo antigo somava peso bruto sem teto: cinco cliques em "Conversar"
- * bastavam para tirar qualquer figura histórica do próprio destino, por
- * acidente. Agora cada categoria satura, e só envolvimento real (intimidade,
- * vínculo, voto) consegue atravessar o limiar.
- */
-export type CanonTouchCategory = 'social' | 'court' | 'intimate' | 'bond' | 'vow';
-
-const CANON_TOUCH_RULES: Record<string, { category: CanonTouchCategory; weight: number }> = {
-  talk: { category: 'social', weight: 1 },
-  drink: { category: 'social', weight: 1 },
-  hunt: { category: 'social', weight: 1 },
-  flowers: { category: 'social', weight: 1 },
-  diplomacy_talk: { category: 'social', weight: 1 },
-  gift: { category: 'court', weight: 2 },
-  diplomacy_gift: { category: 'court', weight: 2 },
-  kiss: { category: 'intimate', weight: 2 },
-  relations: { category: 'bond', weight: 3 },
-  marry: { category: 'vow', weight: 6 },
-  war_support: { category: 'bond', weight: 2 },
-  crisis_support: { category: 'vow', weight: 6 },
-};
-
-/** Teto por categoria (gentilezas repetidas saturam). */
-const CANON_TOUCH_CAPS: Record<CanonTouchCategory, number> = {
-  social: 2,
-  court: 2,
-  intimate: 4,
-  bond: 6,
-  vow: 99,
-};
-
-/** Decaimento por ano sem contato — laços fracos esfriam, votos não. */
-const CANON_TOUCH_DECAY: Record<CanonTouchCategory, number> = {
-  social: 1,
-  court: 1,
-  intimate: 0.5,
-  bond: 0.25,
-  vow: 0,
-};
-
-function canonTouchScore(state: GameState, canonId: string): number {
-  ensureCanonDefaults(state);
-  return state.canon!.playerTouchedCanonIds?.[canonId] ?? 0;
-}
-
-function canonIsDiverged(state: GameState, canonId: string): boolean {
-  ensureCanonDefaults(state);
-  const bypass = !!state.canon!.bypassedDeathCanonIds?.[canonId];
-  return bypass || canonTouchScore(state, canonId) >= CANON_DIVERGENCE_THRESHOLD;
-}
-
-function recomputeCanonTouchScore(state: GameState, canonId: string): number {
-  const detail = state.canon!.playerTouchedDetail![canonId] ?? {};
-  let total = 0;
-  for (const [cat, val] of Object.entries(detail)) {
-    const cap = CANON_TOUCH_CAPS[cat as CanonTouchCategory] ?? 99;
-    total += Math.min(val, cap);
-  }
-  const rounded = Math.round(total * 100) / 100;
-  state.canon!.playerTouchedCanonIds![canonId] = rounded;
-  return rounded;
-}
-
-function markCanonTouched(state: GameState, canonId: string, reason: string, weight: number): void {
-  ensureCanonDefaults(state);
-
-  const rule = CANON_TOUCH_RULES[reason]
-    ?? { category: 'social' as CanonTouchCategory, weight: Math.max(1, Math.floor(weight)) };
-
-  const before = canonTouchScore(state, canonId);
-
-  const detailAll = state.canon!.playerTouchedDetail!;
-  const detail = (detailAll[canonId] = detailAll[canonId] ?? {});
-  detail[rule.category] = (detail[rule.category] ?? 0) + rule.weight;
-  state.canon!.playerTouchedLastTurn![canonId] = state.date.absoluteTurn;
-
-  const r = state.canon!.playerTouchedReasons!;
-  r[canonId] = r[canonId] ?? [];
-  if (!r[canonId].includes(reason)) r[canonId].push(reason);
-
-  const after = recomputeCanonTouchScore(state, canonId);
-
-  // Atravessar o limiar é um acontecimento: o jogador precisa saber que
-  // acabou de tirar alguém da própria história.
-  if (before < CANON_DIVERGENCE_THRESHOLD && after >= CANON_DIVERGENCE_THRESHOLD) {
-    const c = state.characters[canonCharId(canonId)];
-    const name = c?.name ?? canonId;
-    pushNarration(state, `🕯️ O destino de ${name} deixa de estar escrito. O que vier agora depende de vocês.`);
-    pushChronicle(state, {
-      absTurn: state.date.absoluteTurn,
-      title: `Destino divergente: ${name}`,
-      body: `A proximidade com ${name} altera o curso previsto de sua vida.`,
-      tags: ['canon', 'divergence'],
-    });
-  }
-}
-
-/** Laços fracos esfriam com o tempo; compromissos não. */
-function tickCanonDivergenceDecay(state: GameState): void {
-  ensureCanonDefaults(state);
-  const detailAll = state.canon!.playerTouchedDetail!;
-  const lastAll = state.canon!.playerTouchedLastTurn!;
-  const now = state.date.absoluteTurn;
-
-  for (const canonId of Object.keys(detailAll)) {
-    const last = lastAll[canonId] ?? now;
-    const since = now - last;
-    if (since < 20) continue;
-
-    const years = Math.floor(since / 20);
-    const detail = detailAll[canonId];
-    let changed = false;
-
-    for (const cat of Object.keys(CANON_TOUCH_DECAY) as CanonTouchCategory[]) {
-      const perYear = CANON_TOUCH_DECAY[cat];
-      if (perYear <= 0) continue;
-      const cur = detail[cat] ?? 0;
-      if (cur <= 0) continue;
-      detail[cat] = Math.max(0, cur - perYear * years);
-      changed = true;
-    }
-
-    lastAll[canonId] = last + years * 20;
-    if (changed) recomputeCanonTouchScore(state, canonId);
-  }
-}
-
-function markCanonDeathBypassed(state: GameState, canonId: string): void {
-  ensureCanonDefaults(state);
-  state.canon!.bypassedDeathCanonIds![canonId] = true;
-}
-
-function canonTouchIfCanonical(state: GameState, c: Character, reason: string, weight: number): void {
-  if (!c?.isCanonical || !c.canonId) return;
-  markCanonTouched(state, c.canonId, reason, weight);
-}
 
 function houseAliveCount(state: GameState, houseId: string, excludeId?: string): number {
   return Object.values(state.characters).filter(
@@ -435,9 +293,6 @@ function processPendingCanonBirths(state: GameState, rng: Rng): void {
   }
 }
 
-function canonCharId(canonId: string): string {
-  return `canon_${canonId}`;
-}
 
 function resolveCanonAbsTurn(
   state: GameState,
@@ -619,18 +474,6 @@ function killCanonCharacter(state: GameState, rng: Rng, canonId: string, reason:
   return true;
 }
 
-/**
- * Um personagem canônico "sobrevivente": o registro marcava a morte dele
- * neste ponto da linha do tempo, mas a interferência do jogador impediu.
- */
-function survivedOwnCanonDeath(state: GameState, c: Character | undefined): boolean {
-  if (!c || !c.alive || !c.isCanonical || !c.canonId) return false;
-  if (state.canon?.bypassedDeathCanonIds?.[c.canonId]) return true;
-  // Estritamente DEPOIS: os mandatos rodam antes das mortes dentro do mesmo
-  // turno, então `>=` marcaria como "sobrevivente" alguém que morre daqui a
-  // alguns passos deste próprio turno.
-  return typeof c.canonDeathAbsTurn === 'number' && state.date.absoluteTurn > c.canonDeathAbsTurn;
-}
 
 /** Avalia as pré-condições de um evento contra o estado real do mundo. */
 function canonRequiresSatisfied(state: GameState, req?: CanonRequires): { ok: boolean; why?: string } {
@@ -681,6 +524,21 @@ function publishCanonDivergence(state: GameState, e: CanonEventDef, why?: string
  * Se o assento visado pelo evento ainda está ocupado por alguém que deveria
  * ter morrido, abre a disputa e devolve `true` (o evento não se aplica).
  */
+/**
+ * Um assento que o cânone não tem direito de reatribuir em silêncio.
+ *
+ * Vale para quem sobreviveu à própria morte registrada e, principalmente,
+ * para o próprio jogador: a rajada de sincronização de 298 instalava os
+ * senhores canônicos de oito Casas de uma vez e podia tirar do jogador, sem
+ * uma linha de aviso, um assento conquistado ao longo de 148 anos de campanha.
+ * A presença dele ali já É uma divergência — então vira disputa, não decreto.
+ */
+function seatIsContested(state: GameState, incumbent: Character | undefined): boolean {
+  if (!incumbent || !incumbent.alive) return false;
+  if (incumbent.id === state.playerId) return true;
+  return survivedOwnCanonDeath(state, incumbent);
+}
+
 function maybeOpenCrisisForSuccession(state: GameState, rng: Rng, e: CanonEventDef): boolean {
   if (e.kind !== 'succession' && e.kind !== 'dynasty_shift') return false;
   if (!e.newLeaderCanonId) return false;
@@ -690,7 +548,7 @@ function maybeOpenCrisisForSuccession(state: GameState, rng: Rng, e: CanonEventD
   if (!house) return false;
 
   const incumbent = state.characters[house.leaderId];
-  if (!survivedOwnCanonDeath(state, incumbent)) return false;
+  if (!seatIsContested(state, incumbent)) return false;
 
   const claimant = ensureCanonPerson(state, rng, e.newLeaderCanonId, e.year, e.turn);
   if (!claimant || !claimant.alive || claimant.id === incumbent.id) return false;
@@ -698,10 +556,43 @@ function maybeOpenCrisisForSuccession(state: GameState, rng: Rng, e: CanonEventD
   // Disputa já decidida em favor do titular: o evento apenas registra que
   // a coroação prevista não aconteceu.
   const crisis = state.canon!.successionCrises?.[house.id];
-  if (crisis && crisis.incumbentId === incumbent.id) return false;
+  if (crisis && crisis.pretenders.some(p => p.characterId === incumbent.id)) return false;
 
   openSuccessionCrisis(state, house, incumbent, claimant, e);
   return true;
+}
+
+/**
+ * Uma notícia chega ao jogador?
+ *
+ * Marcos do reino todo mundo ouve. Histórias de casas menores — uma rixa por
+ * um moinho, um herdeiro que some, uma casa que enriquece rápido demais — só
+ * chegam a quem está por perto ou tem laço com os envolvidos. Sem isso, o
+ * chat vira um mural de fatos de famílias que o jogador nunca encontrou.
+ */
+function canonNewsReachesPlayer(state: GameState, e: CanonEventDef): boolean {
+  const tags = e.tags ?? [];
+  if (!tags.includes('local')) return true;
+
+  const playerHouse = state.houses[state.playerHouseId];
+  const player = state.characters[state.playerId];
+  if (!playerHouse || !player) return true;
+
+  const playerRegion = state.locations[player.locationId]?.regionId;
+
+  if (e.regionId && (e.regionId === playerRegion || e.regionId === playerHouse.regionId)) return true;
+
+  if (e.houseId) {
+    if (e.houseId === playerHouse.id) return true;
+    const other = state.houses[e.houseId];
+    if (other) {
+      if (other.regionId === playerRegion || other.regionId === playerHouse.regionId) return true;
+      if (other.suzerainId === playerHouse.id || playerHouse.suzerainId === other.id) return true;
+      if ((playerHouse.relations[other.id] ?? 50) >= 62) return true;
+    }
+  }
+
+  return false;
 }
 
 function applyCanonEvent(state: GameState, rng: Rng, e: CanonEventDef): void {
@@ -729,7 +620,9 @@ function applyCanonEvent(state: GameState, rng: Rng, e: CanonEventDef): void {
   switch (e.kind) {
     case 'chronicle': {
       state.chronicle.unshift({ turn: state.date.absoluteTurn, title: e.title, body: e.body, tags: e.tags });
-      pushNarration(state, `📜 ${e.title}: ${e.body}`);
+      if (canonNewsReachesPlayer(state, e)) {
+        pushNarration(state, `📜 ${e.title}: ${e.body}`);
+      }
       break;
     }
     case 'birth': {
@@ -801,7 +694,7 @@ function applyCanonEvent(state: GameState, rng: Rng, e: CanonEventDef): void {
       // Titular que sobreviveu à própria morte canônica não é deposto em
       // silêncio: instala-se uma crise sucessória com dois pretendentes.
       const incumbent = state.characters[h.leaderId];
-      if (incumbent && incumbent.id !== leader.id && survivedOwnCanonDeath(state, incumbent)) {
+      if (incumbent && incumbent.id !== leader.id && seatIsContested(state, incumbent)) {
         openSuccessionCrisis(state, h, incumbent, leader, e);
         break;
       }
@@ -834,7 +727,7 @@ function applyCanonEvent(state: GameState, rng: Rng, e: CanonEventDef): void {
             break;
           }
           const incumbent = state.characters[h.leaderId];
-          if (incumbent && incumbent.id !== leader.id && survivedOwnCanonDeath(state, incumbent)) {
+          if (incumbent && incumbent.id !== leader.id && seatIsContested(state, incumbent)) {
             openSuccessionCrisis(state, h, incumbent, leader, e);
             break;
           }
@@ -900,166 +793,40 @@ const WAR_AID_TIERS: Array<[WarAidSize, string]> = [
   ['large', 'convocação geral'],
 ];
 
-const SUCCESSION_CRISIS_TIMEOUT = 60; // 3 anos
+ // 3 anos
 
-function crisisBaseSupport(c: Character): number {
-  return clamp(
-    28 + Math.round((c.personalPrestige ?? 0) / 4) + Math.round((c.martial ?? 0) / 6),
-    10,
-    70
-  );
-}
 
-function openSuccessionCrisis(
-  state: GameState,
-  house: HouseState,
-  incumbent: Character,
-  claimant: Character,
-  e?: CanonEventDef
-): void {
-  ensureCanonDefaults(state);
-  const crises = state.canon!.successionCrises!;
-  const existing = crises[house.id];
-  if (existing && !existing.resolvedAbsTurn) return;
-  // Uma disputa já decidida não se reabre com os mesmos nomes.
-  if (existing && existing.incumbentId === incumbent.id && existing.claimantId === claimant.id) return;
+// -----------------------
+// Reivindicações (claims)
+// -----------------------
 
-  const crisis: SuccessionCrisis = {
-    id: uid('crisis'),
-    houseId: house.id,
-    incumbentId: incumbent.id,
-    claimantId: claimant.id,
-    startedAbsTurn: state.date.absoluteTurn,
-    supportIncumbent: crisisBaseSupport(incumbent),
-    supportClaimant: crisisBaseSupport(claimant),
-  };
-  crises[house.id] = crisis;
 
-  const title = `Crise sucessória: ${house.name}`;
-  const body =
-    `${incumbent.name} segue vivo quando o registro previa sua morte. ` +
-    `${claimant.name} reivindica o assento mesmo assim, e as casas começam a tomar partido.`;
+// -----------------------
+// Ocupação de assentos
+// -----------------------
 
-  pushChronicle(state, {
-    absTurn: state.date.absoluteTurn,
-    title,
-    body,
-    tags: Array.from(new Set([...(e?.tags ?? []), 'canon', 'divergence', 'sucessao'])),
-  });
-  pushNarration(state, `⚔️ ${title} — ${body}`);
-}
 
-function resolveSuccessionCrisis(
-  state: GameState,
-  rng: Rng,
-  crisis: SuccessionCrisis,
-  outcome: 'incumbent' | 'claimant',
-  why: string
-): void {
-  crisis.resolvedAbsTurn = state.date.absoluteTurn;
-  crisis.outcome = outcome;
-
-  const house = state.houses[crisis.houseId];
-  const winner = state.characters[outcome === 'incumbent' ? crisis.incumbentId : crisis.claimantId];
-  const loser = state.characters[outcome === 'incumbent' ? crisis.claimantId : crisis.incumbentId];
-  if (!house || !winner) return;
-
-  house.leaderId = winner.id;
-  winner.title = titleForHouse(house.id, winner.gender);
-  winner.personalPrestige = clamp((winner.personalPrestige ?? 0) + 8, 0, 100);
-
-  // O perdedor raramente sobrevive a uma disputa aberta pelo assento.
-  // A morte passa por handleDeathImmediate para que toda casa liderada por ele
-  // receba um sucessor — matar "na mão" deixava assentos com líderes mortos.
-  let loserFate = 'aceita o exílio';
-  if (loser && loser.alive) {
-    if (rng.chance(0.55)) {
-      loserFate = 'não sobrevive ao desfecho';
-      if (loser.canonId) markCanonDeathBypassed(state, loser.canonId);
-      handleDeathImmediate(state, rng, loser, `Derrota na crise sucessória de ${house.name}`);
-    } else {
-      loser.personalPrestige = clamp((loser.personalPrestige ?? 0) - 12, 0, 100);
-    }
-  }
-
-  house.prestige = clamp(house.prestige - 2, 1, 100);
-
-  pushChronicle(state, {
-    absTurn: state.date.absoluteTurn,
-    title: `Crise resolvida: ${house.name}`,
-    body: `${winner.name} garante o assento (${why}). ${loser ? `${loser.name} ${loserFate}.` : ''}`,
-    tags: ['canon', 'divergence', 'sucessao'],
-  });
-  pushNarration(state, `👑 ${winner.name} vence a disputa por ${house.name}. ${loser ? `${loser.name} ${loserFate}.` : ''}`);
-}
-
-function tickSuccessionCrises(state: GameState, rng: Rng): void {
-  ensureCanonDefaults(state);
-  const crises = state.canon!.successionCrises!;
-
-  for (const crisis of Object.values(crises)) {
-    if (!crisis || crisis.resolvedAbsTurn) continue;
-
-    const house = state.houses[crisis.houseId];
-    const inc = state.characters[crisis.incumbentId];
-    const cla = state.characters[crisis.claimantId];
-    if (!house || !inc || !cla) {
-      crisis.resolvedAbsTurn = state.date.absoluteTurn;
-      continue;
-    }
-
-    // A morte de um dos lados encerra a disputa sozinha.
-    if (!inc.alive) { resolveSuccessionCrisis(state, rng, crisis, 'claimant', 'morte do titular'); continue; }
-    if (!cla.alive) { resolveSuccessionCrisis(state, rng, crisis, 'incumbent', 'morte do pretendente'); continue; }
-
-    const pull = (c: Character, backed: boolean): number =>
-      1.5
-      + (c.personalPrestige ?? 0) / 28
-      + (c.martial ?? 0) / 45
-      + (c.charm ?? 0) / 60
-      + (backed ? 1.8 : 0);
-
-    crisis.supportIncumbent = clamp(
-      crisis.supportIncumbent + pull(inc, crisis.playerSide === 'incumbent') * rng.float(0.4, 1.3),
-      0, 100
-    );
-    crisis.supportClaimant = clamp(
-      crisis.supportClaimant + pull(cla, crisis.playerSide === 'claimant') * rng.float(0.4, 1.3),
-      0, 100
-    );
-
-    // Uma casa dividida sangra recursos e reputação.
-    house.resources.gold = Math.max(0, house.resources.gold - 3);
-    if (rng.chance(0.15)) house.prestige = clamp(house.prestige - 1, 1, 100);
-
-    const decided = crisis.supportIncumbent >= 100 || crisis.supportClaimant >= 100;
-    const timedOut = (state.date.absoluteTurn - crisis.startedAbsTurn) >= SUCCESSION_CRISIS_TIMEOUT;
-
-    if (decided || timedOut) {
-      const outcome = crisis.supportIncumbent >= crisis.supportClaimant ? 'incumbent' : 'claimant';
-      resolveSuccessionCrisis(state, rng, crisis, outcome, decided ? 'apoio decisivo' : 'exaustão das casas');
-    }
-  }
-}
-
-export function activeSuccessionCrises(state: GameState): SuccessionCrisis[] {
-  const crises = state.canon?.successionCrises ?? {};
-  return Object.values(crises).filter(c => c && !c.resolvedAbsTurn);
-}
-
+/** O jogador escolhe um lado — o gesto político mais forte do jogo. */
 /** O jogador escolhe um lado — o gesto político mais forte do jogo. */
 export function applyCrisisAction(state: GameState, rng: Rng, cmd: string): void {
   ensureCanonDefaults(state);
-  const [houseId, side] = cmd.split(':');
+  const sep = cmd.indexOf(':');
+  const houseId = sep >= 0 ? cmd.slice(0, sep) : cmd;
+  const targetId = sep >= 0 ? cmd.slice(sep + 1) : '';
   const crisis = state.canon!.successionCrises?.[houseId];
 
   if (!crisis || crisis.resolvedAbsTurn) {
     pushNarration(state, 'Não há crise sucessória em aberto nesta Casa.');
     return promptMainMenu(state, rng);
   }
-  if (side !== 'incumbent' && side !== 'claimant') return promptMainMenu(state, rng);
-  if (crisis.playerSide) {
+  if (crisis.playerBackedId) {
     pushNarration(state, 'Você já escolheu um lado nesta disputa. Trocar de lado agora custaria sua palavra.');
+    return promptMainMenu(state, rng);
+  }
+
+  const pick = crisis.pretenders.find(p => p.characterId === targetId);
+  if (!pick) {
+    pushNarration(state, 'Esse pretendente não está na disputa.');
     return promptMainMenu(state, rng);
   }
 
@@ -1071,24 +838,23 @@ export function applyCrisisAction(state: GameState, rng: Rng, cmd: string): void
   }
   playerHouse.resources.goods = (playerHouse.resources.goods ?? 0) - cost;
 
-  crisis.playerSide = side;
-  const backed = state.characters[side === 'incumbent' ? crisis.incumbentId : crisis.claimantId];
-  const against = state.characters[side === 'incumbent' ? crisis.claimantId : crisis.incumbentId];
+  crisis.playerBackedId = pick.characterId;
+  pick.support = clamp(pick.support + 12, 0, 100);
 
-  if (side === 'incumbent') crisis.supportIncumbent = clamp(crisis.supportIncumbent + 12, 0, 100);
-  else crisis.supportClaimant = clamp(crisis.supportClaimant + 12, 0, 100);
-
+  const backed = state.characters[pick.characterId];
   if (backed?.canonId) markCanonTouched(state, backed.canonId, 'crisis_support', 6);
 
   const target = state.houses[crisis.houseId];
   if (target) {
     target.relations[playerHouse.id] = clamp((target.relations[playerHouse.id] ?? 50) + 8, 0, 100);
   }
-  // Tomar partido cria inimigos: quem apoia o outro lado não esquece.
-  if (against) {
-    const againstHouse = state.houses[against.currentHouseId];
-    if (againstHouse && againstHouse.id !== playerHouse.id) {
-      againstHouse.relations[playerHouse.id] = clamp((againstHouse.relations[playerHouse.id] ?? 50) - 10, 0, 100);
+
+  // Tomar partido cria inimigos: cada rival preterido não esquece.
+  for (const other of crisis.pretenders) {
+    if (other.characterId === pick.characterId) continue;
+    const rivalHouse = state.houses[other.houseId];
+    if (rivalHouse && rivalHouse.id !== playerHouse.id) {
+      rivalHouse.relations[playerHouse.id] = clamp((rivalHouse.relations[playerHouse.id] ?? 50) - 10, 0, 100);
     }
   }
 
@@ -1189,9 +955,9 @@ function applyCanonLeaderMandates(state: GameState, rng: Rng): void {
     // e enquanto o sobrevivente governar, a linha canônica daquele assento
     // permanece fora do trilho.
     const incumbent = state.characters[h.leaderId];
-    if (incumbent && incumbent.id !== leader.id && survivedOwnCanonDeath(state, incumbent)) {
+    if (incumbent && incumbent.id !== leader.id && seatIsContested(state, incumbent)) {
       const crisis = state.canon!.successionCrises?.[h.id];
-      const alreadyHandled = !!crisis && crisis.incumbentId === incumbent.id;
+      const alreadyHandled = !!crisis && crisis.pretenders.some(p => p.characterId === incumbent.id);
       if (!alreadyHandled) openSuccessionCrisis(state, h, incumbent, leader);
       continue;
     }
@@ -1220,26 +986,6 @@ function warActive(w: CanonWarDef, abs: number): boolean {
   return abs >= fromAbs && (toAbs === undefined || abs <= toAbs);
 }
 
-
-function armyPower(a: Army): number {
-  // escala simples: levies 1, men-at-arms 2, squires 3, knights 5, dragons 10000 por unidade.
-  return (
-    (a.levies ?? 0) * 1 +
-    (a.menAtArms ?? 0) * 2 +
-    (a.squires ?? 0) * 3 +
-    (a.knights ?? 0) * 5 +
-    (a.dragons ?? 0) * 10000
-  );
-}
-
-function applyArmyLoss(a: Army, frac: number): void {
-  const f = clamp(frac, 0, 0.95);
-  a.levies = Math.max(0, Math.floor((a.levies ?? 0) * (1 - f)));
-  a.menAtArms = Math.max(0, Math.floor((a.menAtArms ?? 0) * (1 - f)));
-  a.squires = Math.max(0, Math.floor((a.squires ?? 0) * (1 - f)));
-  a.knights = Math.max(0, Math.floor((a.knights ?? 0) * (1 - f)));
-  // dragões não são reduzidos aqui (seria uma mecânica específica)
-}
 
 function canonWarState(
   state: GameState,
@@ -1296,6 +1042,11 @@ function tickCanonWarBattles(state: GameState, rng: Rng, w: CanonWarDef): void {
       body: `${loser.name} sofre um sítio após a batalha. Defesas e reservas são corroídas.`,
       tags: ['war', 'siege', 'canon', ...w.tags],
     });
+
+    // Muralhas caídas abrem caminho para a tomada do assento.
+    if ((loser.economy.walls ?? 0) <= 0 && rng.chance(0.45)) {
+      occupySeat(state, loser, winner, w.id);
+    }
   }
 
   // pontuação
@@ -1405,6 +1156,22 @@ function finalizeEndedCanonWar(state: GameState, rng: Rng, w: CanonWarDef): void
       loseTop.suzerainId = winTop.id;
       loseTop.economy.taxRate = Math.max(loseTop.economy.taxRate ?? 0.15, 0.20);
       consequences.push(`${loseTop.name} passa a jurar a ${winTop.name}`);
+    }
+  }
+
+  // Assentos tomados durante o conflito voltam com a paz — exceto quando a
+  // vitória foi decisiva e o ocupante estava do lado vencedor.
+  for (const o of Object.values(ensureOccupations(state))) {
+    if (o.warId !== w.id) continue;
+    const keep = decisive && winIds.includes(o.occupierHouseId);
+    if (keep) {
+      const seat = state.houses[o.seatHouseId];
+      if (seat) {
+        seat.suzerainId = o.occupierHouseId;
+        consequences.push(`${seat.name} permanece sob ${state.houses[o.occupierHouseId]?.name ?? 'o ocupante'}`);
+      }
+    } else {
+      releaseSeat(state, o.locationId, 'a guerra termina');
     }
   }
 
@@ -1567,36 +1334,6 @@ function bootstrapCanonAtStart(state: GameState, rng: Rng): void {
 
 const DANY_HOUSE_ID = 'targaryen_dany';
 
-// --- Economia por "tiers" ---
-// Pedido do jogo: IA econômica deve respeitar melhor reservas 200/350/500/700.
-function econTierGold(house: { prestigeBase: number; isIronThrone?: boolean }): 200 | 350 | 500 | 700 {
-  if (house.isIronThrone) return 700;
-  const p = house.prestigeBase;
-  if (p >= 80) return 700;
-  if (p >= 60) return 500;
-  if (p >= 45) return 350;
-  return 200;
-}
-
-function pickMany<T>(rng: Rng, arr: T[], count: number): T[] {
-  const pool = arr.slice();
-  const out: T[] = [];
-  const n = Math.max(0, Math.min(count, pool.length));
-  for (let i = 0; i < n; i++) {
-    const ix = rng.int(0, pool.length - 1);
-    out.push(pool[ix]);
-    pool.splice(ix, 1);
-  }
-  return out;
-}
-
-export function renownFromMartial(martial: number): RenownTier {
-  if (martial >= 92) return 'renomado';
-  if (martial >= 78) return 'imponente';
-  if (martial >= 62) return 'reconhecido';
-  if (martial >= 45) return 'forte';
-  return 'comum';
-}
 
 export function buildInitialState(seed: number, params: NewGameParams, baseState: Omit<GameState,
   'version'|'date'|'playerId'|'playerHouseId'|'houses'|'characters'|'chronicle'|'chat'|'ironBankDebt'|'ui'|'tournaments'|'game'|'endgame'
@@ -1837,6 +1574,10 @@ export function buildInitialState(seed: number, params: NewGameParams, baseState
     tournaments: [],
 
     missions: [],
+    claims: [],
+    occupations: {},
+    wars: [],
+    rivalries: [],
 
     chronicle: [],
     chat: [],
@@ -1865,22 +1606,6 @@ export function buildInitialState(seed: number, params: NewGameParams, baseState
   return state;
 }
 
-export function titleForHouse(houseId: string, gender: Gender): string {
-  // títulos simples e coerentes com a fantasia (sem tentar “cobrir tudo”)
-  const base = gender === 'M' ? 'Lorde' : 'Lady';
-  switch (houseId) {
-    case 'stark': return gender === 'M' ? 'Protetor do Norte' : 'Protetora do Norte';
-    case 'arryn': return gender === 'M' ? 'Protetor do Vale' : 'Protetora do Vale';
-    case 'tully': return gender === 'M' ? 'Senhor de Correrrio' : 'Senhora de Correrrio';
-    case 'greyjoy': return gender === 'M' ? 'Lorde das Ilhas de Ferro' : 'Lady das Ilhas de Ferro';
-    case 'lannister': return gender === 'M' ? 'Senhor de Rochedo Casterly' : 'Senhora de Rochedo Casterly';
-    case 'baratheon': return gender === 'M' ? 'Senhor de Ponta Tempestade' : 'Senhora de Ponta Tempestade';
-    case 'tyrell': return gender === 'M' ? 'Senhor de Jardim de Cima' : 'Senhora de Jardim de Cima';
-    case 'martell': return gender === 'M' ? 'Príncipe de Dorne' : 'Princesa de Dorne';
-    case 'targaryen_throne': return gender === 'M' ? 'Rei dos Nove Reinos' : 'Rainha dos Nove Reinos';
-    default: return `${base} de ${houseId}`;
-  }
-}
 
 export function promptMainMenu(state: GameState, rng: Rng): void {
   if (state.game.over) {
@@ -1948,75 +1673,6 @@ export function applyChoice(state: GameState, rng: Rng, choiceId: string): void 
   }
 }
 
-function pushSystem(state: GameState, text: string, choices?: Choice[]): void {
-  state.chat.push({
-    id: uid('m'),
-    speaker: 'sistema',
-    text,
-    tsTurn: state.date.absoluteTurn,
-    choices,
-  });
-}
-
-function pushNarration(state: GameState, text: string): void {
-  state.chat.push({
-    id: uid('m'),
-    speaker: 'narrador',
-    text,
-    tsTurn: state.date.absoluteTurn,
-  });
-}
-
-function pushNpc(state: GameState, title: string, text: string): void {
-  state.chat.push({
-    id: uid('m'),
-    speaker: 'npc',
-    title,
-    text,
-    tsTurn: state.date.absoluteTurn,
-  });
-}
-
-function pushChronicle(
-  state: GameState,
-  entry: { absTurn: number; title: string; body: string; tags: string[] }
-): void {
-  state.chronicle.unshift({
-    turn: entry.absTurn,
-    title: entry.title,
-    body: entry.body,
-    tags: entry.tags,
-  });
-}
-
-function setGameOver(state: GameState, reason: string, victory: boolean): void {
-  state.game.over = true;
-  state.game.victory = victory;
-  state.game.reason = reason;
-
-  const title = victory ? '🏆 Fim da Crônica (Vitória)' : '☠️ Fim da Crônica (Game Over)';
-  pushNarration(state, `${title}: ${reason}`);
-  pushSystem(state, 'Você pode carregar um save (3 slots) ou reiniciar a campanha.', [
-    { id: 'saves', label: 'Abrir Saves' },
-    { id: 'reset', label: 'Reiniciar (voltar ao menu inicial)' },
-  ]);
-}
-
-function setVictory(state: GameState, reason: string): void {
-  setGameOver(state, reason, true);
-}
-
-function computeArmyPower(army: Army): number {
-  // Unidades em massa só vão até cavaleiros.
-  // Dragões (quando presentes) contam como equivalentes a 10.000 cavaleiros por dragão.
-  const knightsEq = army.knights + (army.dragons * 10000);
-  return (
-    (army.levies * 1) +
-    (army.menAtArms * 2) +
-    (army.squires * 3) +
-    (knightsEq * 4)
-  );
-}
 
 function ensureDaenerysFaction(state: GameState, rng: Rng): void {
   if (state.endgame.danyArrived) return;
@@ -3173,6 +2829,8 @@ ${lines}
       label: 'Daenerys Targaryen',
       hint: 'Negociar / atacar (condição especial de “vitória”)'
     }] as Choice[] : []),
+    { id: 'dip:rivalries', label: 'Rixas entre Casas', hint: 'Mediar ou tomar partido em desavenças alheias' },
+    { id: 'dip:war', label: 'Guerra', hint: 'Declarar guerra ou negociar paz (apenas líderes)' },
     { id: 'dip:ironbank', label: 'Banco de Ferro', hint: 'Pedir empréstimo / pagar dívida' },
     { id: 'back', label: 'Voltar' },
   ];
@@ -3281,6 +2939,107 @@ export function applyDiplomacy(state: GameState, rng: Rng, action: string): void
       });
       choices.push({ id: 'back', label: 'Voltar' });
       pushSystem(state, 'Qual casa receberá a proposta? (mínimo relação 50)', choices);
+      return;
+    }
+    case 'rivalries': {
+      const minhaRegiao = state.locations[player.locationId]?.regionId;
+      const rixas = activeRivalries(state).filter(r => {
+        const a = state.houses[r.aHouseId];
+        return a && (a.regionId === minhaRegiao || a.regionId === house.regionId);
+      });
+
+      if (!rixas.length) {
+        pushNarration(state, 'Nenhuma rixa aberta ao seu alcance no momento.');
+        return promptMainMenu(state, rng);
+      }
+
+      const choices: Choice[] = [];
+      for (const r of rixas.slice(0, 4)) {
+        const a = state.houses[r.aHouseId]!;
+        const b = state.houses[r.bHouseId]!;
+        const rel = a.relations[b.id] ?? 50;
+        if (r.playerFavors) {
+          choices.push({
+            id: 'back',
+            label: `${a.name} × ${b.name} — você já se envolveu`,
+            hint: `Relação entre elas: ${rel}`,
+            disabled: true,
+          });
+          continue;
+        }
+        choices.push({
+          id: `rival:${r.id}:mediate`,
+          label: `Mediar ${a.name} × ${b.name}`,
+          hint: `Custo 45 recursos • relação entre elas ${rel} • prestígio +2`,
+        });
+        choices.push({ id: `rival:${r.id}:${a.id}`, label: `Apoiar ${a.name}`, hint: `Contra ${b.name}: aliado novo, inimigo novo` });
+        choices.push({ id: `rival:${r.id}:${b.id}`, label: `Apoiar ${b.name}`, hint: `Contra ${a.name}: aliado novo, inimigo novo` });
+      }
+      choices.push({ id: 'back', label: 'Voltar' });
+
+      pushSystem(state, 'Rixas abertas ao seu alcance. Mediar rende reputação; tomar partido rende um aliado — e um inimigo.', choices);
+      return;
+    }
+    case 'war': {
+      const isLeader = house.leaderId === player.id;
+      if (!isLeader) {
+        pushNarration(state, 'Só o líder da Casa pode declarar guerra ou assinar a paz.');
+        return promptMainMenu(state, rng);
+      }
+
+      const mine = warsOf(state, house.id);
+      const choices: Choice[] = [];
+
+      for (const w of mine) {
+        const other = w.attackerHouseId === house.id ? w.defenderHouseId : w.attackerHouseId;
+        const side = sideOf(w, house.id)!;
+        const mineScore = side === 'attacker' ? w.scoreAttacker : w.scoreDefender;
+        const theirScore = side === 'attacker' ? w.scoreDefender : w.scoreAttacker;
+        const otherName = state.houses[other]?.name ?? other;
+
+        // Cada termo tem um preço em pontuação: exigir demais é ser recusado.
+        for (const t of affordableTerms(state, w, side)) {
+          choices.push({
+            id: `war:peace:${w.id}:${t}`,
+            label: `Paz com ${otherName} — ${peaceTermLabel(t)}`,
+            hint: `Placar ${mineScore}–${theirScore} • custa ${PEACE_TERM_COST[t]} de pontuação`,
+          });
+        }
+      }
+
+      // Alvos possíveis: casas alcançáveis com quem você ainda não está em guerra.
+      const targets = computeContactableHouses(state)
+        .filter(h => h.id !== house.id && !warBetween(state, house.id, h.id))
+        .slice(0, 8);
+
+      for (const t of targets) {
+        const cbs = availableCasusBelli(state, house.id, t.id);
+        const best = cbs[0];
+        const rel = house.relations[t.id] ?? 50;
+        // Um refém seu na corte deles é motivo para pensar duas vezes: quem
+        // declara sabendo disso o está condenando.
+        const nosso = hostageFrom(state, t.id, house.id);
+        choices.push({
+          id: `war:declare:${t.id}:${best}`,
+          label: `Declarar guerra a ${t.name}`,
+          hint: `${casusBelliLabel(best)} • prestígio ${t.prestige} • relação ${rel}`
+            + (best === 'conquest' ? ' • SEM justificativa: -6 prestígio e todo o reino se afasta' : '')
+            + (nosso ? ` • ⚠ ${nosso.name} está refém lá e será executado` : ''),
+        });
+      }
+
+      choices.push({ id: 'back', label: 'Voltar' });
+
+      const guardados = hostagesHeldBy(state, house.id);
+      const nota = guardados.length
+        ? ` Sob sua guarda: ${guardados.map(c => `${c.name} (${state.houses[c.hostage!.homeHouseId]?.name ?? '?'})`).join(', ')}.`
+        : '';
+
+      pushSystem(state,
+        (mine.length
+          ? `Você está em ${mine.length} guerra(s). Escolha uma ação.`
+          : 'Nenhuma guerra em andamento. Escolha um alvo — e um motivo que o reino aceite.') + nota,
+        choices);
       return;
     }
     case 'ironbank': {
@@ -3995,6 +3754,19 @@ export function advanceTurn(state: GameState, rng: Rng, options?: { silent?: boo
   // 4.5) Torneios (geração + expiração)
   tickTournaments(state, rng);
 
+  // 4.4) Deriva política entre Casas (atrito, afinidade e rancor)
+  tickRivalries(state, rng);
+  tickWarGrudges(state, rng);
+
+  // 4.5) Guerras declaradas em jogo
+  tickWars(state, rng);
+
+  // 4.75) Assentos ocupados militarmente
+  tickOccupations(state, rng);
+
+  // 4.8) Reféns tomados na paz: guarda, devolução e laço criado
+  tickHostages(state, rng);
+
   // 5) Pressão do Banco de Ferro
   tickIronBank(state, rng);
 
@@ -4014,826 +3786,6 @@ export function advanceTurn(state: GameState, rng: Rng, options?: { silent?: boo
   }
 }
 
-function armyMassCount(h: HouseState): number {
-  const a = h.army;
-  return (a.levies + a.menAtArms + a.squires + a.knights);
-}
-
-function foodNeedMin(h: HouseState): number {
-  // Regra do usuário: exército de massa + 100
-  return armyMassCount(h) + 100;
-}
-
-
-function tickRumors(state: GameState, rng: Rng): void {
-  // pequenos rumores para preencher lacunas quando não há marcos grandes
-  if (!rng.chance(0.08)) return;
-
-  const houses = Object.values(state.houses);
-  if (houses.length < 2) return;
-
-  const a = houses[rng.int(0, houses.length - 1)];
-  let b = houses[rng.int(0, houses.length - 1)];
-  if (a.id === b.id) b = houses[(houses.indexOf(a) + 1) % houses.length];
-
-  const rel = a.relations[b.id] ?? 50;
-
-  const kinds = [
-    { t: 'Rumores de casamento', body: `Sussurros apontam um possível casamento entre ${a.name} e ${b.name}.`, tags: ['rumor', 'casamento', 'politica'] },
-    { t: 'Tensão fronteiriça', body: `Patrulhas relatam tensão entre ${a.name} e ${b.name}.`, tags: ['rumor', 'politica'] },
-    { t: 'Disputa por tributos', body: `Mercadores reclamam de tributos e taxas entre ${a.name} e ${b.name}.`, tags: ['rumor', 'economia'] },
-    { t: 'Boatos de conspiração', body: `A corte comenta uma conspiração envolvendo ${a.name} e ${b.name}.`, tags: ['rumor', 'corte'] },
-  ];
-
-  const pick = kinds[rng.int(0, kinds.length - 1)];
-  const mood = rel >= 60 ? 'amistosa' : rel <= 40 ? 'hostil' : 'incerta';
-
-  pushChronicle(state, {
-    absTurn: state.date.absoluteTurn,
-    title: pick.t,
-    body: `${pick.body} Clima entre as casas: ${mood}.`,
-    tags: pick.tags,
-  });
-
-  // só narra no chat quando envolve a casa do jogador ou mesma região
-  const playerHouse = state.houses[state.playerHouseId];
-  if (playerHouse && (a.id === playerHouse.id || b.id === playerHouse.id || a.regionId === playerHouse.regionId || b.regionId === playerHouse.regionId)) {
-    pushNarration(state, `🗞️ ${pick.t}: ${pick.body}`);
-  }
-}
-
-function tickEconomyAll(state: GameState, rng: Rng): void {
-  const now = state.date.absoluteTurn;
-
-  // IA: sua casa só deixa de ser IA quando você herda (vira líder)
-  const player = state.characters[state.playerId];
-  const playerHouse = state.houses[state.playerHouseId];
-  const playerIsLeader = playerHouse.leaderId === player.id;
-
-  for (const house of Object.values(state.houses)) {
-    const econ = house.economy;
-    const res = house.resources;
-    res.goods = res.goods ?? 0;
-
-    // crescimento populacional (bem leve por turno)
-    econ.peasants = Math.max(0, econ.peasants + Math.max(0, Math.floor(econ.peasants * 0.001 + rng.int(-2, 4))));
-    econ.soldiers = Math.max(0, econ.soldiers + (rng.chance(0.05) ? 1 : 0));
-
-    // produção de comida: camponeses + fazendas
-    const foodProd = Math.round(econ.peasants * 0.25 + econ.farms * 80);
-    const need = foodNeedMin(house);
-    res.food += (foodProd - need);
-
-    // produção de "recursos/goods" proporcional à comida produzida
-    const goodsProd = Math.max(0, Math.floor(foodProd / 3));
-    res.goods += goodsProd;
-
-    // renda em ouro (impostos + comércio)
-    const baseGold = Math.round((econ.peasants + econ.soldiers) * 0.06);
-    let tradeGold = 0;
-    const turnsSinceDel = now - econ.tradeLastDelegationTurn;
-    if (turnsSinceDel <= 5 && econ.tradePartners.length > 0) {
-      tradeGold = 30 + econ.tradePartners.length * 12;
-    } else if (econ.tradePartners.length > 0 && turnsSinceDel > 5) {
-      // deteriora relações lentamente por negligência
-      for (const partnerId of econ.tradePartners) {
-        house.relations[partnerId] = clamp((house.relations[partnerId] ?? 50) - 1, 0, 100);
-      }
-    }
-    res.gold += baseGold + tradeGold;
-
-    // tributo ao suserano (em goods)
-    const taxRate = clamp(econ.taxRate ?? (house.suzerainId ? 0.15 : 0.0), 0, 0.60);
-    econ.taxRate = taxRate;
-
-    if (house.suzerainId) {
-      const suz = state.houses[house.suzerainId];
-      if (suz) {
-        const due = Math.floor(goodsProd * taxRate);
-        if (due > 0) {
-          const paid = Math.min(res.goods, due);
-          res.goods -= paid;
-          suz.resources.goods = (suz.resources.goods ?? 0) + paid;
-
-          if (paid >= due) {
-            house.relations[suz.id] = clamp((house.relations[suz.id] ?? 50) + 1, 0, 100);
-            suz.relations[house.id] = clamp((suz.relations[house.id] ?? 50) + 1, 0, 100);
-          } else {
-            house.relations[suz.id] = clamp((house.relations[suz.id] ?? 50) - 2, 0, 100);
-            suz.relations[house.id] = clamp((suz.relations[house.id] ?? 50) - 2, 0, 100);
-          }
-
-          if (house.id === state.playerHouseId) {
-            pushNarration(state, `📦 Tributo ao suserano (${suz.name}): devido ${due}, pago ${paid} (taxa ${(taxRate*100).toFixed(0)}%).`);
-          }
-        }
-      }
-    }
-
-    // fome
-    if (res.food < 0) {
-      const deficit = Math.abs(res.food);
-      res.food = 0;
-
-      const lossPeasants = Math.min(econ.peasants, Math.ceil(deficit / 45));
-      econ.peasants -= lossPeasants;
-
-      // perde tropas em massa primeiro (levies)
-      const a = house.army;
-      const lossLevies = Math.min(a.levies, Math.ceil(deficit / 75));
-      a.levies -= lossLevies;
-
-      house.prestige = clamp(house.prestige - 2, 1, 100);
-
-      if (house.id === state.playerHouseId) {
-        pushNarration(state, `⚠️ Fome em suas terras: -${lossPeasants} camponeses e -${lossLevies} soldados em massa. Prestígio -2.`);
-      }
-    }
-
-    // IA (todas as casas não-controladas; e sua casa antes de você herdar)
-    const shouldAI = (house.id !== state.playerHouseId) || !playerIsLeader;
-    if (shouldAI) {
-      tickHouseAI(state, rng, house);
-    }
-  }
-}
-
-function tickHouseAI(state: GameState, rng: Rng, house: HouseState): void {
-  const econ = house.economy;
-  const res = house.resources;
-  const need = foodNeedMin(house);
-
-  const tier = econTierGold(house);
-  const reserve = tier; // regra: tenta manter pelo menos esse ouro em caixa
-  const foodBuffer = tier === 700 ? 320 : tier === 500 ? 240 : tier === 350 ? 170 : 120;
-  const desiredMass = tier === 700 ? 320 : tier === 500 ? 250 : tier === 350 ? 190 : 150;
-
-  // Envia delegação comercial periodicamente
-  const delChance = tier >= 500 ? 0.90 : tier === 350 ? 0.82 : 0.75;
-  if (econ.tradePartners.length > 0 && (state.date.absoluteTurn - econ.tradeLastDelegationTurn) >= 5 && (res.gold - 30) >= reserve && rng.chance(delChance)) {
-    res.gold -= 30;
-    econ.tradeLastDelegationTurn = state.date.absoluteTurn;
-    for (const partnerId of econ.tradePartners) {
-      house.relations[partnerId] = clamp((house.relations[partnerId] ?? 50) + 1, 0, 100);
-      const partner = state.houses[partnerId];
-      if (partner) partner.relations[house.id] = clamp((partner.relations[house.id] ?? 50) + 1, 0, 100);
-    }
-  }
-
-  // Se comida baixa, compra fazenda
-  const farmChance = tier >= 500 ? 0.78 : tier === 350 ? 0.70 : 0.62;
-  if (res.food < need + foodBuffer && (res.gold - 120) >= reserve && rng.chance(farmChance)) {
-    res.gold -= 120;
-    econ.farms += 1;
-    econ.peasants += 35;
-    house.prestige = clamp(house.prestige + 1, 1, 100);
-    return;
-  }
-
-  // Se exército muito baixo, recruta
-  const mass = armyMassCount(house);
-  const recruitChance = tier >= 500 ? 0.66 : tier === 350 ? 0.60 : 0.54;
-  if (mass < desiredMass && (res.gold - 60) >= reserve && rng.chance(recruitChance)) {
-    res.gold -= 60;
-    house.army.levies += 50;
-    econ.soldiers += 15;
-    return;
-  }
-
-  // Treino ocasional
-  const trainChance = tier === 700 ? 0.28 : tier === 500 ? 0.22 : tier === 350 ? 0.18 : 0.14;
-  if ((res.gold - 90) >= reserve && rng.chance(trainChance)) {
-    res.gold -= 90;
-    const toMen = Math.min(house.army.levies, rng.int(8, 18));
-    house.army.levies -= toMen;
-    house.army.menAtArms += toMen;
-
-    const toSquires = Math.min(house.army.menAtArms, rng.int(4, 10));
-    house.army.menAtArms -= toSquires;
-    house.army.squires += toSquires;
-
-    const toKnights = Math.min(house.army.squires, rng.int(1, 3));
-    house.army.squires -= toKnights;
-    house.army.knights += toKnights;
-  }
-}
-
-function deathChanceByAge(age: number): number {
-  // regra pedida: 55:5%, 60:10%, 65:15%, 70:20%...
-  if (age < 55) return 0;
-  const step = Math.floor((age - 55) / 5) + 1; // 55..59 =>1, 60..64=>2...
-  return clamp(step * 0.05, 0.05, 0.95);
-}
-
-
-function tickPersonalProgression(state: GameState, rng: Rng): void {
-  for (const c of Object.values(state.characters)) {
-    if (!c.alive) continue;
-
-    const age = c.ageYears;
-    const growthPhase = age < 16 ? 1.0 : age <= 28 ? 0.7 : age <= 45 ? 0.35 : 0.12;
-    const declinePhase = age >= 56 ? (age >= 68 ? 0.45 : 0.25) : 0;
-
-    // Combate cresce mais em juventude e cai gradualmente com idade avançada.
-    if (rng.chance(0.22 * growthPhase)) {
-      c.martial = clamp(c.martial + rng.int(0, 2), 0, 100);
-    }
-    if (declinePhase > 0 && rng.chance(declinePhase)) {
-      c.martial = clamp(c.martial - rng.int(0, 2), 0, 100);
-    }
-
-    // Carisma amadurece com experiência; declínio suave apenas em idades muito altas.
-    if (rng.chance(age < 50 ? 0.18 : 0.08)) {
-      c.charm = clamp(c.charm + rng.int(0, 1), 0, 100);
-    }
-    if (age >= 72 && rng.chance(0.20)) {
-      c.charm = clamp(c.charm - 1, 0, 100);
-    }
-
-    // Apresentação acompanha idade e recursos pessoais (quem tem ouro tende a manter status visual).
-    if ((c.personalGold ?? 0) > 80 && rng.chance(0.16)) {
-      c.beauty = clamp(c.beauty + 1, 0, 100);
-      c.personalGold = Math.max(0, (c.personalGold ?? 0) - 5);
-    } else if (age >= 60 && rng.chance(0.17)) {
-      c.beauty = clamp(c.beauty - 1, 0, 100);
-    }
-
-    // Prestígio pessoal: cresce conforme conjunto de atributos, mais devagar no topo.
-    const build = Math.round((c.martial + c.charm + c.beauty) / 3);
-    const prestigeGainChance = build >= 72 ? 0.20 : build >= 56 ? 0.14 : 0.08;
-    if (rng.chance(prestigeGainChance)) {
-      const gain = c.personalPrestige >= 85 ? 0 : 1;
-      c.personalPrestige = clamp((c.personalPrestige ?? 0) + gain, 0, 100);
-    }
-
-    c.renownTier = renownFromMartial(c.martial);
-  }
-}
-
-function tickAgesAndDeaths(state: GameState, rng: Rng): void {
-  // 1 turno = 1/20 ano
-  const delta = 1 / 20;
-
-  for (const c of Object.values(state.characters)) {
-    if (!c.alive) continue;
-    c.ageYears = Math.round((c.ageYears + delta) * 100) / 100;
-
-    // Personagens canônicos não morrem aleatoriamente antes do marco de morte conhecido,
-    // a menos que o jogador tenha causado divergência relevante naquele destino.
-    if (c.isCanonical && c.canonId && c.canonDeathAbsTurn && state.date.absoluteTurn < c.canonDeathAbsTurn) {
-      if (!canonIsDiverged(state, c.canonId)) {
-        continue;
-      }
-    }
-
-    const p = deathChanceByAge(c.ageYears);
-    if (p > 0 && rng.chance(p)) {
-      c.alive = false;
-      c.maritalStatus = c.maritalStatus === 'married' ? 'widowed' : c.maritalStatus;
-      pushNarration(state, `⚰️ ${c.name} morre de causas naturais aos ${Math.floor(c.ageYears)} anos.`);
-
-      // viúvo(a) volta ao sobrenome de nascimento conforme regra
-      if (c.spouseId) {
-        const spouse = state.characters[c.spouseId];
-        if (spouse && spouse.alive) {
-          spouse.maritalStatus = 'widowed';
-          if (spouse.gender === 'F' && spouse.birthHouseId !== spouse.currentHouseId) {
-            spouse.currentHouseId = spouse.birthHouseId;
-            spouse.keepsBirthName = true;
-          }
-        }
-      }
-
-      // Se era líder de casa, resolve sucessão
-      for (const h of Object.values(state.houses)) {
-        if (h.leaderId === c.id) {
-          const succ = computeSuccessor(state, rng, h.id);
-          if (succ) {
-            h.leaderId = succ.id;
-            succ.title = titleForHouse(h.id, succ.gender);
-            pushNarration(state, `👑 ${succ.name} torna-se líder de ${h.name}.`);
-          }
-        }
-      }
-
-      // Se o jogador morreu:
-      if (c.id === state.playerId) {
-        handlePlayerDeath(state, rng, 'Morte por idade');
-        return;
-      }
-    }
-  }
-}
-
-function computeSuccessor(state: GameState, rng: Rng, houseId: string): Character | null {
-  const house = state.houses[houseId];
-  const currentLeader = state.characters[house.leaderId];
-
-  // coletar candidatos que pertencem à casa (sobrenome atual == houseId) e estão vivos
-  const candidates = Object.values(state.characters).filter(c => c.alive && c.currentHouseId === houseId && !(c as any).isBastard);
-
-  // helper: filhos do líder (ordenados por idade desc), sexo
-  const children = candidates.filter(c => c.fatherId === currentLeader.id || c.motherId === currentLeader.id);
-
-  const sons = children.filter(c => c.gender === 'M').sort((a,b)=> b.ageYears - a.ageYears);
-  const daughters = children.filter(c => c.gender === 'F').sort((a,b)=> b.ageYears - a.ageYears);
-
-  const siblings = candidates.filter(c => c.fatherId && currentLeader.fatherId && c.fatherId === currentLeader.fatherId && c.id !== currentLeader.id);
-  const brothers = siblings.filter(c => c.gender === 'M').sort((a,b)=> b.ageYears - a.ageYears);
-  const sisters = siblings.filter(c => c.gender === 'F').sort((a,b)=> b.ageYears - a.ageYears);
-
-  // tios/primos (aproximação): qualquer membro vivo da casa mais velho que 18, excluindo filhos/irmãos
-  const extended = candidates
-    .filter(c => c.id !== currentLeader.id && !children.includes(c) && !siblings.includes(c))
-    .sort((a,b)=> b.ageYears - a.ageYears);
-
-  const unclesCousinsMale = extended.filter(c => c.gender === 'M');
-  const unclesCousinsFemale = extended.filter(c => c.gender === 'F');
-
-  // regra do usuário (prioridade): filhos homens, irmãos homens, tios homens, primos homens, filhas, irmãs, tias, primas
-  const order = [...sons, ...brothers, ...unclesCousinsMale, ...daughters, ...sisters, ...unclesCousinsFemale];
-
-  // filtrar mulheres que “não podem” herdar por estarem casadas com outro sobrenome (nesta função, currentHouseId já garante)
-  const chosen = order[0] ?? null;
-  if (chosen) return chosen;
-
-  // Se a casa ficou sem herdeiros vivos, o suserano pode conceder o feudo a alguém de confiança.
-  if (house.suzerainId) {
-    const suz = state.houses[house.suzerainId];
-    if (suz) {
-      const pool = Object.values(state.characters).filter(c => c.alive && c.currentHouseId === suz.id && c.ageYears >= 16 && !(c as any).isBastard);
-      if (pool.length) {
-        pool.sort((a,b)=> ((b.personalPrestige ?? 0) + (b.martial ?? 0)) - ((a.personalPrestige ?? 0) + (a.martial ?? 0)));
-        const pick = pool[0];
-        // assume o nome/casa do feudo concedido
-        pick.currentHouseId = houseId;
-        pick.keepsBirthName = false;
-        pushChronicle(state, {
-          absTurn: state.date.absoluteTurn,
-          title: `Concessão: ${house.name}`,
-          body: `${suz.name} concede ${house.name} a ${pick.name} após a extinção da linha local.`,
-          tags: ['politica', 'sucessao'],
-        });
-        return pick;
-      }
-    }
-  }
-
-  // Último recurso: um ramo distante reclama o assento.
-  //
-  // Sem isto a função devolvia null e quem chamou deixava `leaderId` apontando
-  // para um morto — o mundo inteiro assume que toda Casa tem um líder vivo.
-  // (Para a Casa do jogador isso não se aplica: a extinção da linhagem é uma
-  // condição de fim de jogo legítima e é tratada em handlePlayerDeath.)
-  if (houseId !== state.playerHouseId) {
-    const cadet = spawnCadet(state, rng, houseId);
-    if (cadet) {
-      pushChronicle(state, {
-        absTurn: state.date.absoluteTurn,
-        title: `Ramo distante: ${house.name}`,
-        body: `Sem herdeiros diretos, ${cadet.name} chega de um ramo distante para reclamar ${house.name}.`,
-        tags: ['politica', 'sucessao'],
-      });
-      return cadet;
-    }
-  }
-
-  return null;
-}
-
-/** Cria um herdeiro de ramo colateral para manter uma Casa viva. */
-function spawnCadet(state: GameState, rng: Rng, houseId: string): Character | null {
-  const house = state.houses[houseId];
-  if (!house) return null;
-
-  const gender: Gender = rng.chance(0.62) ? 'M' : 'F';
-  const martial = clamp(rng.int(18, 55), 0, 100);
-  const c: Character = {
-    id: uid('c'),
-    name: genFirstName(rng, gender),
-    gender,
-    ageYears: rng.int(19, 38),
-    alive: true,
-    birthHouseId: houseId,
-    currentHouseId: houseId,
-    maritalStatus: 'single',
-    keepsBirthName: false,
-    locationId: house.seatLocationId,
-    martial,
-    charm: clamp(rng.int(20, 60), 0, 100),
-    beauty: clamp(rng.int(20, 60), 0, 100),
-    renownTier: renownFromMartial(martial),
-    fertility: rng.chance(0.05) ? 'sterile' : 'fertile',
-    wellLiked: clamp(rng.int(25, 60), 0, 100),
-    personalPrestige: clamp(rng.int(8, 28), 0, 100),
-    knownToPlayer: false,
-    relationshipToPlayer: 0,
-    personalGold: rng.int(10, 40),
-    kissedIds: [],
-    title: 'Ramo distante',
-  };
-
-  state.characters[c.id] = c;
-  return c;
-}
-
-function isFertileFemale(c: Character): boolean {
-  return c.alive && c.gender === 'F' && c.fertility !== 'sterile' && c.ageYears >= 16 && c.ageYears <= 40;
-}
-
-function isAdultMale(c: Character): boolean {
-  return c.alive && c.gender === 'M' && c.ageYears >= 16 && c.ageYears <= 60;
-}
-
-function beginPregnancy(state: GameState, rng: Rng, mother: Character, father: Character, isBastard: boolean): void {
-  if ((mother as any).pregnancy) return;
-  (mother as any).pregnancy = {
-    fatherId: father.id,
-    conceivedTurn: state.date.absoluteTurn,
-    turnsLeft: 15,
-    isBastard,
-  };
-  if (mother.id === state.playerId || father.id === state.playerId) {
-    pushNarration(state, `🤰 Gravidez iniciada (${isBastard ? 'bastardo' : 'legítimo'}). Parto previsto em ~15 turnos.`);
-  }
-}
-
-
-function areCloseKin(a: Character, b: Character): boolean {
-  // pai/mãe/filho
-  if (a.id === b.fatherId || a.id === b.motherId) return true;
-  if (b.id === a.fatherId || b.id === a.motherId) return true;
-  // irmãos completos/por um dos pais
-  if (a.fatherId && b.fatherId && a.fatherId === b.fatherId) return true;
-  if (a.motherId && b.motherId && a.motherId === b.motherId) return true;
-  return false;
-}
-
-function aiCanMarry(a: Character, b: Character): boolean {
-  if (!a.alive || !b.alive) return false;
-  if (a.maritalStatus === 'married' || b.maritalStatus === 'married') return false;
-  if (a.ageYears < 16 || b.ageYears < 16) return false;
-  if (!((a.gender === 'M' && b.gender === 'F') || (a.gender === 'F' && b.gender === 'M'))) return false;
-  if (areCloseKin(a, b)) return false;
-  return true;
-}
-
-function applyMarriage(
-  state: GameState,
-  rng: Rng,
-  groom: Character,
-  bride: Character,
-  lineage: 'patri' | 'matri',
-  reason: string
-): void {
-  // vínculo
-  groom.spouseId = bride.id;
-  bride.spouseId = groom.id;
-  groom.maritalStatus = 'married';
-  bride.maritalStatus = 'married';
-
-  // Sobrenome/casa:
-  // - padrão: patri (casa do homem)
-  // - matri: homem assume casa da mulher (usado apenas quando ela é a última viva da casa)
-  const chosenHouseId = lineage === 'matri' ? bride.currentHouseId : groom.currentHouseId;
-
-  if (lineage === 'patri') {
-    bride.keepsBirthName = false;
-    bride.currentHouseId = chosenHouseId;
-  } else {
-    groom.currentHouseId = chosenHouseId;
-  }
-
-  // Dote simples (política básica)
-  // - brideHouse transfere um pouco de goods + gold para o casal (casa escolhida)
-  const brideHouse = state.houses[bride.birthHouseId] ?? state.houses[bride.currentHouseId];
-  const groomHouse = state.houses[groom.currentHouseId];
-  if (brideHouse && groomHouse && brideHouse.id !== groomHouse.id) {
-    brideHouse.resources.goods = brideHouse.resources.goods ?? 0;
-    groomHouse.resources.goods = groomHouse.resources.goods ?? 0;
-
-    // preserva reserva mínima por tier
-    const brideReserve = econTierGold(brideHouse);
-    const maxGold = Math.max(0, (brideHouse.resources.gold ?? 0) - brideReserve);
-    const maxGoods = Math.max(0, (brideHouse.resources.goods ?? 0) - 60);
-
-    const giveGold = Math.min(maxGold, rng.int(10, 40));
-    const giveGoods = Math.min(maxGoods, rng.int(12, 45));
-
-    if (giveGold > 0) {
-      brideHouse.resources.gold -= giveGold;
-      groomHouse.resources.gold += giveGold;
-    }
-    if (giveGoods > 0) {
-      brideHouse.resources.goods -= giveGoods;
-      groomHouse.resources.goods += giveGoods;
-    }
-
-    // melhora relações
-    brideHouse.relations[groomHouse.id] = clamp((brideHouse.relations[groomHouse.id] ?? 50) + 6, 0, 100);
-    groomHouse.relations[brideHouse.id] = clamp((groomHouse.relations[brideHouse.id] ?? 50) + 6, 0, 100);
-  }
-
-  // Crônica
-  const houseLabel = state.houses[chosenHouseId]?.name ?? chosenHouseId;
-  pushChronicle(state, {
-    absTurn: state.date.absoluteTurn,
-    title: `Casamento (IA)`,
-    body: `${groom.name} casa-se com ${bride.name}. Casa do casal: ${houseLabel}. Motivo: ${reason}.`,
-    tags: ['casamento', 'politica'],
-  });
-}
-
-function tickArrangedMarriages(state: GameState, rng: Rng): void {
-  // roda a cada 5 turnos para não "explodir" o mundo com casamentos
-  if ((state.date.absoluteTurn % 5) !== 0) return;
-
-  const allChars = Object.values(state.characters);
-
-  const eligibleM = allChars.filter(c => c.alive && c.gender === 'M' && c.ageYears >= 16 && c.ageYears <= 65 && c.maritalStatus !== 'married' && !c.isBastard);
-  const eligibleF = allChars.filter(c => c.alive && c.gender === 'F' && c.ageYears >= 16 && c.ageYears <= 45 && c.maritalStatus !== 'married' && !c.isBastard);
-
-  const leaderIds = new Set(Object.values(state.houses).map(h => h.leaderId));
-
-  if (!eligibleM.length || !eligibleF.length) return;
-
-  // número de tentativas por tick, proporcional ao tamanho do mundo
-  const tries = clamp(Math.floor(Object.keys(state.houses).length / 45), 1, 6);
-
-  for (let i = 0; i < tries; i++) {
-    // escolhe uma casa com "necessidade": líder sem filhos adultos ou herdeiro solteiro
-    const housePool = Object.values(state.houses).filter(h => h.id !== state.playerHouseId);
-    const house = housePool.length ? housePool[rng.int(0, housePool.length - 1)] : null;
-    if (!house) continue;
-
-    const leader = state.characters[house.leaderId];
-    if (!leader || !leader.alive) continue;
-
-    const houseMembers = allChars.filter(c => c.alive && c.currentHouseId === house.id && !c.isBastard);
-    const leaderChildren = houseMembers.filter(c => c.fatherId === leader.id || c.motherId === leader.id);
-    const unmarriedHeirs = leaderChildren.filter(c => c.ageYears >= 16 && c.maritalStatus !== 'married');
-    const needHeir = leaderChildren.filter(c => c.ageYears >= 10).length === 0; // sem filhos vivos crescendo
-
-    // escolhe noivo: prioriza herdeiros solteiros; senão, o próprio líder se viúvo/solteiro e precisar de herdeiro
-    let groom: Character | null = null;
-    let bride: Character | null = null;
-
-    const pickFrom = (list: Character[]): Character | null => list.length ? list[rng.int(0, list.length - 1)] : null;
-
-    if (unmarriedHeirs.length) {
-      // tenta casar um herdeiro (preferencialmente homem)
-      const maleHeir = unmarriedHeirs.filter(c => c.gender === 'M');
-      groom = pickFrom(maleHeir.length ? maleHeir : unmarriedHeirs.filter(c => c.gender === 'F'));
-    } else if (needHeir && leader.maritalStatus !== 'married' && leader.gender === 'M') {
-      groom = leader;
-    } else if (needHeir && leader.maritalStatus !== 'married' && leader.gender === 'F') {
-      // líder mulher: ela será a "noiva"; tentaremos buscar homem
-      bride = leader;
-    }
-
-    // se escolhido foi mulher como alvo, inverter lógica
-    if (groom && groom.gender === 'F') {
-      bride = groom;
-      groom = null;
-    }
-
-    // busca par
-    if (bride && !groom) {
-      // precisa de homem de outra casa
-      let candidates = eligibleM.filter(m => m.currentHouseId !== bride!.currentHouseId && !areCloseKin(m, bride!));
-      // evita arrancar líderes de outras casas (a não ser que não haja alternativa)
-      const nonLeaders = candidates.filter(m => !leaderIds.has(m.id));
-      if (nonLeaders.length) candidates = nonLeaders;
-      if (!candidates.length) continue;
-      // escolhe por relações entre casas
-      candidates.sort((a, b) => {
-        const ra = (state.houses[bride!.currentHouseId]?.relations[a.currentHouseId] ?? 50);
-        const rb = (state.houses[bride!.currentHouseId]?.relations[b.currentHouseId] ?? 50);
-        return rb - ra;
-      });
-      groom = candidates[0];
-    } else if (groom && !bride) {
-      const candidates = eligibleF.filter(f => f.currentHouseId !== groom!.currentHouseId && !areCloseKin(f, groom!));
-      if (!candidates.length) continue;
-      candidates.sort((a, b) => {
-        const ra = (state.houses[groom!.currentHouseId]?.relations[a.currentHouseId] ?? 50);
-        const rb = (state.houses[groom!.currentHouseId]?.relations[b.currentHouseId] ?? 50);
-        return rb - ra;
-      });
-      bride = candidates[0];
-    }
-
-    if (!groom || !bride) continue;
-    if (!aiCanMarry(groom, bride)) continue;
-
-    // regra de preservação da casa da mulher: só se ela for a última viva da casa
-    const brideHouseId = bride.currentHouseId;
-    const aliveCountOther = Object.values(state.characters).filter(c => c.alive && c.currentHouseId === brideHouseId && c.id !== bride.id).length;
-    const brideIsLast = aliveCountOther === 0;
-
-    let lineage: 'patri' | 'matri' = 'patri';
-    if (brideIsLast) {
-      // IA: tende a preservar a casa da mulher quando ela é a última, especialmente se for líder
-      const isLeader = state.houses[brideHouseId]?.leaderId === bride.id;
-      const p = isLeader ? 0.90 : 0.65;
-      lineage = rng.chance(p) ? 'matri' : 'patri';
-    }
-
-    applyMarriage(state, rng, groom, bride, lineage, 'arranjo entre Casas');
-  }
-}
-
-
-function tickConceptions(state: GameState, rng: Rng): void {
-  const couples: Array<{father: Character, mother: Character}> = [];
-
-  for (const c of Object.values(state.characters)) {
-    if (!c.alive || c.maritalStatus !== 'married' || !c.spouseId) continue;
-    const spouse = state.characters[c.spouseId];
-    if (!spouse || !spouse.alive || spouse.maritalStatus !== 'married') continue;
-    if (c.gender === 'M' && spouse.gender === 'F') {
-      couples.push({ father: c, mother: spouse });
-    }
-  }
-
-  for (const pair of couples) {
-    const mother = pair.mother;
-    const father = pair.father;
-    if (!isFertileFemale(mother) || !isAdultMale(father)) continue;
-    if ((mother as any).pregnancy) continue;
-
-    if (rng.chance(0.015)) {
-      beginPregnancy(state, rng, mother, father, false);
-    }
-  }
-}
-
-function handleDeathImmediate(state: GameState, rng: Rng, c: Character, reason: string): void {
-  if (!c.alive) return;
-  c.alive = false;
-  c.maritalStatus = c.maritalStatus === 'married' ? 'widowed' : c.maritalStatus;
-  pushNarration(state, `☠️ ${c.name} morre. (${reason})`);
-
-  if (c.spouseId) {
-    const spouse = state.characters[c.spouseId];
-    if (spouse && spouse.alive) {
-      spouse.maritalStatus = 'widowed';
-      if (spouse.gender === 'F' && spouse.birthHouseId !== spouse.currentHouseId) {
-        spouse.currentHouseId = spouse.birthHouseId;
-        spouse.keepsBirthName = true;
-      }
-    }
-  }
-
-  for (const h of Object.values(state.houses)) {
-    if (h.leaderId === c.id) {
-      const succ = computeSuccessor(state, rng, h.id);
-      if (succ) {
-        h.leaderId = succ.id;
-        succ.title = titleForHouse(h.id, succ.gender);
-        pushNarration(state, `👑 ${succ.name} torna-se líder de ${h.name}.`);
-      }
-    }
-  }
-
-  if (c.id === state.playerId) {
-    handlePlayerDeath(state, rng, reason);
-  }
-}
-
-function spawnNewborn(state: GameState, rng: Rng, father: Character, mother: Character, gender: Gender, isBastard: boolean): Character {
-  const id = uid('c');
-  const name = genFirstName(rng, gender);
-
-  const houseId = father.currentHouseId;
-  const locationId = mother.locationId;
-
-  const child: Character = {
-    id,
-    name,
-    gender,
-    ageYears: 0,
-    alive: true,
-
-    birthHouseId: houseId,
-    currentHouseId: houseId,
-
-    fatherId: father.id,
-    motherId: mother.id,
-
-    maritalStatus: 'single',
-    keepsBirthName: false,
-    locationId,
-
-    martial: rng.int(0, 5),
-    charm: rng.int(0, 5),
-    beauty: rng.int(0, 5),
-    renownTier: 'comum',
-    fertility: rng.chance(0.05) ? 'sterile' : 'fertile',
-    wellLiked: rng.int(10, 40),
-    personalPrestige: 0,
-
-    knownToPlayer: false,
-    relationshipToPlayer: 0,
-
-    personalGold: 0,
-    kissedIds: [],
-    isBastard,
-  };
-
-  state.characters[id] = child;
-  return child;
-}
-
-function queueNamingIfPlayerParent(state: GameState, baby: Character, father: Character, mother: Character): void {
-  const isPlayerParent = father.id === state.playerId || mother.id === state.playerId;
-  if (!isPlayerParent) {
-    state.chronicle.unshift({
-      turn: state.date.absoluteTurn,
-      title: 'Nascimento',
-      body: `${baby.name} nasce na ${state.houses[baby.currentHouseId].name}.`,
-      tags: ['nascimento'],
-    });
-    return;
-  }
-
-  baby.name = '— sem nome —';
-  state.ui.pendingNameQueue = state.ui.pendingNameQueue ?? [];
-  state.ui.pendingNameQueue.push(baby.id);
-  pushNarration(state, `👶 Você teve um(a) bebê! Abra a janela de nomeação para escolher o primeiro nome agora.`);
-  state.chronicle.unshift({
-    turn: state.date.absoluteTurn,
-    title: 'Nascimento (sua família)',
-    body: `Um bebê nasce em sua linhagem.`,
-    tags: ['nascimento'],
-  });
-}
-
-function tickPregnancies(state: GameState, rng: Rng): void {
-  for (const mother of Object.values(state.characters)) {
-    const preg = (mother as any).pregnancy as any;
-    if (!preg) continue;
-    if (!mother.alive) { (mother as any).pregnancy = undefined; continue; }
-
-    if (rng.chance(0.02)) {
-      (mother as any).pregnancy = undefined;
-      if (mother.id === state.playerId || preg.fatherId === state.playerId) {
-        pushNarration(state, `🩸 Uma tragédia: o bebê não sobreviveu à gestação.`);
-      }
-      continue;
-    }
-
-    preg.turnsLeft -= 1;
-    if (preg.turnsLeft > 0) continue;
-
-    (mother as any).pregnancy = undefined;
-    const father = state.characters[preg.fatherId];
-    if (!father || !father.alive) continue;
-
-    const roll = rng.next(); // 0..1
-    const babyGender: Gender = rng.chance(0.55) ? 'M' : 'F';
-
-    if (roll < 0.03) {
-      handleDeathImmediate(state, rng, mother, 'Morreu no parto (mãe e bebê)');
-      if (!state.game.over) pushNarration(state, '👶 O bebê também não sobreviveu ao parto.');
-      continue;
-    }
-    if (roll < 0.08) {
-      const baby = spawnNewborn(state, rng, father, mother, babyGender, preg.isBastard);
-      handleDeathImmediate(state, rng, mother, 'Morreu no parto');
-      if (!state.game.over) {
-        pushNarration(state, `👶 O bebê sobrevive: ${baby.name}.`);
-        queueNamingIfPlayerParent(state, baby, father, mother);
-      }
-      continue;
-    }
-    if (roll < 0.13) {
-      if (mother.id === state.playerId || father.id === state.playerId) {
-        pushNarration(state, '👶 O bebê não sobreviveu ao parto.');
-      }
-      continue;
-    }
-
-    const baby = spawnNewborn(state, rng, father, mother, babyGender, preg.isBastard);
-    if (mother.id === state.playerId || father.id === state.playerId) {
-      pushNarration(state, `👶 Nasce um(a) bebê (${preg.isBastard ? 'bastardo' : 'legítimo'}).`);
-    }
-    queueNamingIfPlayerParent(state, baby, father, mother);
-  }
-}
-
-function prestigeToTournamentSize(prestige: number): TournamentSize {
-  if (prestige < 45) return 'menor';
-  if (prestige < 75) return 'medio';
-  return 'importante';
-}
-
-function categoriesForSize(size: TournamentSize): RenownTier[] {
-  // 3 tipos conforme pedido: menor (fraco->intermediário), médio (2º fraco->2º forte), importante (intermediário->mais forte)
-  if (size === 'menor') return ['comum', 'forte', 'reconhecido'];
-  if (size === 'medio') return ['forte', 'reconhecido', 'imponente'];
-  return ['reconhecido', 'imponente', 'renomado'];
-}
 
 function randomTournamentReason(rng: Rng): TournamentReason {
   const pool: TournamentReason[] = ['maioridade', 'casamento', 'vitoria', 'colheita', 'outro'];
@@ -4872,147 +3824,6 @@ function tickTournaments(state: GameState, rng: Rng): void {
     pushNarration(state, `🏇 ${body}`);
   }
 }
-
-function spawnChild(state: GameState, rng: Rng, father: Character, mother: Character, gender: Gender): Character {
-  const id = uid('c');
-  const name = genFirstName(rng, gender);
-  const houseId = father.currentHouseId;
-  const locationId = father.locationId;
-
-  const child: Character = {
-    id,
-    name,
-    gender,
-    ageYears: 0,
-    alive: true,
-
-    birthHouseId: houseId,
-    currentHouseId: houseId,
-
-    fatherId: father.id,
-    motherId: mother.id,
-
-    maritalStatus: 'single',
-    keepsBirthName: false,
-    locationId,
-
-    martial: rng.int(0, 5),
-    charm: rng.int(0, 5),
-    beauty: rng.int(0, 5),
-    renownTier: 'comum',
-    fertility: rng.chance(0.05) ? 'sterile' : 'fertile',
-    wellLiked: rng.int(10, 40),
-    personalPrestige: 0,
-
-    knownToPlayer: false,
-    relationshipToPlayer: 0,
-  };
-
-  state.characters[id] = child;
-  return child;
-}
-
-function tickIronBank(state: GameState, rng: Rng): void {
-  const debt = state.ironBankDebt;
-  if (!debt) return;
-
-  if (state.date.absoluteTurn >= debt.nextPaymentTurn) {
-    const house = state.houses[state.playerHouseId];
-    if (house.resources.gold >= debt.minimumPayment) {
-      house.resources.gold -= debt.minimumPayment;
-      debt.principal = Math.max(0, Math.round(debt.principal - debt.minimumPayment * 0.60)); // parte amortiza
-      debt.nextPaymentTurn += 20;
-      debt.missedPayments = Math.max(0, debt.missedPayments - 1);
-      pushNarration(state, `🏦 Você paga ${debt.minimumPayment} ouro ao Banco de Ferro. A dívida diminui (principal agora ${debt.principal}).`);
-      if (debt.principal <= 0) {
-        state.ironBankDebt = null;
-        house.prestige = clamp(house.prestige + 1, 1, 100);
-        pushNarration(state, '🏦 Dívida quitada. Sua Casa respira. Prestígio +1.');
-      }
-    } else {
-      debt.missedPayments += 1;
-      debt.nextPaymentTurn += 10; // pressão acelera
-      pushNarration(state, `🏦 Você não consegue pagar o Banco de Ferro. A pressão aumenta (atrasos: ${debt.missedPayments}).`);
-
-      // intervenção se muito grave
-      if (debt.missedPayments >= 3) {
-        const house = state.houses[state.playerHouseId];
-        house.prestige = clamp(house.prestige - 5, 1, 100);
-        house.resources.gold = Math.max(0, house.resources.gold - 120);
-        pushNarration(state, '⚔️ Braavos impõe sanções e “cobradores” — sua economia sofre e sua honra despenca. Prestígio -5.');
-      }
-      if (debt.missedPayments >= 5) {
-        pushNarration(state, '🩸 Intervenção do Banco de Ferro: mercenários e credores exigem rendas e portos. Você corre risco de ruína total.');
-      }
-    }
-  }
-
-  // juros acumulam 1x ao ano (a cada 20 turnos, no pagamento)
-}
-
-export function applyIronBank(state: GameState, rng: Rng, cmd: string): void {
-  const house = state.houses[state.playerHouseId];
-  if (cmd.startsWith('loan:')) {
-    const amount = parseInt(cmd.split(':')[1], 10);
-    house.resources.gold += amount;
-    house.prestige = clamp(house.prestige - Math.ceil(amount / 350), 1, 100);
-    state.ironBankDebt = {
-      principal: amount,
-      interestRateYear: 0.12,
-      nextPaymentTurn: state.date.absoluteTurn + 20,
-      minimumPayment: Math.round(amount * 0.18),
-      missedPayments: 0,
-    };
-    pushNarration(state, `🏦 Empréstimo aprovado: +${amount} ouro. Próximo pagamento em 20 turnos.`);
-    return promptMainMenu(state, rng);
-  }
-  if (cmd === 'paymin') {
-    const debt = state.ironBankDebt;
-    if (!debt) return promptMainMenu(state, rng);
-    if (house.resources.gold < debt.minimumPayment) {
-      pushNarration(state, 'Ouro insuficiente para pagar o mínimo.');
-      return promptMainMenu(state, rng);
-    }
-    house.resources.gold -= debt.minimumPayment;
-    debt.principal = Math.max(0, Math.round(debt.principal - debt.minimumPayment * 0.60));
-    debt.nextPaymentTurn += 20;
-    debt.missedPayments = Math.max(0, debt.missedPayments - 1);
-    pushNarration(state, `🏦 Pagamento mínimo efetuado. Principal agora ${debt.principal}.`);
-    if (debt.principal <= 0) {
-      state.ironBankDebt = null;
-      house.prestige = clamp(house.prestige + 1, 1, 100);
-      pushNarration(state, '🏦 Dívida quitada. Prestígio +1.');
-    }
-    return promptMainMenu(state, rng);
-  }
-  if (cmd === 'payall') {
-    const debt = state.ironBankDebt;
-    if (!debt) return promptMainMenu(state, rng);
-    const pay = debt.principal;
-    if (house.resources.gold < pay) {
-      pushNarration(state, 'Ouro insuficiente para quitar tudo.');
-      return promptMainMenu(state, rng);
-    }
-    house.resources.gold -= pay;
-    state.ironBankDebt = null;
-    house.prestige = clamp(house.prestige + 1, 1, 100);
-    pushNarration(state, `🏦 Você quita ${pay} ouro. Dívida encerrada. Prestígio +1.`);
-    return promptMainMenu(state, rng);
-  }
-}
-
-export function handlePlayerDeath(state: GameState, rng: Rng, reason: string): void {
-  const houseId = state.playerHouseId;
-  const next = computeSuccessor(state, rng, houseId);
-  if (next) {
-    state.playerId = next.id;
-    state.playerHouseId = next.currentHouseId;
-    pushNarration(state, `🕯️ Controle transferido para ${next.name} (${state.houses[state.playerHouseId].name}). Motivo: ${reason}.`);
-  } else {
-    setGameOver(state, `Sua linhagem se apaga. Não há herdeiro elegível — fim de jogo. (${reason})`, false);
-  }
-}
-
 
 
 export function applyLocalAction(
@@ -5200,6 +4011,9 @@ export function applyLocalAction(
       }
     }
 
+    // Casar entre Casas cria direito sobre os dois assentos.
+    registerMarriageClaims(state, p, t);
+
     // marca divergência canônica se aplicável
     canonTouchIfCanonical(state, t, 'marry', 5);
     canonTouchIfCanonical(state, p, 'marry', 5);
@@ -5312,3 +4126,149 @@ export function applyTournamentAction(state: GameState, rng: Rng, cmd: string): 
   return promptMainMenu(state, rng);
 }
 
+export function applyIronBank(state: GameState, rng: Rng, cmd: string): void {
+  const house = state.houses[state.playerHouseId];
+  if (cmd.startsWith('loan:')) {
+    const amount = parseInt(cmd.split(':')[1], 10);
+    house.resources.gold += amount;
+    house.prestige = clamp(house.prestige - Math.ceil(amount / 350), 1, 100);
+    state.ironBankDebt = {
+      principal: amount,
+      interestRateYear: 0.12,
+      nextPaymentTurn: state.date.absoluteTurn + 20,
+      minimumPayment: Math.round(amount * 0.18),
+      missedPayments: 0,
+    };
+    pushNarration(state, `🏦 Empréstimo aprovado: +${amount} ouro. Próximo pagamento em 20 turnos.`);
+    return promptMainMenu(state, rng);
+  }
+  if (cmd === 'paymin') {
+    const debt = state.ironBankDebt;
+    if (!debt) return promptMainMenu(state, rng);
+    if (house.resources.gold < debt.minimumPayment) {
+      pushNarration(state, 'Ouro insuficiente para pagar o mínimo.');
+      return promptMainMenu(state, rng);
+    }
+    house.resources.gold -= debt.minimumPayment;
+    debt.principal = Math.max(0, Math.round(debt.principal - debt.minimumPayment * 0.60));
+    debt.nextPaymentTurn += 20;
+    debt.missedPayments = Math.max(0, debt.missedPayments - 1);
+    pushNarration(state, `🏦 Pagamento mínimo efetuado. Principal agora ${debt.principal}.`);
+    if (debt.principal <= 0) {
+      state.ironBankDebt = null;
+      house.prestige = clamp(house.prestige + 1, 1, 100);
+      pushNarration(state, '🏦 Dívida quitada. Prestígio +1.');
+    }
+    return promptMainMenu(state, rng);
+  }
+  if (cmd === 'payall') {
+    const debt = state.ironBankDebt;
+    if (!debt) return promptMainMenu(state, rng);
+    const pay = debt.principal;
+    if (house.resources.gold < pay) {
+      pushNarration(state, 'Ouro insuficiente para quitar tudo.');
+      return promptMainMenu(state, rng);
+    }
+    house.resources.gold -= pay;
+    state.ironBankDebt = null;
+    house.prestige = clamp(house.prestige + 1, 1, 100);
+    pushNarration(state, `🏦 Você quita ${pay} ouro. Dívida encerrada. Prestígio +1.`);
+    return promptMainMenu(state, rng);
+  }
+}
+
+/** Declaração de guerra e pedido de paz (ações do líder da Casa). */
+export function applyWarAction(state: GameState, rng: Rng, cmd: string): void {
+  const player = state.characters[state.playerId];
+  const house = state.houses[state.playerHouseId];
+
+  if (house.leaderId !== player.id) {
+    pushNarration(state, 'Só o líder da Casa pode declarar guerra ou assinar a paz.');
+    return promptMainMenu(state, rng);
+  }
+
+  const parts = cmd.split(':');
+
+  if (parts[0] === 'declare') {
+    const targetId = parts[1];
+    const cb = (parts[2] ?? 'conquest') as any;
+    const target = state.houses[targetId];
+
+    if (!target) {
+      pushNarration(state, 'Casa inválida.');
+      return promptMainMenu(state, rng);
+    }
+    if (warBetween(state, house.id, targetId)) {
+      pushNarration(state, 'Vocês já estão em guerra.');
+      return promptMainMenu(state, rng);
+    }
+    if (!availableCasusBelli(state, house.id, targetId).includes(cb)) {
+      pushNarration(state, 'Esse motivo não se sustenta contra esta Casa.');
+      return promptMainMenu(state, rng);
+    }
+
+    // Uma hoste precisa existir antes de marchar.
+    if (house.army.levies < 30) {
+      pushNarration(state, 'Sua hoste é pequena demais para uma campanha (mínimo 30 levies).');
+      return promptMainMenu(state, rng);
+    }
+
+    const w = declareWar(state, rng, house.id, targetId, cb);
+    if (w && (w.attackerAllies.length || w.defenderAllies.length)) {
+      const mine = w.attackerAllies.map(id => state.houses[id]?.name).filter(Boolean).join(', ') || 'ninguém';
+      const theirs = w.defenderAllies.map(id => state.houses[id]?.name).filter(Boolean).join(', ') || 'ninguém';
+      pushNarration(state, `🤝 Ao seu lado: ${mine}. Ao lado deles: ${theirs}.`);
+    }
+    return promptMainMenu(state, rng);
+  }
+
+  if (parts[0] === 'peace') {
+    const warId = parts[1];
+    const termo = (parts[2] ?? 'white') as PeaceTerms;
+    const w = activeWars(state).find(x => x.id === warId);
+    if (!w) {
+      pushNarration(state, 'Essa guerra já terminou.');
+      return promptMainMenu(state, rng);
+    }
+
+    const side = sideOf(w, house.id)!;
+    const mineScore = side === 'attacker' ? w.scoreAttacker : w.scoreDefender;
+    const theirScore = side === 'attacker' ? w.scoreDefender : w.scoreAttacker;
+
+    if (!affordableTerms(state, w, side).includes(termo)) {
+      pushNarration(state, 'Você não conquistou o suficiente para exigir isso.');
+      return promptMainMenu(state, rng);
+    }
+
+    // Quanto mais duro o termo, mais difícil de engolir — e quem está ganhando
+    // não assina nada.
+    const gap = theirScore - mineScore;
+    const dureza = PEACE_TERM_COST[termo] / 100;
+    const acceptChance = clamp(0.8 - gap / 90 - dureza, 0.05, 0.95);
+
+    if (!rng.chance(acceptChance)) {
+      pushNarration(state, `A proposta (${peaceTermLabel(termo)}) é recusada. Eles ainda acreditam que podem vencer.`);
+      return promptMainMenu(state, rng);
+    }
+
+    const outcome = termo === 'white' || mineScore === theirScore
+      ? 'white'
+      : (mineScore > theirScore ? side : (side === 'attacker' ? 'defender' : 'attacker'));
+
+    endWar(state, rng, w, outcome as any, 'paz negociada', termo);
+    return promptMainMenu(state, rng);
+  }
+
+  return promptMainMenu(state, rng);
+}
+
+/** Mediar ou atiçar uma rixa entre outras Casas. */
+export function applyRivalryAction(state: GameState, rng: Rng, cmd: string): void {
+  const sep = cmd.indexOf(':');
+  const rivalryId = sep >= 0 ? cmd.slice(0, sep) : cmd;
+  const mode = sep >= 0 ? cmd.slice(sep + 1) : 'mediate';
+
+  const res = applyRivalryIntervention(state, rng, rivalryId, mode);
+  pushNarration(state, res.message);
+  return promptMainMenu(state, rng);
+}

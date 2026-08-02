@@ -134,6 +134,13 @@ export interface CanonEventDef {
   /** Variante publicada quando as pré-condições falham. */
   altTitle?: string;
   altBody?: string;
+
+  /**
+   * Região da notícia. Eventos com `local` nas tags só são narrados no chat
+   * para quem está por perto ou tem laço com a Casa envolvida — o resto do
+   * reino fica sabendo apenas pela crônica, se procurar.
+   */
+  regionId?: string;
 }
 
 /**
@@ -399,7 +406,225 @@ export const CANON_EVENTS: CanonEventDef[] = [
   { title: 'A Muralha é rompida', id: '304_wall_breached', year: 304, turn: 20, kind: 'chronicle', body: 'A Muralha é rompida e o Exército dos Mortos avança para o Norte.', tags: ['canon', 'north', 'endgame', 'anchor'] },
   { title: 'Batalha de Winterfell', id: '305_battle_winterfell', year: 305, turn: 2, kind: 'chronicle', body: 'As forças dos vivos enfrentam os mortos em Winterfell e sobrevivem por pouco.', tags: ['canon', 'north', 'war', 'endgame', 'anchor'] },
   { title: 'Queda de Porto Real', id: '305_fall_kings_landing', year: 305, turn: 12, kind: 'chronicle', body: 'A campanha final por Porto Real culmina em incêndio massivo e ruptura do reino.', tags: ['canon', 'kings_landing', 'war', 'endgame', 'anchor'] },
-  { title: 'Grande Conselho e novo rei', id: '305_great_council_new_king', year: 305, turn: 18, kind: 'chronicle', body: 'Um grande conselho redefine a sucessão e estabelece uma nova ordem política.', tags: ['canon', 'throne', 'politics', 'endgame', 'anchor'] }
+  { title: 'Grande Conselho e novo rei', id: '305_great_council_new_king', year: 305, turn: 18, kind: 'chronicle', body: 'Um grande conselho redefine a sucessão e estabelece uma nova ordem política.', tags: ['canon', 'throne', 'politics', 'endgame', 'anchor'] },
+
+  // ===================== Aegon III (150-157) =====================
+  { id: '151_dance_debts', year: 151, turn: 6, kind: 'chronicle', title: 'Contas da Danca', body: 'A Coroa ainda paga as dividas deixadas pela Danca dos Dragoes. O Mestre da Moeda corta despesas da corte.', tags: ['canon', 'economia', 'contexto'] },
+  { id: '152_last_dragon_ill', year: 152, turn: 10, kind: 'chronicle', title: 'A ultima dragoa definha', body: 'No Poco do Dragao, a ultima dragoa adoece. Os maesters discordam sobre a causa.', tags: ['canon', 'dragons'] },
+  { id: '154_eggs_fail', year: 154, turn: 8, kind: 'chronicle', title: 'Ovos que nao chocam', body: 'Depois da morte do ultimo dragao, as tentativas de chocar os ovos restantes fracassam uma apos a outra.', tags: ['canon', 'dragons'] },
+  { id: '155_daeron_renown', year: 155, turn: 10, kind: 'chronicle', title: 'O Jovem Dragao ganha renome', body: 'O principe Daeron destaca-se nas armas e fala abertamente em terminar a conquista de Aegon.', tags: ['canon', 'targaryen'], personCanonId: 'daeron_i' },
+  { id: '156_king_fails', year: 156, turn: 14, kind: 'chronicle', title: 'A saude do rei falha', body: 'Aegon III definha. A corte cinzenta prepara-se para uma sucessao muito jovem.', tags: ['canon', 'throne'], personCanonId: 'aegon_iii' },
+
+  // ===================== Daeron I (157-161) =====================
+  { id: '158_conquest_book', year: 158, turn: 18, kind: 'chronicle', title: 'A Conquista de Dorne', body: 'Daeron I escreve o relato da propria campanha, lido em voz alta nos saloes do reino.', tags: ['canon', 'dorne'] },
+  { id: '159_dorne_rises', year: 159, turn: 6, kind: 'chronicle', title: 'Dorne se levanta', body: 'A submissao dornesa dura pouco. Guarnicoes sao massacradas e as passagens voltam a ser terra de ninguem.', tags: ['canon', 'dorne', 'war'] },
+  { id: '159_price_of_dorne', year: 159, turn: 14, kind: 'chronicle', title: 'O preco de segurar Dorne', body: 'Dez mil homens tomaram Dorne. Muitas vezes esse numero morre tentando mante-la.', tags: ['canon', 'dorne', 'war'] },
+
+  // ===================== Baelor I (161-171) =====================
+  { id: '162_boneway_walk', year: 162, turn: 6, kind: 'chronicle', title: 'A caminhada pela Estrada do Osso', body: 'Baelor atravessa a Estrada do Osso descalco para libertar os refens dorneses e selar a paz.', tags: ['canon', 'dorne', 'religion'], personCanonId: 'baelor_i' },
+  { id: '163_annulment', year: 163, turn: 8, kind: 'chronicle', title: 'Anulacao real', body: 'Baelor anula o proprio casamento com Daena e dedica-se inteiramente a Fe.', tags: ['canon', 'religion', 'targaryen'] },
+  { id: '164_great_sept', year: 164, turn: 10, kind: 'chronicle', title: 'Comeca o Grande Septo', body: 'Baelor ordena erguer um grande septo sobre a Colina de Visenya, em Porto Real.', tags: ['canon', 'religion'] },
+  { id: '165_mason_septon', year: 165, turn: 10, kind: 'chronicle', title: 'Um Alto Septao de pedra', body: 'Baelor eleva um pedreiro iletrado a Alto Septao, dizendo que ele esculpira o rosto do Pai.', tags: ['canon', 'religion'] },
+  { id: '166_boy_septon', year: 166, turn: 10, kind: 'chronicle', title: 'Um menino sob a coroa de cristal', body: 'Morto o pedreiro, Baelor nomeia Alto Septao um menino de oito anos, tido como capaz de milagres.', tags: ['canon', 'religion'] },
+  { id: '167_faith_city', year: 167, turn: 10, kind: 'chronicle', title: 'Porto Real sob a Fe', body: 'Bordeis sao fechados por ordem do rei. A cidade murmura, mas obedece.', tags: ['canon', 'religion'] },
+  { id: '168_viserys_governs', year: 168, turn: 10, kind: 'chronicle', title: 'Viserys governa de fato', body: 'Enquanto o rei jejua e reza, a Mao Viserys mantem o reino funcionando.', tags: ['canon', 'court'], personCanonId: 'viserys_ii' },
+  { id: '169_longer_fasts', year: 169, turn: 10, kind: 'chronicle', title: 'Jejuns cada vez mais longos', body: 'O rei come cada vez menos. Os maesters temem pela sua vida.', tags: ['canon', 'religion'] },
+  { id: '170_daemon_born', year: 170, turn: 18, kind: 'chronicle', title: 'Um filho sem pai declarado', body: 'Daena, a Desafiadora, da a luz um menino e recusa-se a nomear o pai.', tags: ['canon', 'targaryen'] },
+
+  // ===================== Viserys II e Aegon IV (171-184) =====================
+  { id: '172_viserys_reforms', year: 172, turn: 6, kind: 'chronicle', title: 'Um ano de reformas', body: 'Em pouco mais de um ano no trono, Viserys II endireita as financas da Coroa.', tags: ['canon', 'economia'], personCanonId: 'viserys_ii' },
+  { id: '173_unworthy_court', year: 173, turn: 10, kind: 'chronicle', title: 'A corte do Indigno', body: 'Aegon IV distribui cargos entre favoritos e amantes, e afasta os conselheiros do pai.', tags: ['canon', 'court'] },
+  { id: '174_wooden_dragons', year: 174, turn: 12, kind: 'chronicle', title: 'Os dragoes de madeira', body: 'Aegon IV manda construir dragoes de madeira para invadir Dorne. Eles ardem e afundam no Mar de Dorne.', tags: ['canon', 'dorne', 'war'] },
+  { id: '176_queen_and_knight', year: 176, turn: 10, kind: 'chronicle', title: 'Sussurros sobre a rainha', body: 'A corte fala da rainha Naerys e do Cavaleiro Dragao. O rei alimenta os boatos.', tags: ['canon', 'court'] },
+  { id: '178_blackfyre_sword', year: 178, turn: 10, kind: 'chronicle', title: 'Blackfyre em maos bastardas', body: 'Aegon IV entrega a espada valiriana Blackfyre ao bastardo Daemon, e nao ao herdeiro.', tags: ['canon', 'targaryen', 'blackfyre'] },
+  { id: '179_naerys_death', year: 179, turn: 10, kind: 'chronicle', title: 'Morte da rainha Naerys', body: 'A rainha Naerys morre. A corte perde a ultima voz que continha os excessos do rei.', tags: ['death', 'targaryen', 'canon'], personCanonId: 'naerys' },
+  { id: '181_heir_slandered', year: 181, turn: 10, kind: 'chronicle', title: 'O herdeiro difamado', body: 'O rei insinua em publico que Daeron nao e filho seu.', tags: ['canon', 'throne'], personCanonId: 'daeron_ii' },
+  { id: '183_king_rots', year: 183, turn: 10, kind: 'chronicle', title: 'O rei apodrece', body: 'Aegon IV, monstruosamente gordo, ja nao consegue deixar o leito.', tags: ['canon', 'throne'], personCanonId: 'aegon_iv' },
+
+  // ===================== Daeron II (184-209) =====================
+  { id: '185_dornish_court', year: 185, turn: 10, kind: 'chronicle', title: 'Uma corte dornesa', body: 'Daeron II enche a corte de dorneses. Velhas casas do Dominio e das Terras da Tempestade ressentem-se.', tags: ['canon', 'court', 'dorne'] },
+  { id: '188_good_king', year: 188, turn: 10, kind: 'chronicle', title: 'O Bom Rei', body: 'Daeron II governa por leis e casamentos, e nao por conquistas.', tags: ['canon', 'court'] },
+  { id: '190_blackfyre_shadows', year: 190, turn: 10, kind: 'chronicle', title: 'Sombras em torno de Daemon', body: 'Cavaleiros descontentes cercam Daemon Blackfyre e falam de um rei que nunca houve.', tags: ['canon', 'blackfyre'] },
+  { id: '192_bittersteel', year: 192, turn: 10, kind: 'chronicle', title: 'Aco Amargo sussurra', body: 'Aegor Rivers pressiona o meio-irmao a reclamar o trono pelo aco.', tags: ['canon', 'blackfyre'], personCanonId: 'aegor_rivers' },
+  { id: '194_houses_divided', year: 194, turn: 10, kind: 'chronicle', title: 'Casas divididas', body: 'O reino divide-se em silencio entre o dragao vermelho e o dragao negro.', tags: ['canon', 'blackfyre', 'politics'] },
+  { id: '195_the_refusal', year: 195, turn: 14, kind: 'chronicle', title: 'A recusa', body: 'Daemon Blackfyre reune apoio e e recusado pelo rei. Restam-lhe as armas.', tags: ['canon', 'blackfyre'] },
+  { id: '197_golden_company', year: 197, turn: 10, kind: 'chronicle', title: 'A Companhia Dourada', body: 'No exilio, Aco Amargo funda a Companhia Dourada com os derrotados da rebeliao.', tags: ['canon', 'blackfyre', 'essos'], personCanonId: 'aegor_rivers' },
+  { id: '199_thousand_eyes', year: 199, turn: 10, kind: 'chronicle', title: 'Mil olhos e um', body: 'Brynden Rivers tece uma rede de informantes por todo o reino.', tags: ['canon', 'court'], personCanonId: 'brynden_rivers' },
+  { id: '202_rebuilding', year: 202, turn: 10, kind: 'chronicle', title: 'Reconstrucao do Campo de Erva Vermelha', body: 'As terras arrasadas pela rebeliao voltam a dar colheita.', tags: ['canon', 'economia', 'contexto'] },
+  { id: '205_breakspear_hand', year: 205, turn: 10, kind: 'chronicle', title: 'Baelor Quebra-Lancas governa', body: 'O principe herdeiro serve como Mao do Rei e e amado pelo povo miudo.', tags: ['canon', 'court'], personCanonId: 'baelor_breakspear' },
+  { id: '208_quiet_year', year: 208, turn: 10, kind: 'chronicle', title: 'Um ano quieto', body: 'Nada de grande se registra. O reino respira antes da tempestade.', tags: ['canon', 'contexto'] },
+
+  // ===================== Aerys I e Maekar I (209-233) =====================
+  { id: '210_book_king', year: 210, turn: 10, kind: 'chronicle', title: 'O rei dos livros', body: 'Aerys I prefere pergaminhos a conselhos. Bloodraven governa em seu nome.', tags: ['canon', 'court'], personCanonId: 'aerys_i' },
+  { id: '213_ravens_justice', year: 213, turn: 10, kind: 'chronicle', title: 'A justica do Corvo', body: 'A mao de Brynden Rivers e pesada. Ha quem prefira o caos a essa ordem.', tags: ['canon', 'court'], personCanonId: 'brynden_rivers' },
+  { id: '215_riverlands_famine', year: 215, turn: 10, kind: 'chronicle', title: 'Fome nas Terras Fluviais', body: 'Chuvas perdidas e celeiros vazios. Os senhores fluviais pedem alivio de tributos.', tags: ['canon', 'economia', 'contexto'] },
+  { id: '217_marches_restless', year: 217, turn: 10, kind: 'chronicle', title: 'Marcas inquietas', body: 'Escaramucas nas Marcas Dornesas mantem os senhores da fronteira em armas.', tags: ['canon', 'dorne', 'contexto'] },
+  { id: '220_tired_realm', year: 220, turn: 10, kind: 'chronicle', title: 'Um reino cansado', body: 'Duas rebelioes em uma geracao deixam marca. Os grandes senhores evitam a corte.', tags: ['canon', 'contexto'] },
+  { id: '221_aerys_i_death', year: 221, turn: 10, kind: 'death', title: 'Morte de Aerys I', body: 'Aerys I morre sem deixar filhos. A sucessao passa ao irmao Maekar.', tags: ['death', 'targaryen', 'throne', 'canon'], personCanonId: 'aerys_i' },
+  { id: '221_maekar_i_crowned', year: 221, turn: 10, kind: 'succession', title: 'Maekar I e coroado', body: 'Maekar, o mais novo dos filhos de Daeron II ainda vivo, assume o Trono de Ferro.', tags: ['succession', 'throne', 'canon'], houseId: 'targaryen_throne', newLeaderCanonId: 'maekar_i', requires: { deadCanonIds: ['aerys_i'] }, altBody: 'Aerys I segue vivo: Maekar continua apenas principe.' },
+  { id: '222_soldier_king', year: 222, turn: 10, kind: 'chronicle', title: 'Um rei soldado', body: 'Maekar I governa como comandou: com dureza e sem paciencia para a corte.', tags: ['canon', 'court'], personCanonId: 'maekar_i' },
+  { id: '224_squire_egg', year: 224, turn: 10, kind: 'chronicle', title: 'Um escudeiro chamado Egg', body: 'O filho mais novo do rei percorre o reino como escudeiro de um cavaleiro andante.', tags: ['canon', 'targaryen'], personCanonId: 'aegon_v' },
+  { id: '228_wall_reinforced', year: 228, turn: 10, kind: 'chronicle', title: 'Reforcos para a Muralha', body: 'A Coroa envia homens e suprimentos a Patrulha da Noite, cada vez mais escassa.', tags: ['canon', 'north', 'contexto'] },
+  { id: '230_heirs_dispute', year: 230, turn: 10, kind: 'chronicle', title: 'Herdeiros em disputa', body: 'Os filhos de Maekar medem forcas. Nenhum deles agrada a todos os senhores.', tags: ['canon', 'throne', 'contexto'] },
+  { id: '232_marches_in_arms', year: 232, turn: 10, kind: 'chronicle', title: 'Marcas em armas', body: 'Maekar passa mais tempo em campanha do que no trono.', tags: ['canon', 'contexto'] },
+
+  // ===================== Aegon V (233-259) =====================
+  { id: '234_unpopular_reforms', year: 234, turn: 10, kind: 'chronicle', title: 'Reformas impopulares', body: 'Aegon V decreta leis em favor do povo miudo. Os grandes senhores resistem em silencio.', tags: ['canon', 'court'], personCanonId: 'aegon_v' },
+  { id: '235_dunk_kingsguard', year: 235, turn: 10, kind: 'chronicle', title: 'Duncan, o Alto, na Guarda Real', body: 'O cavaleiro andante que criou o rei toma o manto branco.', tags: ['canon', 'court'], personCanonId: 'dunk' },
+  { id: '237_lords_resist', year: 237, turn: 10, kind: 'chronicle', title: 'Senhores em resistencia', body: 'Casas antigas recusam-se a aplicar as leis do rei em suas terras.', tags: ['canon', 'court', 'contexto'] },
+  { id: '241_bittersteel_death', year: 241, turn: 10, kind: 'chronicle', title: 'Morte de Aco Amargo', body: 'Aegor Rivers morre no exilio, sem nunca ter voltado a Westeros.', tags: ['death', 'blackfyre', 'canon'], personCanonId: 'aegor_rivers' },
+  { id: '243_marriages_for_peace', year: 243, turn: 10, kind: 'chronicle', title: 'Casamentos que compram paz', body: 'O rei tenta emendar com nupcias o que nao consegue impor por decreto.', tags: ['canon', 'politics', 'contexto'] },
+  { id: '248_peace_unlikely', year: 248, turn: 10, kind: 'chronicle', title: 'Paz sob o Improvavel', body: 'O reino prospera modestamente. As reformas avancam devagar.', tags: ['canon', 'contexto'] },
+  { id: '250_crown_vs_lords', year: 250, turn: 10, kind: 'chronicle', title: 'A Coroa e os grandes senhores', body: 'O atrito entre o trono e as grandes casas endurece.', tags: ['canon', 'court', 'contexto'] },
+  { id: '252_bloodraven_taken', year: 252, turn: 10, kind: 'chronicle', title: 'Bloodraven desaparece alem da Muralha', body: 'Em patrulha, Brynden Rivers some no bosque assombrado e nao retorna.', tags: ['death', 'north', 'canon'], personCanonId: 'brynden_rivers' },
+  { id: '254_dragon_dreams', year: 254, turn: 10, kind: 'chronicle', title: 'Sonhos de dragoes', body: 'Aegon V volta a sonhar com o retorno dos dragoes e consulta livros proibidos.', tags: ['canon', 'targaryen'], personCanonId: 'aegon_v' },
+  { id: '257_summerhall_prep', year: 257, turn: 10, kind: 'chronicle', title: 'Preparativos em Summerhall', body: 'A corte reune-se em Summerhall para o nascimento de um principe. Ha fogo demais nos planos do rei.', tags: ['canon', 'targaryen'] },
+
+  // ===================== Aerys II (262-283) =====================
+  { id: '263_realm_flourishes', year: 263, turn: 10, kind: 'chronicle', title: 'O reino floresce', body: 'Com Tywin Lannister como Mao, a Coroa prospera e a corte brilha.', tags: ['canon', 'court'], personCanonId: 'tywin' },
+  { id: '265_hand_and_king', year: 265, turn: 10, kind: 'chronicle', title: 'A Mao e o rei', body: 'Diz-se pelo reino que Aerys governa, mas quem manda e Tywin.', tags: ['canon', 'court'], personCanonId: 'tywin' },
+  { id: '268_king_suspicious', year: 268, turn: 10, kind: 'chronicle', title: 'O rei desconfia', body: 'Aerys II comeca a ver rivais onde ha servidores, e a Mao e o primeiro deles.', tags: ['canon', 'court'], personCanonId: 'aerys_ii' },
+  { id: '270_court_splits', year: 270, turn: 10, kind: 'chronicle', title: 'A corte se divide', body: 'Facoes formam-se entre os homens do rei e os homens da Mao.', tags: ['canon', 'court', 'contexto'] },
+  { id: '272_lannisport_tourney', year: 272, turn: 16, kind: 'chronicle', title: 'Torneio em Lannisporto', body: 'Rochedo Casterly recebe o reino em armas. A rivalidade entre rei e Mao fica visivel a todos.', tags: ['canon', 'tournament'] },
+  { id: '274_madness_grows', year: 274, turn: 10, kind: 'chronicle', title: 'A loucura cresce', body: 'O rei fala com o fogo e desconfia de todos. Nao ha ainda quem ouse dize-lo alto.', tags: ['canon', 'court'], personCanonId: 'aerys_ii' },
+  { id: '276_viserys_tourney', year: 276, turn: 16, kind: 'chronicle', title: 'Torneio pelo nascimento de Viserys', body: 'A Coroa celebra o nascimento de um principe com um grande torneio em Lannisporto.', tags: ['canon', 'tournament'] },
+  { id: '279_after_duskendale', year: 279, turn: 10, kind: 'chronicle', title: 'Depois de Duskendale', body: 'Libertado, Aerys recusa-se a deixar a Fortaleza Vermelha. Suas unhas e sua desconfianca crescem juntas.', tags: ['canon', 'court'], personCanonId: 'aerys_ii' },
+
+  // ===================== Robert I (283-298) =====================
+  { id: '286_joffrey_born', year: 286, turn: 10, kind: 'chronicle', title: 'Nasce o principe Joffrey', body: 'A rainha Cersei da a luz um menino de cachos dourados.', tags: ['canon', 'birth', 'contexto'] },
+  { id: '287_realm_settles', year: 287, turn: 10, kind: 'chronicle', title: 'O reino se acomoda', body: 'Velhos rebeldes e velhos leais sentam-se a mesma mesa. Nem todos esquecem.', tags: ['canon', 'court', 'contexto'] },
+  { id: '288_crown_debt', year: 288, turn: 10, kind: 'chronicle', title: 'A divida da Coroa', body: 'Robert gasta como quem nunca vera a conta. O Banco de Ferro anota tudo.', tags: ['canon', 'economia'] },
+  { id: '291_royal_children', year: 291, turn: 10, kind: 'chronicle', title: 'Filhos reais', body: 'A rainha da a luz mais dois filhos. Todos com os cachos dourados da mae.', tags: ['canon', 'contexto'] },
+  { id: '293_tourneys_and_debt', year: 293, turn: 10, kind: 'chronicle', title: 'Torneios e dividas', body: 'Cada torneio real custa mais do que a Coroa arrecada num ano.', tags: ['canon', 'economia', 'contexto'] },
+  { id: '294_hand_governs', year: 294, turn: 10, kind: 'chronicle', title: 'A Mao governa', body: 'Jon Arryn mantem o reino de pe enquanto o rei caca e bebe.', tags: ['canon', 'court'], personCanonId: 'jon_arryn' },
+  { id: '296_six_million', year: 296, turn: 10, kind: 'chronicle', title: 'Seis milhoes em divida', body: 'As contas da Coroa passam de qualquer numero que o Mestre da Moeda saiba justificar.', tags: ['canon', 'economia'] },
+
+  // --- anos de registro esparso: contexto de reino, por reinado ---
+  { id: '175_favourites', year: 175, turn: 10, kind: 'chronicle', title: 'Favoritos e cargos', body: 'Cargos da Coroa mudam de mao conforme os humores do rei. Nenhum conselheiro dura muito.', tags: ['canon', 'court', 'contexto'] },
+  { id: '177_bastards_at_court', year: 177, turn: 10, kind: 'chronicle', title: 'Bastardos na corte', body: 'Os filhos naturais do rei crescem entre os legitimos, e nao se comportam como inferiores.', tags: ['canon', 'court', 'contexto'] },
+  { id: '180_lords_absent', year: 180, turn: 10, kind: 'chronicle', title: 'Saloes vazios', body: 'Grandes senhores encontram desculpas para nao comparecer a corte.', tags: ['canon', 'court', 'contexto'] },
+  { id: '182_succession_whispers', year: 182, turn: 10, kind: 'chronicle', title: 'Sussurros de sucessao', body: 'Fala-se em voz baixa sobre quem herdara o Trono de Ferro, e com que direito.', tags: ['canon', 'throne', 'contexto'] },
+  { id: '186_dornish_marriages', year: 186, turn: 10, kind: 'chronicle', title: 'Negociacoes com Dorne', body: 'Emissarios vao e voltam de Lancassolar tratando de dote, leis e autonomia.', tags: ['canon', 'dorne', 'contexto'] },
+  { id: '189_old_grudges', year: 189, turn: 10, kind: 'chronicle', title: 'Rancores antigos', body: 'Casas que perderam com a paz dornesa lembram das perdas em cada banquete.', tags: ['canon', 'politics', 'contexto'] },
+  { id: '191_black_dragon_talk', year: 191, turn: 10, kind: 'chronicle', title: 'Fala-se do dragao negro', body: 'Cavaleiros descontentes brindam em silencio a um rei que nao foi coroado.', tags: ['canon', 'blackfyre', 'contexto'] },
+  { id: '193_loyalty_tested', year: 193, turn: 10, kind: 'chronicle', title: 'Lealdades medidas', body: 'A Coroa convoca juramentos renovados. Alguns senhores demoram a responder.', tags: ['canon', 'politics', 'contexto'] },
+  { id: '198_counting_the_dead', year: 198, turn: 10, kind: 'chronicle', title: 'Contando os mortos', body: 'As casas fluviais e do Dominio ainda contam os que nao voltaram do Campo de Erva Vermelha.', tags: ['canon', 'contexto'] },
+  { id: '200_exile_court', year: 200, turn: 10, kind: 'chronicle', title: 'A corte no exilio', body: 'Em Tyrosh, os herdeiros de Daemon mantem uma corte de pretendentes.', tags: ['canon', 'blackfyre', 'contexto'] },
+  { id: '201_roads_and_tolls', year: 201, turn: 10, kind: 'chronicle', title: 'Estradas e portagens', body: 'A Coroa investe em estradas; os senhores discutem quem cobra pedagio.', tags: ['canon', 'economia', 'contexto'] },
+  { id: '203_good_harvests', year: 203, turn: 10, kind: 'chronicle', title: 'Colheitas fartas', body: 'Anos bons enchem celeiros e esvaziam ressentimentos. Por ora.', tags: ['canon', 'economia', 'contexto'] },
+  { id: '204_maesters_and_law', year: 204, turn: 10, kind: 'chronicle', title: 'Maesters e leis', body: 'A Cidadela colabora com a Coroa na codificacao de leis do reino.', tags: ['canon', 'court', 'contexto'] },
+  { id: '206_watch_dwindles', year: 206, turn: 10, kind: 'chronicle', title: 'A Patrulha mingua', body: 'Cada vez menos homens tomam o negro. A Muralha guarda-se com sombras.', tags: ['canon', 'north', 'contexto'] },
+  { id: '207_quiet_borders', year: 207, turn: 10, kind: 'chronicle', title: 'Fronteiras quietas', body: 'Nem Dorne nem o Norte dao trabalho. O reino desacostuma-se da guerra.', tags: ['canon', 'contexto'] },
+  { id: '214_drought_deepens', year: 214, turn: 10, kind: 'chronicle', title: 'A seca aperta', body: 'Poços secam nas Terras Fluviais e nas Terras da Coroa. O preco do pao dobra.', tags: ['canon', 'economia', 'contexto'] },
+  { id: '216_bandits_on_roads', year: 216, turn: 10, kind: 'chronicle', title: 'Bandidos nas estradas', body: 'A fome multiplica os fora da lei. Senhores locais organizam patrulhas.', tags: ['canon', 'contexto'] },
+  { id: '218_pretenders_gather', year: 218, turn: 10, kind: 'chronicle', title: 'Pretendentes se juntam', body: 'Do outro lado do Mar Estreito, o exilio prepara mais uma tentativa.', tags: ['canon', 'blackfyre', 'contexto'] },
+  { id: '223_king_in_armour', year: 223, turn: 10, kind: 'chronicle', title: 'O rei em armas', body: 'Maekar prefere a sela ao trono, e resolve disputas pessoalmente.', tags: ['canon', 'court', 'contexto'] },
+  { id: '225_north_reports', year: 225, turn: 10, kind: 'chronicle', title: 'Relatos do Norte', body: 'Corvos de alem da Muralha trazem noticias de povos livres em movimento.', tags: ['canon', 'north', 'contexto'] },
+  { id: '227_after_redbeard', year: 227, turn: 10, kind: 'chronicle', title: 'Depois de Barba-Vermelha', body: 'O Norte reconstroi o que a invasao destruiu e reforca as guarnicoes.', tags: ['canon', 'north', 'contexto'] },
+  { id: '229_marcher_lords', year: 229, turn: 10, kind: 'chronicle', title: 'Senhores das Marcas', body: 'As Marcas Dornesas vivem em alerta permanente, com ou sem paz assinada.', tags: ['canon', 'dorne', 'contexto'] },
+  { id: '231_succession_unclear', year: 231, turn: 10, kind: 'chronicle', title: 'Sucessao pouco clara', body: 'Nenhum dos filhos de Maekar reune apoio suficiente. O reino observa.', tags: ['canon', 'throne', 'contexto'] },
+  { id: '238_reform_resistance', year: 238, turn: 10, kind: 'chronicle', title: 'A lei que nao chega', body: 'Decretos reais em favor do povo miudo param nas portas dos castelos.', tags: ['canon', 'court', 'contexto'] },
+  { id: '242_crown_and_faith', year: 242, turn: 10, kind: 'chronicle', title: 'A Coroa e a Fe', body: 'O rei busca na Fe o apoio que os grandes senhores lhe negam.', tags: ['canon', 'religion', 'contexto'] },
+  { id: '244_aerys_born', year: 244, turn: 10, kind: 'chronicle', title: 'Nasce o principe Aerys', body: 'Nasce Aerys, filho de Jaehaerys e Shaera. A corte celebra sem saber o que celebra.', tags: ['canon', 'birth', 'targaryen'], personCanonId: 'aerys_ii' },
+  { id: '247_stormlands_ties', year: 247, turn: 10, kind: 'chronicle', title: 'Lacos com a Tempestade', body: 'O casamento de Rhaelle amarra a Coroa a Ponta Tempestade por sangue.', tags: ['canon', 'politics', 'contexto'] },
+  { id: '249_lords_defiant', year: 249, turn: 10, kind: 'chronicle', title: 'Senhores desafiadores', body: 'Casas do Dominio e do Oeste recusam-se abertamente a aplicar as leis do rei.', tags: ['canon', 'court', 'contexto'] },
+  { id: '253_prophecy_talk', year: 253, turn: 10, kind: 'chronicle', title: 'Fala-se de profecia', body: 'Na corte, murmura-se sobre sonhos, cometas e o preco de acordar dragoes.', tags: ['canon', 'targaryen', 'contexto'] },
+  { id: '255_eggs_gathered', year: 255, turn: 10, kind: 'chronicle', title: 'Ovos reunidos', body: 'O rei manda reunir ovos de dragao antigos e chama sabios de longe.', tags: ['canon', 'targaryen', 'contexto'] },
+  { id: '256_summerhall_summons', year: 256, turn: 10, kind: 'chronicle', title: 'Convocacao para Summerhall', body: 'A corte e chamada a Summerhall. Poucos entendem para que.', tags: ['canon', 'targaryen', 'contexto'] },
+  { id: '258_aerys_rhaella_wed', year: 258, turn: 10, kind: 'chronicle', title: 'Casamento de Aerys e Rhaella', body: 'Por ordem do rei, Aerys despoza a irma Rhaella. O registro diverge quanto ao ano exato.', tags: ['canon', 'marriage', 'targaryen'] },
+  { id: '264_hand_reforms', year: 264, turn: 10, kind: 'chronicle', title: 'As reformas da Mao', body: 'Tywin Lannister endireita as contas da Coroa e a disciplina da corte.', tags: ['canon', 'economia', 'contexto'], personCanonId: 'tywin' },
+  { id: '266_lannister_twins', year: 266, turn: 10, kind: 'chronicle', title: 'Gemeos em Rochedo Casterly', body: 'Nascem os gemeos de Tywin e Joanna. O Oeste celebra por dias.', tags: ['canon', 'lannister', 'contexto'] },
+  { id: '267_tywin_lord', year: 267, turn: 10, kind: 'chronicle', title: 'Tywin torna-se Senhor do Oeste', body: 'Com a morte de Tytos, Tywin assume Rochedo Casterly sem largar o cargo de Mao.', tags: ['canon', 'lannister'], personCanonId: 'tywin' },
+  { id: '269_king_and_hand', year: 269, turn: 10, kind: 'chronicle', title: 'O rei e a sua sombra', body: 'Aerys comeca a contradizer publicamente as decisoes da propria Mao.', tags: ['canon', 'court', 'contexto'] },
+  { id: '271_court_factions', year: 271, turn: 10, kind: 'chronicle', title: 'Facoes na Fortaleza Vermelha', body: 'A corte divide-se entre os que temem o rei e os que temem a Mao.', tags: ['canon', 'court', 'contexto'] },
+  { id: '273_joanna_dies', year: 273, turn: 10, kind: 'chronicle', title: 'Luto em Rochedo Casterly', body: 'Joanna Lannister morre no parto do terceiro filho. Tywin nunca mais e o mesmo.', tags: ['canon', 'lannister'] },
+  { id: '275_king_hoards_fire', year: 275, turn: 10, kind: 'chronicle', title: 'O rei e o fogo', body: 'Piromantes ganham espaco na corte. O rei ouve-os mais do que aos conselheiros.', tags: ['canon', 'court', 'contexto'] },
+  { id: '292_debts_mount', year: 292, turn: 10, kind: 'chronicle', title: 'As contas se acumulam', body: 'A Coroa pede mais ao Banco de Ferro e a Rochedo Casterly. Ninguem diz nao ao rei.', tags: ['canon', 'economia', 'contexto'] },
+
+  // ===== Histórias de casas menores =====
+  // Arcos que atravessam gerações e só chegam a quem está por perto.
+
+  // --- Bracken x Blackwood: a rixa mais antiga das Terras Fluviais ---
+  { id: '154_bracken_blackwood_mill', year: 154, turn: 8, kind: 'chronicle', title: 'Sangue por um moinho', body: 'Bracken e Blackwood voltam a disputar um moinho no Rio Vermelho. Ninguem lembra qual das duas casas o construiu.', tags: ['feud', 'riverlands', 'local'], houseId: 'bracken', regionId: 'riverlands' },
+  { id: '181_bracken_blackwood_ford', year: 181, turn: 12, kind: 'chronicle', title: 'Disputa pelo vau', body: 'Uma ponte destruida reacende a querela entre Bracken e Blackwood. O suserano manda calar os dois e nao e obedecido.', tags: ['feud', 'riverlands', 'local'], houseId: 'blackwood', regionId: 'riverlands' },
+  { id: '195_bracken_black_dragon', year: 195, turn: 10, kind: 'chronicle', title: 'Cores opostas', body: 'Os Bracken erguem o dragao negro; os Blackwood, o vermelho. A rixa antiga encontra uma guerra grande onde caber.', tags: ['feud', 'blackfyre', 'riverlands', 'local'], houseId: 'bracken', regionId: 'riverlands' },
+  { id: '198_bracken_pays', year: 198, turn: 10, kind: 'chronicle', title: 'O preco da escolha errada', body: 'Terminada a rebeliao, os Bracken pagam em terras o que apostaram no dragao negro. Os Blackwood assistem.', tags: ['feud', 'riverlands', 'local'], houseId: 'bracken', regionId: 'riverlands' },
+  { id: '241_bracken_blackwood_marriage', year: 241, turn: 10, kind: 'chronicle', title: 'Um casamento que nao pacifica', body: 'Tenta-se casar um Bracken com uma Blackwood. O banquete termina em armas sacadas.', tags: ['feud', 'riverlands', 'local'], houseId: 'blackwood', regionId: 'riverlands' },
+  { id: '299_bracken_blackwood_again', year: 299, turn: 6, kind: 'chronicle', title: 'A rixa aproveita a guerra', body: 'Com o Tridente em chamas, Bracken e Blackwood aproveitam para acertar contas de seculos.', tags: ['feud', 'riverlands', 'war', 'local'], houseId: 'bracken', regionId: 'riverlands' },
+
+  // --- Bolton: os que foram Reis do Norte ---
+  { id: '166_bolton_old_kings', year: 166, turn: 10, kind: 'chronicle', title: 'O Forte do Pavor lembra', body: 'Nos saloes dos Bolton ainda se fala nos Reis Vermelhos que disputaram o Norte com os Stark.', tags: ['north', 'local'], houseId: 'bolton', regionId: 'north' },
+  { id: '214_bolton_flaying', year: 214, turn: 14, kind: 'chronicle', title: 'A pratica proibida', body: 'Um Bolton e advertido por esfolar um cacador furtivo. A pratica e proibida ha seculos, e sobrevive assim mesmo.', tags: ['north', 'local'], houseId: 'bolton', regionId: 'north' },
+  { id: '268_bolton_quiet', year: 268, turn: 10, kind: 'chronicle', title: 'Silencio no Forte do Pavor', body: 'Os Bolton pagam seus tributos em dia e nao comparecem a corte. Winterfell prefere assim.', tags: ['north', 'local'], houseId: 'bolton', regionId: 'north' },
+
+  // --- Frey: a portagem das Gemeas ---
+  { id: '174_frey_toll', year: 174, turn: 10, kind: 'chronicle', title: 'A portagem das Gemeas', body: 'Os Frey cobram por cada carroca que cruza o Forcaverde. Os senhores mais antigos chamam-nos de novos-ricos.', tags: ['riverlands', 'local'], houseId: 'frey', regionId: 'riverlands' },
+  { id: '233_frey_walder', year: 233, turn: 10, kind: 'chronicle', title: 'Walder Frey assume as Gemeas', body: 'Um novo Lorde Frey toma as Gemeas e comeca a colecionar esposas e filhos com a mesma diligencia.', tags: ['riverlands', 'local'], houseId: 'frey', regionId: 'riverlands' },
+  { id: '272_frey_brood', year: 272, turn: 10, kind: 'chronicle', title: 'A ninhada das Gemeas', body: 'Contam-se dezenas de Frey entre filhos, netos e bastardos. Nenhuma outra casa cresce tao depressa.', tags: ['riverlands', 'local'], houseId: 'frey', regionId: 'riverlands' },
+
+  // --- Reyne e Tarbeck: os que desafiaram Rochedo Casterly ---
+  { id: '252_reyne_rich', year: 252, turn: 10, kind: 'chronicle', title: 'Ouro em Castamere', body: 'As minas dos Reyne rendem tanto que a casa passa a viver como se fosse a primeira do Oeste.', tags: ['westerlands', 'local'], houseId: 'house_westerlands_reyne', regionId: 'westerlands' },
+  { id: '257_tarbeck_defiance', year: 257, turn: 10, kind: 'chronicle', title: 'Os Tarbeck desafiam', body: 'Casados com os Reyne, os Tarbeck deixam de responder aos chamados de Rochedo Casterly.', tags: ['westerlands', 'local'], houseId: 'house_westerlands_tarbeck', regionId: 'westerlands' },
+  { id: '262_castamere_silence', year: 262, turn: 4, kind: 'chronicle', title: 'O silencio de Castamere', body: 'Depois das chuvas, ninguem mais mora em Castamere. A cancao viaja mais longe que a noticia.', tags: ['westerlands', 'local'], houseId: 'house_westerlands_reyne', regionId: 'westerlands' },
+
+  // --- Clegane: de cao de caca a terror ---
+  { id: '243_clegane_dogs', year: 243, turn: 10, kind: 'chronicle', title: 'Tres caes e um leao', body: 'Um canil salva a vida de um Lorde Lannister de uma leoa. O mestre dos caes ganha terras, e tres caes num escudo.', tags: ['westerlands', 'local'], houseId: 'clegane', regionId: 'westerlands' },
+  { id: '276_clegane_fire', year: 276, turn: 16, kind: 'chronicle', title: 'O fogo entre irmaos', body: 'Nas terras dos Clegane, um menino e queimado pelo proprio irmao mais velho. A casa chama aquilo de acidente.', tags: ['westerlands', 'local'], houseId: 'clegane', regionId: 'westerlands' },
+  { id: '296_clegane_tourneys', year: 296, turn: 10, kind: 'chronicle', title: 'O Monte nos torneios', body: 'O maior dos Clegane entra nas listas. Cavaleiros preferem pagar a multa a enfrenta-lo.', tags: ['westerlands', 'tournament', 'local'], houseId: 'clegane', regionId: 'westerlands' },
+
+  // --- Dayne: a Espada da Manha ---
+  { id: '159_dayne_dawn', year: 159, turn: 14, kind: 'chronicle', title: 'Alvorada em campo', body: 'Um Dayne empunha Alvorada contra as hostes da Coroa em Dorne. Poucos que o enfrentam voltam para contar.', tags: ['dorne', 'local'], houseId: 'dayne', regionId: 'dorne' },
+  { id: '217_dayne_starfall', year: 217, turn: 10, kind: 'chronicle', title: 'Marca-Estrela', body: 'A espada palida so passa a quem prova ser digno. Passam-se geracoes sem uma Espada da Manha.', tags: ['dorne', 'local'], houseId: 'dayne', regionId: 'dorne' },
+  { id: '279_dayne_arthur', year: 279, turn: 10, kind: 'chronicle', title: 'Uma nova Espada da Manha', body: 'Um jovem Dayne recebe Alvorada e o titulo que vem com ela. Falam dele antes mesmo de o verem lutar.', tags: ['dorne', 'local'], houseId: 'dayne', regionId: 'dorne' },
+
+  // --- Mormont: a Ilha do Urso ---
+  { id: '206_mormont_bears', year: 206, turn: 10, kind: 'chronicle', title: 'Mulheres de machado', body: 'Na Ilha do Urso, as mulheres aprendem a lutar cedo. Os homens vao ao mar e nem sempre voltam.', tags: ['north', 'local'], houseId: 'mormont', regionId: 'north' },
+  { id: '289_mormont_knighted', year: 289, turn: 14, kind: 'chronicle', title: 'Um Mormont armado cavaleiro', body: 'Nas Ilhas de Ferro, um Mormont e o primeiro a subir a muralha e recebe a espada no ombro pelo proprio rei.', tags: ['north', 'war', 'local'], houseId: 'mormont', regionId: 'north' },
+  { id: '296_mormont_disgrace', year: 296, turn: 12, kind: 'chronicle', title: 'A desgraca do Urso', body: 'Um Mormont vende homens a escravidao para sustentar uma esposa cara, e foge antes que o gelo o alcance.', tags: ['north', 'local'], houseId: 'mormont', regionId: 'north' },
+
+  // --- Osgrey e Webber: a agua enxadrezada (Dunk & Egg) ---
+  { id: '211_osgrey_dam', year: 211, turn: 12, kind: 'chronicle', title: 'A represa da Dama Vermelha', body: 'Uma represa seca o riacho enxadrezado. Osgrey e Webber vao as armas por um fio de agua.', tags: ['reach', 'local'], houseId: 'house_reach_osgrey', regionId: 'reach' },
+  { id: '211_osgrey_settled', year: 211, turn: 16, kind: 'chronicle', title: 'Julgamento por combate', body: 'A disputa do riacho termina em combate singular e casamento. A agua volta a correr para os dois lados.', tags: ['reach', 'local'], houseId: 'house_reach_webber', regionId: 'reach' },
+
+  // --- Peake e Lothston: Harrenhal muda de dono ---
+  { id: '212_whitewalls_after', year: 212, turn: 14, kind: 'chronicle', title: 'Depois de Whitewalls', body: 'Casas que brindaram ao dragao negro em Whitewalls perdem cargos e filhos como refens.', tags: ['blackfyre', 'reach', 'local'], houseId: 'house_reach_peake', regionId: 'reach' },
+  { id: '236_harrenhal_curse', year: 236, turn: 10, kind: 'chronicle', title: 'A maldicao de Harrenhal', body: 'Mais uma casa se extingue em Harrenhal. Os maesters chamam de coincidencia; o povo, de maldicao.', tags: ['riverlands', 'local'], houseId: 'whent', regionId: 'riverlands' },
+  { id: '281_whent_tourney_cost', year: 281, turn: 8, kind: 'chronicle', title: 'O custo do grande torneio', body: 'Os Whent gastam em um torneio mais do que Harrenhal rende em anos. Perguntam-se de onde veio o ouro.', tags: ['riverlands', 'tournament', 'local'], houseId: 'whent', regionId: 'riverlands' },
+
+  // --- Baelish: de nada a algo ---
+  { id: '282_baelish_duel', year: 282, turn: 10, kind: 'chronicle', title: 'Um duelo desigual', body: 'Um menino de nome pequeno desafia um herdeiro do Norte por uma Tully, e quase morre por isso.', tags: ['vale', 'local'], houseId: 'baelish', regionId: 'vale' },
+  { id: '289_baelish_gulltown', year: 289, turn: 10, kind: 'chronicle', title: 'Contas em Vila Gaivota', body: 'O mesmo menino recebe um cargo modesto de alfandega e triplica a arrecadacao no primeiro ano.', tags: ['vale', 'economia', 'local'], houseId: 'baelish', regionId: 'vale' },
+  { id: '293_baelish_coin', year: 293, turn: 10, kind: 'chronicle', title: 'O homem que faz ouro', body: 'A Coroa descobre que ha alguem em Vila Gaivota bom demais com numeros, e o chama para Porto Real.', tags: ['vale', 'economia', 'local'], houseId: 'baelish', regionId: 'vale' },
+
+  // --- Marcas Dornesas: Swann, Dondarrion, Caron, Selmy ---
+  { id: '163_marches_raids', year: 163, turn: 10, kind: 'chronicle', title: 'Ataques nas Marcas', body: 'Mesmo em paz, Marcas Dornesas e Dorne trocam incursoes. Os senhores da fronteira dormem armados.', tags: ['stormlands', 'dorne', 'local'], houseId: 'swann', regionId: 'stormlands' },
+  { id: '228_dondarrion_watch', year: 228, turn: 10, kind: 'chronicle', title: 'A vigilia de Refugio Negro', body: 'Os Dondarrion mantem fogueiras acesas nas passagens. E o que separa a Campina de uma noite ruim.', tags: ['stormlands', 'local'], houseId: 'dondarrion', regionId: 'stormlands' },
+  { id: '266_selmy_young', year: 266, turn: 10, kind: 'chronicle', title: 'O jovem Selmy', body: 'Um Selmy entra num torneio disfarcado de cavaleiro misterioso e derruba homens duas vezes maiores.', tags: ['stormlands', 'tournament', 'local'], houseId: 'selmy', regionId: 'stormlands' },
+
+  // --- Ilhas de Ferro: a Velha Rota ---
+  { id: '186_ironborn_old_way', year: 186, turn: 10, kind: 'chronicle', title: 'A Velha Rota', body: 'Nas Ilhas, capitaes ainda medem valor pelo que tomam e nao pelo que compram.', tags: ['iron_islands', 'local'], houseId: 'harlaw', regionId: 'iron_islands' },
+  { id: '244_drumm_redrain', year: 244, turn: 10, kind: 'chronicle', title: 'Chuva Vermelha', body: 'Os Drumm exibem uma espada valiriana tomada ha seculos e recusam-se a dizer de quem.', tags: ['iron_islands', 'local'], houseId: 'drumm', regionId: 'iron_islands' },
+  { id: '291_ironborn_after', year: 291, turn: 10, kind: 'chronicle', title: 'Depois da rebeliao', body: 'Sem saques, as Ilhas empobrecem. Capitaes jovens falam da Velha Rota como quem fala de comida.', tags: ['iron_islands', 'local'], houseId: 'goodbrother', regionId: 'iron_islands' },
+
+  // --- Vale: Royce e Corbray ---
+  { id: '201_royce_runes', year: 201, turn: 10, kind: 'chronicle', title: 'As runas de bronze', body: 'Os Royce guardam uma armadura coberta de runas que, dizem, protege quem a veste. Ninguem testou de propósito.', tags: ['vale', 'local'], houseId: 'royce', regionId: 'vale' },
+  { id: '258_corbray_lady', year: 258, turn: 10, kind: 'chronicle', title: 'Dama Desolada', body: 'A espada dos Corbray passa de pai para filho, e sempre ha um irmao mais novo que a queria.', tags: ['vale', 'local'], houseId: 'corbray', regionId: 'vale' },
+
+  // --- Norte: Manderly, Karstark, Umber, Hornwood ---
+  { id: '151_manderly_exile', year: 151, turn: 10, kind: 'chronicle', title: 'Memoria de exilio', body: 'Os Manderly ainda contam como foram expulsos do Dominio e acolhidos pelos Stark. Nao esqueceram nenhum dos dois lados.', tags: ['north', 'local'], houseId: 'manderly', regionId: 'north' },
+  { id: '178_karstark_kin', year: 178, turn: 10, kind: 'chronicle', title: 'Sangue de Stark', body: 'Os Karstark lembram a quem quiser ouvir que descendem dos Stark, e por isso se acham mal servidos.', tags: ['north', 'local'], houseId: 'karstark', regionId: 'north' },
+  { id: '227_umber_giants', year: 227, turn: 10, kind: 'chronicle', title: 'Os Umber e o gigante', body: 'Depois de Barba-Vermelha, os Umber juram guardar sozinhos o trecho mais frio da estrada.', tags: ['north', 'local'], houseId: 'umber', regionId: 'north' },
+  { id: '287_hornwood_heir', year: 287, turn: 10, kind: 'chronicle', title: 'Um herdeiro so', body: 'Os Hornwood tem um unico filho vivo. Meio Norte ja calcula o que acontece se ele cair de um cavalo.', tags: ['north', 'local'], houseId: 'hornwood', regionId: 'north' },
+
+  // --- Dominio: Hightower, Redwyne, Tarly, Florent ---
+  { id: '204_hightower_citadel', year: 204, turn: 10, kind: 'chronicle', title: 'A Torre e a Cidadela', body: 'Vila Velha vive de dois poderes: a Torre Alta e os maesters. Nem sempre concordam.', tags: ['reach', 'local'], houseId: 'hightower', regionId: 'reach' },
+  { id: '238_redwyne_fleet', year: 238, turn: 10, kind: 'chronicle', title: 'A frota do Arbor', body: 'A frota Redwyne cresce mais que a da Coroa. Ninguem em Porto Real comenta isso em voz alta.', tags: ['reach', 'local'], houseId: 'redwyne', regionId: 'reach' },
+  { id: '263_tarly_heartsbane', year: 263, turn: 10, kind: 'chronicle', title: 'Fome-de-Coracao', body: 'A espada valiriana dos Tarly so e erguida por quem lidera a casa em campo. Nao ha excecoes.', tags: ['reach', 'local'], houseId: 'tarly', regionId: 'reach' },
+  { id: '284_florent_claim', year: 284, turn: 10, kind: 'chronicle', title: 'A queixa dos Florent', body: 'Os Florent lembram que tinham direito melhor a Jardim de Cima do que quem se sentou nele.', tags: ['reach', 'claim', 'local'], houseId: 'florent', regionId: 'reach' },
+
+  // --- Dorne: Yronwood e Jordayne ---
+  { id: '170_yronwood_bloodroyal', year: 170, turn: 10, kind: 'chronicle', title: 'O Sangue Real', body: 'Os Yronwood lembram que foram reis quando os Martell ainda eram principes de areia.', tags: ['dorne', 'local'], houseId: 'yronwood', regionId: 'dorne' },
+  { id: '292_yronwood_duel', year: 292, turn: 10, kind: 'chronicle', title: 'Um duelo que nao devia ter sido', body: 'Um principe de Lancassolar e um Yronwood duelam por honra. A ferida infecciona e a paz entre as casas junto.', tags: ['dorne', 'local'], houseId: 'yronwood', regionId: 'dorne' },
 ];
 
 // -----------------------------

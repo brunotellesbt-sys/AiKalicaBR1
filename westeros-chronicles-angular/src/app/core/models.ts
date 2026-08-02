@@ -112,6 +112,20 @@ export interface Character {
   knownToPlayer: boolean;
   relationshipToPlayer: number; // 0..100
 
+  /**
+   * Pupilo à força: criado na corte de outra Casa como garantia de paz.
+   *
+   * Não é prisão — o refém vive como parte da casa que o guarda. Enquanto
+   * durar, a Casa de origem não ataca o guardião; se atacar mesmo assim, o
+   * refém paga. E quem devolve o refém inteiro no fim ganha um amigo.
+   */
+  hostage?: {
+    holderHouseId: string;
+    homeHouseId: string;
+    sinceAbsTurn: number;
+    untilAbsTurn: number;
+  };
+
   personalGold?: number; // ouro pessoal (separado do ouro da Casa)
   kissedIds?: string[]; // ids de pessoas que já foram beijadas
 
@@ -264,6 +278,18 @@ export interface GameState {
 
   missions?: Mission[];
 
+  /** Reivindicações formais sobre assentos (casamento, sangue, conquista). */
+  claims?: SeatClaim[];
+
+  /** Assentos ocupados militarmente, por id de local. */
+  occupations?: Record<string, Occupation>;
+
+  /** Guerras declaradas em jogo (o jogador ou a IA). */
+  wars?: War[];
+
+  /** Rixas ativas entre Casas. */
+  rivalries?: Rivalry[];
+
   // Sistema de empréstimo com o Banco de Ferro
   ironBankDebt: {
     principal: number;
@@ -360,15 +386,106 @@ warStates?: Record<
   };
 }
 
+/**
+ * De onde vem o direito de um pretendente ao assento.
+ * - incumbent: já está sentado nele
+ * - canon_heir: era quem o registro histórico coroaria
+ * - claim: reivindicação formal (casamento ou sangue) registrada em `claims`
+ * - blood: parente vivo da Casa, sem reivindicação formal
+ */
+export type PretenderBasis = 'incumbent' | 'canon_heir' | 'claim' | 'blood';
+
+export interface CrisisPretender {
+  characterId: string;
+  houseId: string;
+  basis: PretenderBasis;
+  support: number; // 0..100
+}
+
 export interface SuccessionCrisis {
   id: string;
   houseId: string;
-  incumbentId: string;   // quem está no poder (sobreviveu por divergência)
-  claimantId: string;    // quem deveria ter assumido pelo cânone
   startedAbsTurn: number;
-  supportIncumbent: number; // 0..100 (apoio político acumulado)
-  supportClaimant: number;  // 0..100
-  playerSide?: 'incumbent' | 'claimant';
+  pretenders: CrisisPretender[];
+  playerBackedId?: string;
   resolvedAbsTurn?: number;
-  outcome?: 'incumbent' | 'claimant';
+  winnerId?: string;
+}
+
+/**
+ * Reivindicação formal sobre um assento.
+ *
+ * Casar entre Casas cria direito; filhos desse casamento herdam esse direito
+ * pelo sangue. Quando uma linha se extingue ou é contestada, são estes os
+ * nomes que aparecem para disputar.
+ */
+export interface SeatClaim {
+  id: string;
+  seatHouseId: string;    // a Casa/assento reivindicado
+  claimantId: string;     // a pessoa que reivindica
+  claimantHouseId: string;// a Casa dela no momento do registro
+  origin: 'marriage' | 'blood' | 'conquest';
+  strength: number;       // 0..100
+  createdAbsTurn: number;
+}
+
+/**
+ * Justificativa para declarar guerra.
+ * - claim: sua Casa tem reivindicação sobre o assento do alvo
+ * - feud: relação no chão (rixa de fronteira)
+ * - tribute: um vassalo seu deixou de pagar
+ * - conquest: nenhuma — guerra de pura ambição, e o reino julga por isso
+ */
+export type CasusBelli = 'claim' | 'feud' | 'tribute' | 'conquest';
+
+/**
+ * O que o vencedor exige na mesa de paz. Cada termo tem um preço em pontuação
+ * de guerra — pedir mais do que se conquistou faz o outro lado recusar.
+ */
+export type PeaceTerms = 'white' | 'tribute' | 'seat' | 'vassalage' | 'hostage' | 'marriage';
+
+/** Guerra entre Casas, declarada em jogo (distinta das guerras canônicas). */
+export interface War {
+  id: string;
+  attackerHouseId: string;
+  defenderHouseId: string;
+  attackerAllies: string[];
+  defenderAllies: string[];
+  casusBelli: CasusBelli;
+  startedAbsTurn: number;
+  /** Pontuação de guerra 0..100 de cada lado. */
+  scoreAttacker: number;
+  scoreDefender: number;
+  lastBattleAbsTurn: number;
+  recentBattles: Array<{ absTurn: number; summary: string }>;
+  endedAbsTurn?: number;
+  outcome?: 'attacker' | 'defender' | 'white';
+}
+
+/**
+ * Rixa ativa entre duas Casas.
+ *
+ * Atrito difuso sobre todos os pares não funciona — são dezenas de milhares de
+ * pares e cada um seria tocado meia vez por campanha. Westeros tem feudos com
+ * nome, não antipatia uniforme: um punhado de rixas ativas que aprofundam com
+ * o tempo e podem explodir em guerra.
+ */
+export interface Rivalry {
+  id: string;
+  aHouseId: string;
+  bHouseId: string;
+  startedAbsTurn: number;
+  /** Motivo declarado (fronteira, primazia, sangue, insulto). */
+  cause: string;
+  /** O jogador tomou partido? */
+  playerFavors?: string;
+}
+
+/** Assento tomado por outra Casa durante uma guerra. */
+export interface Occupation {
+  locationId: string;
+  seatHouseId: string;   // de quem é o assento
+  occupierHouseId: string;
+  sinceAbsTurn: number;
+  warId?: string;
 }

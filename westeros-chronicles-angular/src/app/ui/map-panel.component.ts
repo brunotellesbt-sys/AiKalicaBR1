@@ -27,6 +27,7 @@ type MapMarker = {
   isPlayer: boolean;
   isSeat: boolean;
   isMajor: boolean;
+  occupiedBy: string | null;
   distance: number | null;
 };
 
@@ -127,6 +128,7 @@ export class MapPanelComponent {
       this.showAllLocations,
       this.state.date.absoluteTurn,
       Object.keys(this.state.houses).length,
+      Object.keys(this.state.occupations ?? {}).join(','),
     ].join('|');
 
     if (this.markerCache?.key === key) return this.markerCache.value;
@@ -147,6 +149,7 @@ export class MapPanelComponent {
     );
     // Capitais regionais também são referências de leitura do mapa.
     const capitals = new Set(Object.values(this.state.regions).map(r => r.capitalLocationId));
+    const occupied = this.state.occupations ?? {};
 
     const out: MapMarker[] = [];
     for (const loc of Object.values(this.state.locations)) {
@@ -173,6 +176,9 @@ export class MapPanelComponent {
         isPlayer,
         isSeat: seats.has(loc.id),
         isMajor: capitals.has(loc.id) || bigSeats.has(loc.id),
+        occupiedBy: occupied[loc.id]
+          ? (this.state.houses[occupied[loc.id].occupierHouseId]?.name ?? null)
+          : null,
         distance: edges.get(loc.id) ?? null,
       });
     }

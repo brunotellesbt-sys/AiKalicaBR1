@@ -1,11 +1,11 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { GameState, SuccessionCrisis } from '../core/models';
+import { GameState, SuccessionCrisis, CrisisPretender } from '../core/models';
 import { CANON_PEOPLE, CANON_EVENT_ONLY_PEOPLE, CANON_WARS, absTurn, CanonEventDef, CanonWarDef } from '../core/data/canon';
 // O painel usa exatamente as mesmas regras do motor — antes havia uma cópia
 // aqui que já tinha divergido da implementação real.
-import { CANON_DIVERGENCE_THRESHOLD, CANON_EVENTS_ALL, isAnchorCanonEvent } from '../core/engine/sim';
+import { CANON_DIVERGENCE_THRESHOLD, CANON_EVENTS_ALL, isAnchorCanonEvent, pretenderLabel } from '../core/engine/sim';
 
 const DIVERGENCE_THRESHOLD = CANON_DIVERGENCE_THRESHOLD;
 
@@ -104,17 +104,57 @@ export class CanonPanelComponent {
     return this.state.houses[id]?.name ?? id;
   }
 
-  crisisSupport(c: SuccessionCrisis, side: 'incumbent' | 'claimant'): number {
-    const raw = side === 'incumbent' ? c.supportIncumbent : c.supportClaimant;
-    return Math.round(raw);
+  /** Pretendentes ordenados do mais apoiado para o menos. */
+  pretenders(c: SuccessionCrisis): CrisisPretender[] {
+    return [...c.pretenders].sort((a, b) => b.support - a.support);
+  }
+
+  supportOf(p: CrisisPretender): number {
+    return Math.round(p.support);
+  }
+
+  basisLabel(p: CrisisPretender): string {
+    return pretenderLabel(p.basis);
+  }
+
+  isBacked(c: SuccessionCrisis, p: CrisisPretender): boolean {
+    return c.playerBackedId === p.characterId;
   }
 
   canBackSide(c: SuccessionCrisis): boolean {
-    return !c.playerSide;
+    return !c.playerBackedId;
   }
 
-  backSide(c: SuccessionCrisis, side: 'incumbent' | 'claimant'): void {
-    this.choose.emit(`crisis:${c.houseId}:${side}`);
+  backedName(c: SuccessionCrisis): string {
+    return c.playerBackedId ? this.charName(c.playerBackedId) : '';
+  }
+
+  backSide(c: SuccessionCrisis, p: CrisisPretender): void {
+    this.choose.emit(`crisis:${c.houseId}:${p.characterId}`);
+  }
+
+  /** Reivindicações formais vivas, para leitura do jogador. */
+  claims(): Array<{ seat: string; who: string; origin: string; strength: number }> {
+    return (this.state.claims ?? [])
+      .map(c => ({
+        seat: this.houseName(c.seatHouseId),
+        who: this.charName(c.claimantId),
+        origin: c.origin === 'marriage' ? 'casamento' : c.origin === 'blood' ? 'sangue' : 'conquista',
+        strength: c.strength,
+        alive: !!this.state.characters[c.claimantId]?.alive,
+      }))
+      .filter(c => c.alive)
+      .sort((a, b) => b.strength - a.strength)
+      .slice(0, 25);
+  }
+
+  occupations(): Array<{ where: string; seat: string; by: string; since: number }> {
+    return Object.values(this.state.occupations ?? {}).map(o => ({
+      where: this.state.locations[o.locationId]?.name ?? o.locationId,
+      seat: this.houseName(o.seatHouseId),
+      by: this.houseName(o.occupierHouseId),
+      since: o.sinceAbsTurn,
+    }));
   }
 
   upcomingEvents(): Array<{ abs: number; e: CanonEventDef; isAnchor: boolean }> {

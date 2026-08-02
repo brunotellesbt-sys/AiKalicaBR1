@@ -100,6 +100,8 @@
 .marker.seat circle{fill:#a9bed2}
 .marker.reachable circle{fill:#ffd166;stroke:#3a2b06}
 .marker.player circle{fill:#8dff7a;stroke:#0b2a10}
+/* assento tomado durante uma guerra */
+.marker.occupied circle{fill:#ff7b6b;stroke:#3a0f0a}
 .marker:hover circle{fill:#fff}
 
 .marker .pulse{
@@ -126,6 +128,7 @@
 .legend .dot.player{background:#8dff7a}
 .legend .dot.reachable{background:#ffd166}
 .legend .dot.seat{background:#a9bed2}
+.legend .dot.occupied{background:#ff7b6b}
 
 .card{margin-top:10px;border:1px solid var(--line);border-radius:20px;padding:10px;background:rgba(16,26,44,.35)}
 .h3{font-weight:800}
