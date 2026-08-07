@@ -20,45 +20,92 @@ export type Point = { x: number; y: number };
 // Litoral
 // ---------------------------------------------------------------------------
 
-/** Contorno do continente, da ponta oeste da Muralha e no sentido horário. */
+/**
+ * Contorno do continente, da ponta oeste da Muralha e no sentido horário.
+ *
+ * Proporções, que era o erro mais grosseiro da versão anterior: o Norte sozinho
+ * ocupa cerca de um terço do continente — é do tamanho de todos os reinos do sul
+ * somados. Antes ele saía pequeno e o mapa inteiro parecia outra coisa.
+ *
+ * Feições que dão a silhueta reconhecível, e sem as quais nenhum contorno de
+ * Westeros funciona:
+ *
+ *  - Muralha reta no topo, e o continente cheio abaixo dela
+ *  - Baía de Gelo mordendo o oeste; a Mordida mordendo o leste
+ *  - entre as duas, o Pescoço: um istmo estreito, o único caminho por terra
+ *  - Vale saliente a leste, terminando nos Dedos
+ *  - Baía da Água Negra, com a Ponta das Garras ganchada por cima
+ *  - Cabo da Ira no sudeste, e o Mar de Dorne recuado atrás dele
+ *  - Braço Partido: a península de Dorne apontando a sudeste, rompida
+ */
 const MAINLAND: Array<[number, number]> = [
-  // costa oeste, descendo (Baía de Gelo, Dedo de Flint, Baía do Homem de Ferro)
-  [252, 244], [240, 268], [246, 296], [268, 318], [258, 344], [236, 366],
-  [228, 392], [244, 416], [262, 442], [252, 470], [268, 496], [292, 516],
-  // Baía de Gelo entrando fundo: é a mordida oeste que, junto com a Mordida a
-  // leste, aperta o continente e cria o Pescoço.
-  [306, 542], [292, 556], [316, 566], [364, 574], [412, 582], [434, 598],
-  [426, 622], [394, 636], [352, 646],
-  [312, 656], [296, 678], [304, 702], [330, 722], [316, 746], [298, 772],
-  [306, 800], [300, 834], [308, 866], [296, 894], [312, 922], [330, 952],
-  [322, 984], [338, 1012], [330, 1044], [344, 1074], [358, 1104], [382, 1132],
-  // sul da Campina e entrada de Dorne
-  [404, 1152], [432, 1168], [462, 1182], [474, 1206], [462, 1236], [452, 1266],
-  [462, 1296], [486, 1320], [512, 1342], [548, 1360], [588, 1372], [630, 1374],
-  [668, 1362], [702, 1344], [730, 1318], [748, 1288], [762, 1256],
-  // Braço Partido
-  [774, 1224], [768, 1196], [748, 1180], [722, 1172], [700, 1160], [676, 1146],
-  [652, 1132], [630, 1124],
-  // Mar de Dorne e Cabo da Ira
-  [648, 1108], [676, 1096], [706, 1090], [738, 1072], [760, 1044], [752, 1014],
-  [734, 990], [716, 962], [722, 934], [706, 906], [692, 880],
-  // Baía da Água Negra e Ponta das Garras
-  [704, 858], [686, 842], [658, 850], [632, 860], [614, 842], [620, 816],
-  [642, 798], [668, 784], [690, 766], [672, 748], [646, 758], [628, 744],
-  // costa do Vale, Dedos e a Mordida
-  [634, 720], [656, 700], [678, 684], [700, 670], [724, 658], [752, 644],
-  [782, 632], [800, 610], [786, 590], [760, 584], [738, 600], [716, 592],
-  [698, 572], [670, 584],
-  // A Mordida: baía funda que separa o Vale do Norte. Ela e a Baía de Gelo,
-  // do outro lado, é que estrangulam o continente e formam o Pescoço — o
-  // istmo pantanoso que é o único caminho por terra para o Norte. Quanto mais
-  // fundo entram, mais o mapa explica sozinho por que Fosso Cailin decide
-  // guerras.
-  [648, 600], [614, 616], [578, 628], [548, 630], [520, 620], [500, 600],
-  [494, 578], [504, 558], [528, 544], [556, 536],
-  // costa leste do Norte, subindo até a Muralha
-  [596, 528], [604, 500], [614, 470], [626, 442], [618, 412], [624, 384],
-  [632, 354], [626, 322], [616, 290], [610, 262], [612, 244],
+  // — costa oeste do Norte —
+  // Baía de Gelo: entra fundo pelo oeste, logo abaixo da ponta da Muralha.
+  [248, 190], [266, 224], [292, 258], [306, 292],
+  [292, 322], [258, 336], [224, 328],
+  [202, 344], [196, 378], [206, 410],
+  // Cabo Kraken, apontando para o mar do Poente
+  [180, 430], [154, 446], [182, 462], [214, 474], [244, 470],
+  // Baía do Braseiro, estreitando em direção ao istmo
+  [268, 496], [300, 520], [330, 542], [352, 566], [372, 590],
+
+  // — O PESCOÇO, lado oeste —
+  [398, 610], [412, 634],
+
+  // — costa oeste do sul: Baía do Homem de Ferro e Terras Ocidentais —
+  [396, 660], [366, 676], [330, 690], [300, 712],
+  [276, 742], [268, 780], [286, 812], [300, 846],
+  [292, 884], [304, 922], [322, 958], [318, 996], [330, 1034],
+
+  // — sudoeste da Campina —
+  [348, 1072], [372, 1106], [404, 1136], [440, 1160], [472, 1182],
+
+  // — Dorne, costa sul —
+  // Dorne é a ponta LARGA do continente, não um afunilamento. A versão
+  // anterior estreitava indo para o sul e espremia a região inteira contra o
+  // Braço Partido, deixando metade dela no mar.
+  [492, 1216], [504, 1256], [520, 1296], [546, 1330],
+  [584, 1356], [630, 1374], [680, 1378], [726, 1366],
+  [764, 1342], [790, 1310],
+
+  // — Braço Partido —
+  // A península aponta a sudeste e termina rompida: o que sobrou dela são os
+  // Degraus, ilhas soltas fora do continente.
+  [812, 1276], [830, 1244], [840, 1208],
+  [822, 1188], [796, 1196], [776, 1218],
+  [756, 1244], [730, 1262], [702, 1272], [674, 1272],
+
+  // — Mar de Dorne: recua para oeste, atrás do Cabo da Ira —
+  [646, 1250], [618, 1230], [596, 1206],
+  [606, 1182], [636, 1170], [670, 1166], [706, 1156], [740, 1138],
+
+  // — Cabo da Ira e costa das Terras da Tempestade —
+  [772, 1114], [796, 1084], [806, 1048], [792, 1018], [768, 996],
+  [746, 968], [736, 936], [748, 906], [742, 876],
+
+  // — Baía da Água Negra e Ponta das Garras —
+  [722, 856], [692, 846], [660, 852], [634, 866],
+  [612, 850], [608, 822], [626, 800], [652, 786],
+  [680, 770], [702, 750], [686, 730], [658, 740], [636, 730],
+
+  // — Vale: saliente a leste, terminando nos Dedos —
+  [642, 706], [668, 690], [698, 676], [728, 664], [760, 652], [792, 640],
+  [822, 622], [806, 606], [780, 614], [762, 600],
+  [788, 586], [800, 570], [776, 560], [752, 572], [734, 588],
+  [712, 578], [700, 560],
+
+  // — A MORDIDA: baía funda que separa o Vale do Norte —
+  // Junto com a Baía de Gelo do outro lado, é ela que estrangula o continente.
+  [672, 574], [640, 594], [606, 610], [570, 620], [534, 622],
+  [502, 612], [480, 594],
+
+  // — O PESCOÇO, lado leste —
+  [476, 570],
+
+  // — costa leste do Norte, subindo até a Muralha —
+  [492, 546], [520, 528], [552, 518],
+  [586, 508], [604, 480], [614, 448], [622, 414], [614, 380],
+  [622, 346], [632, 312], [626, 272], [618, 230], [622, 190],
 ];
 
 /**
@@ -70,10 +117,9 @@ const MAINLAND: Array<[number, number]> = [
  * cima — é o que comunica "continua, e ninguém sabe até onde".
  */
 const BEYOND_THE_WALL: Array<[number, number]> = [
-  [252, 244], [228, 214], [206, 178], [190, 140], [178, 96], [172, 40],
-  [174, 0],
-  [700, 0],
-  [696, 44], [684, 92], [666, 134], [648, 172], [630, 202], [612, 244],
+  [248, 190], [222, 158], [198, 120], [180, 78], [168, 34], [164, 0],
+  [726, 0],
+  [720, 38], [708, 82], [690, 124], [668, 158], [644, 178], [622, 190],
 ];
 
 function toPath(points: Array<[number, number]>): string {
@@ -84,7 +130,7 @@ export const MAINLAND_PATH = toPath(MAINLAND);
 export const BEYOND_WALL_PATH = toPath(BEYOND_THE_WALL);
 
 /** A Muralha: 300 léguas de gelo entre o Norte e o que vem depois. */
-export const WALL_PATH = 'M252,244 L612,244';
+export const WALL_PATH = 'M248,190 L622,190';
 
 // ---------------------------------------------------------------------------
 // Regiões
@@ -95,16 +141,16 @@ export const WALL_PATH = 'M252,244 L612,244';
 
 const REGION_POLYGONS: Record<string, Array<[number, number]>> = {
   north: [
-    [120, 220], [740, 220], [740, 570], [618, 600], [508, 650], [430, 658],
-    [348, 614], [120, 540],
+    [110, 170], [780, 170], [780, 530], [650, 578], [540, 612], [452, 642],
+    [372, 606], [110, 500],
   ],
   vale: [
-    [598, 528], [890, 496], [890, 744], [772, 806], [688, 770], [650, 700],
-    [626, 606],
+    [592, 520], [880, 496], [880, 762], [764, 806], [682, 772], [640, 702],
+    [612, 600],
   ],
   riverlands: [
-    [240, 588], [348, 608], [430, 654], [508, 646], [618, 594], [648, 618],
-    [674, 714], [646, 798], [560, 854], [466, 842], [336, 790], [240, 700],
+    [268, 620], [400, 648], [512, 640], [614, 606], [668, 700], [658, 792],
+    [560, 852], [450, 842], [330, 786], [252, 700],
   ],
   crownlands: [
     [552, 736], [640, 712], [720, 730], [828, 766], [836, 894], [700, 948],
@@ -115,19 +161,19 @@ const REGION_POLYGONS: Record<string, Array<[number, number]>> = {
     [230, 912],
   ],
   iron_islands: [
-    [140, 600], [322, 596], [328, 772], [142, 776],
+    [120, 620], [300, 616], [306, 792], [122, 796],
   ],
   reach: [
     [268, 984], [446, 998], [488, 932], [578, 920], [664, 990], [638, 1150],
-    [470, 1220], [334, 1164], [264, 1068],
+    [452, 1196], [330, 1156], [264, 1068],
   ],
   stormlands: [
-    [584, 856], [700, 840], [844, 852], [856, 1074], [712, 1140], [614, 1104],
+    [584, 856], [700, 840], [852, 852], [862, 1080], [712, 1146], [614, 1104],
     [572, 978],
   ],
   dorne: [
-    [404, 1166], [628, 1104], [856, 1164], [840, 1320], [668, 1412],
-    [486, 1370], [392, 1268],
+    [452, 1180], [640, 1116], [872, 1180], [860, 1330], [676, 1420],
+    [500, 1382], [438, 1268],
   ],
 };
 
@@ -259,19 +305,19 @@ interface TerrainField {
 
 const TERRAIN_FIELDS: TerrainField[] = [
   // — Além da Muralha —
-  { kind: 'mountain', label: 'Presas de Gelo', step: 30, poly: [[250, 130], [372, 112], [392, 190], [268, 214]] },
-  { kind: 'forest', label: 'Floresta Assombrada', step: 26, poly: [[404, 112], [566, 132], [582, 206], [416, 208]] },
+  { kind: 'mountain', label: 'Presas de Gelo', step: 30, poly: [[236, 48], [368, 28], [390, 150], [258, 168]] },
+  { kind: 'forest', label: 'Floresta Assombrada', step: 26, poly: [[410, 30], [600, 44], [604, 162], [418, 166]] },
 
   // — Norte —
-  { kind: 'mountain', label: 'Montanhas do Norte', step: 30, poly: [[268, 268], [400, 258], [412, 320], [274, 330]] },
-  { kind: 'forest', label: 'Bosque dos Lobos', step: 26, poly: [[286, 356], [392, 350], [402, 452], [292, 462]] },
-  { kind: 'forest', label: 'Bosque Lobo (leste)', step: 28, poly: [[470, 340], [572, 352], [566, 430], [472, 422]] },
-  { kind: 'hills', label: 'Colinas do Norte', step: 30, poly: [[330, 484], [470, 490], [468, 552], [334, 546]] },
-  { kind: 'swamp', label: 'O Pescoço', step: 24, poly: [[416, 578], [530, 586], [524, 648], [410, 636]] },
+  { kind: 'mountain', label: 'Montanhas do Norte', step: 30, poly: [[262, 220], [404, 208], [416, 278], [270, 292]] },
+  { kind: 'forest', label: 'Bosque dos Lobos', step: 26, poly: [[268, 348], [386, 342], [396, 452], [280, 462]] },
+  { kind: 'forest', label: 'Bosque Lobo (leste)', step: 28, poly: [[466, 330], [578, 344], [572, 426], [468, 414]] },
+  { kind: 'hills', label: 'Colinas do Norte', step: 30, poly: [[336, 480], [500, 490], [498, 554], [340, 544]] },
+  { kind: 'swamp', label: 'O Pescoço', step: 24, poly: [[416, 574], [492, 582], [480, 646], [408, 632]] },
 
   // — Vale —
-  { kind: 'mountain', label: 'Montanhas da Lua', step: 26, poly: [[636, 556], [790, 542], [806, 660], [660, 690]] },
-  { kind: 'hills', label: 'Dedos', step: 30, poly: [[700, 618], [800, 606], [806, 664], [706, 676]] },
+  { kind: 'mountain', label: 'Montanhas da Lua', step: 26, poly: [[634, 592], [782, 566], [800, 668], [656, 698]] },
+  { kind: 'hills', label: 'Dedos', step: 30, poly: [[724, 618], [812, 604], [816, 656], [730, 672]] },
 
   // — Terras Ocidentais —
   { kind: 'hills', label: 'Colinas Ocidentais', step: 28, poly: [[300, 812], [452, 806], [462, 918], [306, 924]] },
@@ -291,8 +337,8 @@ const TERRAIN_FIELDS: TerrainField[] = [
   { kind: 'hills', label: 'Colinas da Campina', step: 34, poly: [[380, 1020], [500, 1028], [494, 1086], [376, 1078]] },
 
   // — Dorne —
-  { kind: 'mountain', label: 'Montanhas Vermelhas', step: 26, poly: [[498, 1150], [652, 1122], [676, 1196], [512, 1220]] },
-  { kind: 'dunes', label: 'Deserto de Dorne', step: 30, poly: [[520, 1246], [724, 1214], [742, 1320], [546, 1350]] },
+  { kind: 'mountain', label: 'Montanhas Vermelhas', step: 26, poly: [[496, 1150], [664, 1120], [690, 1194], [516, 1222]] },
+  { kind: 'dunes', label: 'Deserto de Dorne', step: 30, poly: [[534, 1248], [744, 1222], [760, 1322], [560, 1348]] },
 ];
 
 function pointInTerrainField(x: number, y: number, poly: Array<[number, number]>): boolean {
@@ -356,9 +402,9 @@ export const TERRAIN_GLYPHS: TerrainGlyph[] = buildTerrain();
 const NAMED_POINTS: Record<string, Point> = {
   // Norte
   winterfell: { x: 424, y: 432 },
-  castle_black: { x: 428, y: 250 },
-  eastwatch: { x: 596, y: 252 },
-  shadow_tower: { x: 282, y: 252 },
+  castle_black: { x: 432, y: 198 },
+  eastwatch: { x: 606, y: 198 },
+  shadow_tower: { x: 268, y: 198 },
   white_harbor: { x: 548, y: 520 },
   dreadfort: { x: 512, y: 386 },
   karhold: { x: 578, y: 336 },
@@ -580,8 +626,8 @@ export function buildLocationPoints(
  * são regiões pequenas e cheias, sem vão interno que caiba o nome.
  */
 export const REGION_LABELS: Record<string, Point> = {
-  north: { x: 360, y: 306 },
-  vale: { x: 782, y: 566 },
+  north: { x: 250, y: 420 },
+  vale: { x: 800, y: 700 },
   riverlands: { x: 476, y: 686 },
   iron_islands: { x: 176, y: 606 },
   westerlands: { x: 322, y: 968 },
