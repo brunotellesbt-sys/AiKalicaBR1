@@ -65,6 +65,31 @@
 
 .river{fill:none;stroke:#7fc4e8;stroke-width:3;stroke-opacity:.5;stroke-linecap:round}
 
+/* Relevo.
+   Tinta escura translúcida em vez de cor própria: assim o glifo escurece a
+   cor do reino embaixo em vez de brigar com ela, e o mapa continua legível
+   como mapa político. Nada de pointer-events — o terreno é decoração e a
+   região embaixo precisa continuar clicável. */
+.terrain{pointer-events:none}
+.terrain path{
+  fill:#243020;
+  fill-opacity:.62;
+  /* Fio claro por baixo: dá a cada glifo um lado iluminado e o relevo deixa
+     de ler como mancha de sujeira. É o truque dos mapas gravados. */
+  stroke:#e8e2cf;
+  stroke-opacity:.22;
+  stroke-width:.9;
+  paint-order:stroke;
+}
+.terrain.stroked path{
+  fill:none;
+  stroke:#243020;
+  stroke-opacity:.6;
+  stroke-width:1.8;
+  stroke-linecap:round;
+  paint-order:normal;
+}
+
 .wall{stroke:#dff1ff;stroke-width:9;stroke-linecap:round;opacity:.92}
 .wall-label{
   fill:#0d2033;font-size:15px;font-weight:900;letter-spacing:3px;
@@ -77,11 +102,17 @@
   stroke-dasharray:7 7;pointer-events:none;
 }
 
+/* Nome de reino e nome de castelo disputavam o mesmo registro visual — mesmo
+   peso, mesma cor, mesmo halo — e o resultado era ilegível onde se cruzavam.
+   Aqui o reino vira rótulo gravado: versalete espaçado, cor de pedra, sem
+   negrito. Some para o fundo quando não é o reino selecionado, e é isso que
+   se quer — o nome do lugar para onde você pode viajar importa mais. */
 .region-label{
-  fill:#f2f7ff;font-size:19px;font-weight:800;letter-spacing:1.4px;
+  fill:#dbe6ef;font-size:17px;font-weight:600;letter-spacing:4px;
+  text-transform:uppercase;
   text-anchor:middle;pointer-events:none;
-  opacity:.62;
-  paint-order:stroke;stroke:rgba(4,14,26,.75);stroke-width:4;
+  opacity:.42;
+  paint-order:stroke;stroke:rgba(4,14,26,.6);stroke-width:3.5;
 }
 .region-label.active{opacity:1;fill:#ffd166}
 

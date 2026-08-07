@@ -50,12 +50,26 @@
             <clipPath id="mainlandClip">
               <path [attr.d]="mainlandPath"/>
             </clipPath>
+            <clipPath id="beyondClip">
+              <path [attr.d]="beyondWallPath"/>
+            </clipPath>
           </defs>
 
           <rect x="0" y="0" width="1000" height="1600" fill="url(#seaGrad)"/>
 
           <!-- Terras Além da Muralha -->
           <path class="beyond" [attr.d]="beyondWallPath"/>
+
+          <g clip-path="url(#beyondClip)">
+            <g
+              *ngFor="let g of terrainBeyond; trackBy: trackTerrain"
+              class="terrain"
+              [class.stroked]="terrainIsStroked(g.kind)"
+              [attr.transform]="'translate(' + g.x + ' ' + g.y + ') scale(' + g.s + ')'"
+            >
+              <path [attr.d]="terrainPath(g.kind)"/>
+            </g>
+          </g>
 
           <!-- Continente -->
           <path class="landmass" [attr.d]="mainlandPath" filter="url(#coastGlow)"/>
@@ -67,6 +81,17 @@
             </ng-container>
 
             <path class="river" *ngFor="let d of rivers" [attr.d]="d"/>
+
+            <!-- Relevo. Vem depois dos rios e antes da camada interativa: o
+                 terreno é decoração e não pode roubar o clique da região. -->
+            <g
+              *ngFor="let g of terrainMainland; trackBy: trackTerrain"
+              class="terrain"
+              [class.stroked]="terrainIsStroked(g.kind)"
+              [attr.transform]="'translate(' + g.x + ' ' + g.y + ') scale(' + g.s + ')'"
+            >
+              <path [attr.d]="terrainPath(g.kind)"/>
+            </g>
 
             <!-- camada interativa por cima (seleção e clique) -->
             <ng-container *ngFor="let r of regionShapes">
