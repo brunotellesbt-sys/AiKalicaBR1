@@ -25,8 +25,11 @@ const MAINLAND: Array<[number, number]> = [
   // costa oeste, descendo (Baía de Gelo, Dedo de Flint, Baía do Homem de Ferro)
   [252, 244], [240, 268], [246, 296], [268, 318], [258, 344], [236, 366],
   [228, 392], [244, 416], [262, 442], [252, 470], [268, 496], [292, 516],
-  [306, 542], [286, 560], [312, 584], [352, 598], [374, 618], [358, 642],
-  [312, 654], [296, 678], [304, 702], [330, 722], [316, 746], [298, 772],
+  // Baía de Gelo entrando fundo: é a mordida oeste que, junto com a Mordida a
+  // leste, aperta o continente e cria o Pescoço.
+  [306, 542], [292, 556], [316, 566], [364, 574], [412, 582], [434, 598],
+  [426, 622], [394, 636], [352, 646],
+  [312, 656], [296, 678], [304, 702], [330, 722], [316, 746], [298, 772],
   [306, 800], [300, 834], [308, 866], [296, 894], [312, 922], [330, 952],
   [322, 984], [338, 1012], [330, 1044], [344, 1074], [358, 1104], [382, 1132],
   // sul da Campina e entrada de Dorne
@@ -46,18 +49,31 @@ const MAINLAND: Array<[number, number]> = [
   [634, 720], [656, 700], [678, 684], [700, 670], [724, 658], [752, 644],
   [782, 632], [800, 610], [786, 590], [760, 584], [738, 600], [716, 592],
   [698, 572], [670, 584],
-  // A Mordida: baía profunda que separa o Vale do Norte e forma o Pescoço
-  [642, 606], [610, 620], [576, 626], [546, 614], [524, 592], [520, 564],
-  [544, 546], [574, 536],
+  // A Mordida: baía funda que separa o Vale do Norte. Ela e a Baía de Gelo,
+  // do outro lado, é que estrangulam o continente e formam o Pescoço — o
+  // istmo pantanoso que é o único caminho por terra para o Norte. Quanto mais
+  // fundo entram, mais o mapa explica sozinho por que Fosso Cailin decide
+  // guerras.
+  [648, 600], [614, 616], [578, 628], [548, 630], [520, 620], [500, 600],
+  [494, 578], [504, 558], [528, 544], [556, 536],
   // costa leste do Norte, subindo até a Muralha
   [596, 528], [604, 500], [614, 470], [626, 442], [618, 412], [624, 384],
   [632, 354], [626, 322], [616, 290], [610, 262], [612, 244],
 ];
 
-/** Terras Além da Muralha (fora das nove regiões jogáveis). */
+/**
+ * Terras Além da Muralha.
+ *
+ * Saía como uma cúpula arredondada apoiada na Muralha, o que dava a impressão
+ * de uma ilha pequena. Nas fontes é o contrário: o território ao norte é vasto
+ * e não tem limite conhecido. Aqui ele sobe até a borda do quadro e sai por
+ * cima — é o que comunica "continua, e ninguém sabe até onde".
+ */
 const BEYOND_THE_WALL: Array<[number, number]> = [
-  [252, 244], [236, 206], [252, 168], [292, 140], [340, 118], [396, 106],
-  [452, 108], [508, 122], [556, 146], [592, 180], [608, 214], [612, 244],
+  [252, 244], [228, 214], [206, 178], [190, 140], [178, 96], [172, 40],
+  [174, 0],
+  [700, 0],
+  [696, 44], [684, 92], [666, 134], [648, 172], [630, 202], [612, 244],
 ];
 
 function toPath(points: Array<[number, number]>): string {
@@ -186,6 +202,151 @@ export const RIVERS: string[] = [
   // Lança Verde
   'M626,1200 C664,1216 690,1226 716,1240',
 ];
+
+// ---------------------------------------------------------------------------
+// Relevo
+// ---------------------------------------------------------------------------
+//
+// Um mapa só de manchas coloridas não diz nada sobre o terreno: o Vale e a
+// Campina são igualmente planos, e nada explica por que atravessar o Pescoço é
+// difícil. O relevo entra como glifos repetidos dentro de áreas nomeadas —
+// a mesma convenção dos mapas desenhados à mão, e a que sobrevive ao zoom sem
+// virar textura borrada.
+//
+// As áreas seguem a geografia descrita nas fontes (onde ficam as Montanhas da
+// Lua, o Bosque dos Lobos, o Pescoço pantanoso, os desertos de Dorne). O
+// desenho de cada glifo é próprio.
+
+export type TerrainKind = 'mountain' | 'hills' | 'forest' | 'swamp' | 'dunes';
+
+export interface TerrainGlyph {
+  kind: TerrainKind;
+  x: number;
+  y: number;
+  /** Escala relativa, variada para o campo não parecer estampa. */
+  s: number;
+}
+
+/**
+ * Glifos desenhados na origem, ~20 unidades de largura.
+ *
+ * Todos são silhuetas cheias por um motivo prático: contorno fino de 1px some
+ * quando o mapa é afastado, e o mapa nasce afastado.
+ */
+export const TERRAIN_PATHS: Record<TerrainKind, string> = {
+  // Pico com neve no topo — o entalhe branco é o que separa montanha de colina.
+  mountain: 'M-10,6 L-3.5,-4 L0,-8 L4,-3 L10,6 Z',
+  hills: 'M-10,5 Q-5,-2 0,5 Q5,-2 10,5 Z',
+  // Conífera: três saias e tronco. Árvore redonda lê como nuvem no tamanho pequeno.
+  forest: 'M0,-9 L4.5,-2 L2,-2 L6,3 L2.5,3 L7,8 L-7,8 L-2.5,3 L-6,3 L-2,-2 L-4.5,-2 Z',
+  // Juncos sobre água parada.
+  swamp: 'M-8,5 H8 M-5,5 V-1 M0,5 V-4 M5,5 V-2 M-5,-1 L-7,-4 M0,-4 L2,-7 M5,-2 L7,-5',
+  // Dunas: duas cristas sobrepostas.
+  dunes: 'M-10,4 Q-4,-3 2,4 Z M-2,6 Q4,-1 10,6 Z',
+};
+
+/** Glifo de pântano é traço, não preenchimento. */
+export const TERRAIN_STROKED: readonly TerrainKind[] = ['swamp'];
+
+interface TerrainField {
+  kind: TerrainKind;
+  /** Nome da feição, para referência de quem editar. */
+  label: string;
+  poly: Array<[number, number]>;
+  /** Passo da grade: menor = mais denso. */
+  step: number;
+}
+
+const TERRAIN_FIELDS: TerrainField[] = [
+  // — Além da Muralha —
+  { kind: 'mountain', label: 'Presas de Gelo', step: 30, poly: [[250, 130], [372, 112], [392, 190], [268, 214]] },
+  { kind: 'forest', label: 'Floresta Assombrada', step: 26, poly: [[404, 112], [566, 132], [582, 206], [416, 208]] },
+
+  // — Norte —
+  { kind: 'mountain', label: 'Montanhas do Norte', step: 30, poly: [[268, 268], [400, 258], [412, 320], [274, 330]] },
+  { kind: 'forest', label: 'Bosque dos Lobos', step: 26, poly: [[286, 356], [392, 350], [402, 452], [292, 462]] },
+  { kind: 'forest', label: 'Bosque Lobo (leste)', step: 28, poly: [[470, 340], [572, 352], [566, 430], [472, 422]] },
+  { kind: 'hills', label: 'Colinas do Norte', step: 30, poly: [[330, 484], [470, 490], [468, 552], [334, 546]] },
+  { kind: 'swamp', label: 'O Pescoço', step: 24, poly: [[416, 578], [530, 586], [524, 648], [410, 636]] },
+
+  // — Vale —
+  { kind: 'mountain', label: 'Montanhas da Lua', step: 26, poly: [[636, 556], [790, 542], [806, 660], [660, 690]] },
+  { kind: 'hills', label: 'Dedos', step: 30, poly: [[700, 618], [800, 606], [806, 664], [706, 676]] },
+
+  // — Terras Ocidentais —
+  { kind: 'hills', label: 'Colinas Ocidentais', step: 28, poly: [[300, 812], [452, 806], [462, 918], [306, 924]] },
+  { kind: 'mountain', label: 'Serra de Castamere', step: 32, poly: [[350, 930], [452, 938], [446, 1000], [346, 992]] },
+
+  // — Terras Fluviais —
+  { kind: 'hills', label: 'Colinas do Tridente', step: 32, poly: [[404, 668], [524, 676], [518, 730], [400, 722]] },
+
+  // — Terras da Coroa —
+  { kind: 'forest', label: 'Bosque do Rei', step: 26, poly: [[584, 838], [696, 848], [688, 922], [580, 912]] },
+
+  // — Terras da Tempestade —
+  { kind: 'forest', label: 'Bosque da Chuva', step: 26, poly: [[672, 976], [788, 990], [776, 1078], [664, 1064]] },
+  { kind: 'hills', label: 'Marcas de Dorne', step: 30, poly: [[598, 1040], [682, 1048], [676, 1108], [594, 1098]] },
+
+  // — Campina —
+  { kind: 'hills', label: 'Colinas da Campina', step: 34, poly: [[380, 1020], [500, 1028], [494, 1086], [376, 1078]] },
+
+  // — Dorne —
+  { kind: 'mountain', label: 'Montanhas Vermelhas', step: 26, poly: [[498, 1150], [652, 1122], [676, 1196], [512, 1220]] },
+  { kind: 'dunes', label: 'Deserto de Dorne', step: 30, poly: [[520, 1246], [724, 1214], [742, 1320], [546, 1350]] },
+];
+
+function pointInTerrainField(x: number, y: number, poly: Array<[number, number]>): boolean {
+  let dentro = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i];
+    const [xj, yj] = poly[j];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) dentro = !dentro;
+  }
+  return dentro;
+}
+
+/** Ruído determinístico em [0,1) — mesmo mapa em toda sessão e toda máquina. */
+function jitter(x: number, y: number, salt: number): number {
+  let h = (x * 374761393 + y * 668265263 + salt * 2147483647) >>> 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
+  return ((h ^ (h >>> 16)) >>> 0) / 0xffffffff;
+}
+
+/**
+ * Preenche cada campo com glifos numa grade sacudida.
+ *
+ * Grade pura lê como papel quadriculado; posição totalmente aleatória
+ * amontoa e deixa buracos. Grade com deslocamento de até meio passo dá o
+ * espaçamento irregular dos mapas desenhados à mão.
+ */
+function buildTerrain(): TerrainGlyph[] {
+  const out: TerrainGlyph[] = [];
+  TERRAIN_FIELDS.forEach((campo, idx) => {
+    const xs = campo.poly.map(p => p[0]);
+    const ys = campo.poly.map(p => p[1]);
+    const [x0, x1] = [Math.min(...xs), Math.max(...xs)];
+    const [y0, y1] = [Math.min(...ys), Math.max(...ys)];
+
+    for (let y = y0; y <= y1; y += campo.step) {
+      // Linhas alternadas entram meio passo: evita colunas alinhadas.
+      const offset = (Math.round((y - y0) / campo.step) % 2) * campo.step * 0.5;
+      for (let x = x0 + offset; x <= x1; x += campo.step) {
+        const jx = x + (jitter(x, y, idx) - 0.5) * campo.step * 0.55;
+        const jy = y + (jitter(x, y, idx + 97) - 0.5) * campo.step * 0.55;
+        if (!pointInTerrainField(jx, jy, campo.poly)) continue;
+        out.push({
+          kind: campo.kind,
+          x: Math.round(jx * 10) / 10,
+          y: Math.round(jy * 10) / 10,
+          s: 0.8 + jitter(x, y, idx + 331) * 0.45,
+        });
+      }
+    }
+  });
+  return out;
+}
+
+export const TERRAIN_GLYPHS: TerrainGlyph[] = buildTerrain();
 
 // ---------------------------------------------------------------------------
 // Posições dos locais
@@ -409,14 +570,23 @@ export function buildLocationPoints(
 }
 
 /** Rótulos das regiões, posicionados à mão. */
+/**
+ * Rótulos dos reinos.
+ *
+ * Ficam deliberadamente em vazios de mapa — costa, mar interior, canto de
+ * região — e não no centroide. O centroide é exatamente onde os castelos se
+ * acumulam, e o nome do reino saía cortado por três nomes de local. "Terras da
+ * Coroa" e "Terras da Tempestade" foram para o mar à direita pelo mesmo motivo:
+ * são regiões pequenas e cheias, sem vão interno que caiba o nome.
+ */
 export const REGION_LABELS: Record<string, Point> = {
-  north: { x: 420, y: 330 },
-  vale: { x: 740, y: 590 },
-  riverlands: { x: 460, y: 748 },
-  iron_islands: { x: 196, y: 618 },
-  westerlands: { x: 360, y: 812 },
-  crownlands: { x: 664, y: 812 },
-  reach: { x: 470, y: 1064 },
-  stormlands: { x: 706, y: 918 },
-  dorne: { x: 600, y: 1280 },
+  north: { x: 360, y: 306 },
+  vale: { x: 782, y: 566 },
+  riverlands: { x: 476, y: 686 },
+  iron_islands: { x: 176, y: 606 },
+  westerlands: { x: 322, y: 968 },
+  crownlands: { x: 836, y: 792 },
+  reach: { x: 424, y: 1112 },
+  stormlands: { x: 700, y: 1104 },
+  dorne: { x: 610, y: 1306 },
 };

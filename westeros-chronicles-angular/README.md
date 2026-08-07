@@ -73,6 +73,14 @@ ilhas. Cada um dos 295 locais tem posição no mapa: as referências conhecidas
 com coordenada canônica, o resto distribuído deterministicamente dentro da
 própria região.
 
+O terreno aparece como relevo desenhado, não como mancha de cor: montanhas,
+colinas, coníferas, juncos de pântano e dunas, distribuídos em campos nomeados
+(Presas de Gelo, Bosque dos Lobos, Montanhas da Lua, o Pescoço, Bosque do Rei,
+Bosque da Chuva, Montanhas Vermelhas, deserto de Dorne). Os glifos ficam numa
+grade sacudida deterministicamente — grade pura lê como papel quadriculado,
+posição aleatória amontoa e deixa buracos. Com o relevo, o mapa passa a explicar
+sozinho por que atravessar o Pescoço decide guerras.
+
 > O mapa oficial da HBO/GRRM é material protegido por direitos autorais e não é
 > redistribuído aqui; a geografia foi redesenhada em vetor para este projeto.
 

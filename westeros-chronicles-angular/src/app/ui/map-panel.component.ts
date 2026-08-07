@@ -12,6 +12,9 @@ import {
   RIVERS,
   REGION_LABELS,
   REGION_COLORS,
+  TERRAIN_GLYPHS,
+  TERRAIN_PATHS,
+  TERRAIN_STROKED,
   buildLocationPoints,
   Point,
 } from '../core/data/map-geo';
@@ -53,6 +56,29 @@ export class MapPanelComponent {
   readonly islands = ISLANDS;
   readonly rivers = RIVERS;
   readonly regionLabels = REGION_LABELS;
+  // O relevo é recortado por duas máscaras diferentes: as feições ao norte da
+  // Muralha pertencem às Terras Além dela, que não fazem parte do continente.
+  // Sem separar, as Presas de Gelo apareciam boiando no mar.
+  readonly terrainMainland = TERRAIN_GLYPHS.filter(g => g.y >= 244);
+  readonly terrainBeyond = TERRAIN_GLYPHS.filter(g => g.y < 244);
+
+  terrainPath(kind: string): string {
+    return TERRAIN_PATHS[kind as keyof typeof TERRAIN_PATHS] ?? '';
+  }
+
+  /** Juncos do pântano são traço; o resto é silhueta cheia. */
+  terrainIsStroked(kind: string): boolean {
+    return (TERRAIN_STROKED as readonly string[]).includes(kind);
+  }
+
+  /**
+   * `trackBy` obrigatório aqui pelo mesmo motivo dos marcadores: são centenas
+   * de nós, e recriá-los a cada ciclo de detecção custa caro e já causou bug
+   * de clique neste componente.
+   */
+  trackTerrain(_i: number, g: { kind: string; x: number; y: number }): string {
+    return `${g.kind}:${g.x}:${g.y}`;
+  }
 
   regionColor(regionId: string): string {
     return REGION_COLORS[regionId] ?? '#7f8f68';
