@@ -167,3 +167,13 @@
 .areas button{padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:rgba(16,26,44,.85);color:var(--text);cursor:pointer}
 .areas button:disabled{opacity:.4;cursor:not-allowed}
 .areas button:not(:disabled):hover{border-color:#ffd166}
+
+/* Crédito do mapa de fundo. A licença de uma imagem de terceiro quase sempre
+   exige atribuição visível — deixá-la só no código não cumpre. */
+.attribution{opacity:.7;font-style:italic;margin-right:auto}
+
+/* Regiões sobre imagem: contorno em vez de preenchimento, senão a camada
+   clicável esconde justamente o mapa que se quis usar. */
+.region-overlay .region{fill:transparent;stroke:rgba(255,255,255,.18);stroke-width:2}
+.region-overlay .region:hover{fill:rgba(255,255,255,.08)}
+.region-overlay .region.selected{fill:rgba(255,209,102,.16);stroke:#ffd166}

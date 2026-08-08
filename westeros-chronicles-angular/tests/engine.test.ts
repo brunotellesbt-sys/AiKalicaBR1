@@ -16,6 +16,7 @@ import {
 } from '../src/app/core/engine/warfare';
 import { applyRivalryIntervention } from '../src/app/core/engine/politics';
 import { hostageCandidate, hostageFrom, takeHostage, tickHostages } from '../src/app/core/engine/hostages';
+import { solveSimilarity, applySimilarity } from '../src/app/core/data/map-image';
 
 // ---------------------------------------------------------------------------
 // Utilitários
@@ -750,6 +751,43 @@ test('invariantes econômicas: nada fica negativo depois de 200 turnos', () => {
     assert(h.army.levies >= 0, `${h.name} com levies negativos`);
     assert(!!state.characters[h.leaderId], `${h.name} sem líder válido`);
   }
+});
+
+
+test('o mapa por imagem calibra os locais a partir de duas âncoras', () => {
+  // O ponto da mecânica: trocar o mapa de fundo NÃO pode exigir reposicionar
+  // os 295 locais na mão. Duas âncoras bastam porque nenhum mapa de Westeros
+  // é publicado girado — a transformação é escala mais deslocamento.
+  const vetor = { winterfell: { x: 424, y: 432 }, kings_landing: { x: 604, y: 828 } };
+
+  // Imagem hipotética: mesma geografia a 1,5× e deslocada 100/200.
+  const cfg = {
+    src: 'assets/x.png', width: 1600, height: 2600,
+    anchors: [
+      { locationId: 'winterfell', x: 424 * 1.5 + 100, y: 432 * 1.5 + 200 },
+      { locationId: 'kings_landing', x: 604 * 1.5 + 100, y: 828 * 1.5 + 200 },
+    ] as [any, any],
+  };
+
+  const s = solveSimilarity(cfg, vetor)!;
+  assert(s, 'a calibração falhou com âncoras válidas');
+  assert(Math.abs(s.scale - 1.5) < 1e-6, `escala errada: ${s.scale}`);
+
+  // Um terceiro ponto qualquer tem de cair onde a mesma regra manda.
+  const p = applySimilarity({ x: 300, y: 700 }, s);
+  assert(Math.abs(p.x - (300 * 1.5 + 100)) < 1e-6, `x fora: ${p.x}`);
+  assert(Math.abs(p.y - (700 * 1.5 + 200)) < 1e-6, `y fora: ${p.y}`);
+
+  // Configuração impossível cai fora em vez de amontoar tudo num canto:
+  // sem isso, um id errado produziria NaN e o mapa sairia vazio sem avisar.
+  assert(!solveSimilarity({ ...cfg, anchors: [
+    { locationId: 'inexistente', x: 0, y: 0 }, cfg.anchors[1],
+  ] as [any, any] }, vetor), 'âncora com id desconhecido deveria falhar');
+
+  assert(!solveSimilarity({ ...cfg, anchors: [
+    { locationId: 'winterfell', x: 10, y: 10 },
+    { locationId: 'kings_landing', x: 10, y: 10 },
+  ] as [any, any] }, vetor), 'âncoras coladas deveriam falhar');
 });
 
 run();

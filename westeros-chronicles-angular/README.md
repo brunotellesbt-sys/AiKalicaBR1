@@ -84,6 +84,30 @@ sozinho por que atravessar o Pescoço decide guerras.
 > O mapa oficial da HBO/GRRM é material protegido por direitos autorais e não é
 > redistribuído aqui; a geografia foi redesenhada em vetor para este projeto.
 
+### Usar a sua própria imagem de mapa
+
+O mapa vetorial é desenhado à mão em coordenadas e nunca vai ter a fidelidade de
+um mapa cartografado. Quem quiser um mapa fiel traz a própria imagem:
+
+1. Ponha o arquivo em `src/assets/`.
+2. Leia, em qualquer editor de imagem, a posição em pixels de **dois** locais
+   conhecidos — Winterfell e Porto Real servem bem, por serem a diagonal mais
+   longa.
+3. Preencha `MAP_IMAGE` em `src/app/core/data/map-image.ts`.
+
+Os outros 293 locais se posicionam sozinhos. Duas âncoras bastam porque nenhum
+mapa de Westeros é publicado girado ou espelhado: a transformação entre os dois
+espaços é só escala e deslocamento. Escolha âncoras bem afastadas — base curta
+transforma erro de poucos pixels em erro grande do outro lado do mapa.
+
+Configuração inválida (id errado, âncoras coladas) faz o app voltar ao mapa
+vetorial em vez de desenhar tudo amontoado num canto.
+
+> **O repositório não acompanha imagem de mapa nenhuma, e não deve passar a
+> acompanhar.** Os mapas oficiais são obra protegida, e mapas de fãs pertencem a
+> quem os desenhou. Use uma imagem que você tenha o direito de usar — e lembre
+> que publicar o jogo publica a imagem junto.
+
 ## Estrutura do motor
 
 O motor não depende de Angular e está separado por domínio em
@@ -105,7 +129,7 @@ O motor não depende de Angular e está separado por domínio em
 
 ## Testes
 
-`npm test` compila o motor (que não depende de Angular) e roda 26 testes
+`npm test` compila o motor (que não depende de Angular) e roda 27 testes
 determinísticos com RNG semeado: determinismo, tetos de divergência, a cascata
 canônica, crises sucessórias, guerras, rixas e invariantes de mundo ao longo de
 155 anos simulados.
