@@ -55,6 +55,19 @@
             </clipPath>
           </defs>
 
+          <!-- Fundo: no modo imagem ela substitui o mar e toda a geografia
+               vetorial; no modo padrão (o que o repositório distribui) desenha-se
+               o mapa próprio. -->
+          <image
+            *ngIf="imageMode && mapImage"
+            [attr.href]="mapImage.src"
+            x="0" y="0"
+            [attr.width]="mapImage.width"
+            [attr.height]="mapImage.height"
+            preserveAspectRatio="none"
+          />
+
+          <ng-container *ngIf="!imageMode">
           <rect x="0" y="0" width="1000" height="1600" fill="url(#seaGrad)"/>
 
           <!-- Terras Além da Muralha -->
@@ -128,6 +141,23 @@
           <!-- A Muralha -->
           <path class="wall" [attr.d]="wallPath"/>
           <text class="wall-label" x="435" y="180">A MURALHA</text>
+          </ng-container>
+
+          <!-- Regiões clicáveis sobre a imagem. Transformadas em bloco: são
+               polígonos e nada dentro delas precisa de tamanho fixo. -->
+          <g *ngIf="imageMode" class="region-overlay" [attr.transform]="geometryTransform">
+            <ng-container *ngFor="let r of regionShapes">
+              <path
+                class="region"
+                [class.selected]="r.regionId === selectedRegionId"
+                [class.player-here]="isPlayerRegion(r.regionId)"
+                [attr.d]="r.d"
+                (click)="selectKingdom(r.regionId)"
+              >
+                <title>{{regionName(r.regionId)}}</title>
+              </path>
+            </ng-container>
+          </g>
 
           <!-- Rotas diretas -->
           <line
@@ -141,8 +171,8 @@
           <text
             class="region-label"
             *ngFor="let k of regionLabelKeys()"
-            [attr.x]="regionLabels[k].x"
-            [attr.y]="regionLabels[k].y"
+            [attr.x]="regionLabelPoint(k).x"
+            [attr.y]="regionLabelPoint(k).y"
             [class.active]="k === selectedRegionId"
           >{{regionName(k)}}</text>
 
@@ -174,6 +204,7 @@
       </div>
 
       <div class="legend">
+        <span class="attribution" *ngIf="imageMode && mapImage?.attribution">{{mapImage!.attribution}}</span>
         <span><i class="dot player"></i> você</span>
         <span><i class="dot reachable"></i> destino direto</span>
         <span><i class="dot seat"></i> assento de Casa</span>

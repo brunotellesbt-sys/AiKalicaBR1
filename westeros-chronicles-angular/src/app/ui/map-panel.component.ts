@@ -18,6 +18,7 @@ import {
   buildLocationPoints,
   Point,
 } from '../core/data/map-geo';
+import { MAP_IMAGE, solveSimilarity, applySimilarity } from '../core/data/map-image';
 
 type MapMarker = {
   id: string;
@@ -35,7 +36,28 @@ type MapMarker = {
 };
 
 // Calculado uma vez: as posições são determinísticas por id de local.
-const LOCATION_POINTS: Record<string, Point> = buildLocationPoints(LOCATIONS);
+const VECTOR_POINTS: Record<string, Point> = buildLocationPoints(LOCATIONS);
+
+/**
+ * Onde cada local é desenhado.
+ *
+ * No modo vetorial (o padrão) são as próprias coordenadas do desenho. Com uma
+ * imagem configurada, todos os 295 pontos passam pela semelhança calculada a
+ * partir de duas âncoras — é isso que evita ter de reposicionar local por
+ * local quando se troca o mapa de fundo.
+ *
+ * Se a configuração existir mas não fechar (id de âncora errado, âncoras coladas
+ * uma na outra), `solveSimilarity` devolve null e o app volta ao vetorial em vez
+ * de desenhar tudo amontoado num canto.
+ */
+const IMAGE_TRANSFORM = MAP_IMAGE ? solveSimilarity(MAP_IMAGE, VECTOR_POINTS) : null;
+const IMAGE_MODE = !!(MAP_IMAGE && IMAGE_TRANSFORM);
+
+const LOCATION_POINTS: Record<string, Point> = IMAGE_TRANSFORM
+  ? Object.fromEntries(
+      Object.entries(VECTOR_POINTS).map(([id, p]) => [id, applySimilarity(p, IMAGE_TRANSFORM)])
+    )
+  : VECTOR_POINTS;
 
 @Component({
   selector: 'app-map-panel',
@@ -48,7 +70,34 @@ export class MapPanelComponent {
   @Input({ required: true }) state!: GameState;
   @Output() choose = new EventEmitter<string>();
 
-  readonly viewBox = MAP_VIEWBOX;
+  /**
+   * As formas das regiões são transformadas em bloco por um `transform` no
+   * grupo, e não ponto a ponto: são polígonos puros, nada dentro delas tem de
+   * manter tamanho fixo. Os marcadores, ao contrário, têm raio e texto que não
+   * podem escalar junto — por isso as posições deles já vêm convertidas.
+   */
+  readonly geometryTransform = IMAGE_TRANSFORM
+    ? `translate(${IMAGE_TRANSFORM.dx} ${IMAGE_TRANSFORM.dy}) scale(${IMAGE_TRANSFORM.scale})`
+    : '';
+
+  /**
+   * Rótulo de reino no espaço certo.
+   *
+   * Não entram no grupo transformado com as regiões porque texto não pode
+   * escalar junto: numa imagem grande o nome sairia gigante, numa pequena
+   * ilegível. A posição converte, o tamanho não.
+   */
+  regionLabelPoint(key: string): Point {
+    const p = this.regionLabels[key];
+    return IMAGE_TRANSFORM ? applySimilarity(p, IMAGE_TRANSFORM) : p;
+  }
+
+  /** Com imagem, o sistema de coordenadas passa a ser o dela. */
+  readonly imageMode = IMAGE_MODE;
+  readonly mapImage = MAP_IMAGE;
+  readonly viewBox = IMAGE_MODE && MAP_IMAGE
+    ? `0 0 ${MAP_IMAGE.width} ${MAP_IMAGE.height}`
+    : MAP_VIEWBOX;
   readonly mainlandPath = MAINLAND_PATH;
   readonly beyondWallPath = BEYOND_WALL_PATH;
   readonly wallPath = WALL_PATH;
