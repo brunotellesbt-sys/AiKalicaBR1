@@ -42,17 +42,21 @@
 .westeros{display:block;width:100%;height:auto;user-select:none}
 
 /* --- massa continental --- */
-.landmass{fill:#6f7f61}
+.landmass{fill:#5f7150}
 .beyond{fill:#9fb4c4;opacity:.5}
-.coastline{fill:none;stroke:#e8f2ff;stroke-width:2.2;stroke-opacity:.5;stroke-linejoin:round}
+/* Litoral em tinta escura, não em luz. Contorno claro faz a terra parecer
+   recortada e colada; escuro faz ela parecer desenhada sobre o papel. */
+.coastline{fill:none;stroke:#1d2b1c;stroke-width:2.6;stroke-opacity:.55;stroke-linejoin:round}
 
 .region-fill{pointer-events:none;fill-opacity:.92}
 .island-fill{stroke:rgba(232,242,255,.35);stroke-width:1.4}
 
 .region{
   fill:rgba(255,255,255,0);
-  stroke:rgba(12,24,36,.55);
-  stroke-width:1.6;
+  /* Fronteira política é convenção, não acidente geográfico: fio fino e
+     discreto, senão compete com o litoral, que é o que importa. */
+  stroke:rgba(28,36,24,.5);
+  stroke-width:1.5;
   cursor:pointer;
   transition:fill .15s ease;
 }

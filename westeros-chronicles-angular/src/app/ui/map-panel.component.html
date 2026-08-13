@@ -47,6 +47,35 @@
             <filter id="coastGlow" x="-20%" y="-20%" width="140%" height="140%">
               <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#02121f" flood-opacity="0.55"/>
             </filter>
+
+            <!-- Textura, sem nenhum arquivo de imagem.
+                 Cor chapada é o que mais faz o mapa parecer diagrama. feTurbulence
+                 gera ruído fractal na hora; usado como sobreposição, dá ao papel o
+                 grão e à água a marulhada que a cor sozinha não tem. -->
+            <filter id="grao" x="0" y="0" width="100%" height="100%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" seed="7" result="n"/>
+              <feColorMatrix in="n" type="saturate" values="0" result="cinza"/>
+              <feComponentTransfer in="cinza" result="suave">
+                <feFuncA type="table" tableValues="0 0.5"/>
+              </feComponentTransfer>
+              <feComposite in="suave" in2="SourceGraphic" operator="in"/>
+            </filter>
+
+            <filter id="marulho" x="0" y="0" width="100%" height="100%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.012 0.05" numOctaves="3" seed="3" result="n"/>
+              <feColorMatrix in="n" type="saturate" values="0" result="cinza"/>
+              <feComponentTransfer in="cinza">
+                <feFuncA type="table" tableValues="0 0.10"/>
+              </feComponentTransfer>
+            </filter>
+
+            <!-- Costa desgastada: um deslocamento sutil quebra a regularidade
+                 da spline, que sozinha sai lisa demais para ler como litoral. -->
+            <filter id="costaRugosa" x="-5%" y="-5%" width="110%" height="110%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.028" numOctaves="3" seed="11" result="ruido"/>
+              <feDisplacementMap in="SourceGraphic" in2="ruido" scale="7"
+                                 xChannelSelector="R" yChannelSelector="G"/>
+            </filter>
             <clipPath id="mainlandClip">
               <path [attr.d]="mainlandPath"/>
             </clipPath>
@@ -69,6 +98,7 @@
 
           <ng-container *ngIf="!imageMode">
           <rect x="0" y="0" width="1000" height="1600" fill="url(#seaGrad)"/>
+          <rect x="0" y="0" width="1000" height="1600" filter="url(#marulho)" opacity=".75"/>
 
           <!-- Terras Além da Muralha -->
           <path class="beyond" [attr.d]="beyondWallPath"/>
@@ -87,7 +117,7 @@
           <!-- Continente -->
           <path class="landmass" [attr.d]="mainlandPath" filter="url(#coastGlow)"/>
 
-          <g clip-path="url(#mainlandClip)">
+          <g clip-path="url(#mainlandClip)" filter="url(#costaRugosa)">
             <!-- cor de base de cada reino -->
             <ng-container *ngFor="let r of regionShapes">
               <path *ngIf="r.clip" class="region-fill" [attr.d]="r.d" [attr.fill]="r.color"/>
@@ -142,8 +172,11 @@
             </path>
           </ng-container>
 
+          <!-- Grão de papel sobre a terra -->
+          <path [attr.d]="mainlandPath" fill="#2a2417" filter="url(#grao)" style="pointer-events:none;mix-blend-mode:multiply"/>
+
           <!-- Contorno do litoral por cima -->
-          <path class="coastline" [attr.d]="mainlandPath"/>
+          <path class="coastline" [attr.d]="mainlandPath" filter="url(#costaRugosa)"/>
 
           <!-- A Muralha -->
           <path class="wall" [attr.d]="wallPath"/>

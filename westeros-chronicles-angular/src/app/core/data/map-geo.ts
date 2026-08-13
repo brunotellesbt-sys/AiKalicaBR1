@@ -126,8 +126,41 @@ function toPath(points: Array<[number, number]>): string {
   return points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x},${y}`).join(' ') + ' Z';
 }
 
-export const MAINLAND_PATH = toPath(MAINLAND);
-export const BEYOND_WALL_PATH = toPath(BEYOND_THE_WALL);
+/**
+ * Mesmo contorno, desenhado com curvas.
+ *
+ * Este é o maior salto visual do mapa inteiro, e custa uma função. Ligar os
+ * pontos com segmentos retos entrega um polígono, e polígono lê como diagrama:
+ * nenhum litoral do mundo tem vértices. Passando uma spline Catmull-Rom pelos
+ * MESMOS pontos, a costa vira linha desenhada sem que nenhuma coordenada mude.
+ *
+ * A conversão para Bézier cúbica é a fórmula padrão: os pontos de controle
+ * saem das tangentes dos vizinhos, divididas por 6. `tension` abaixo de 1
+ * suaviza; acima, aperta as curvas contra os pontos.
+ */
+function toSmoothPath(points: Array<[number, number]>, tension = 1): string {
+  const n = points.length;
+  if (n < 3) return toPath(points);
+
+  // Fechado: os vizinhos dão a volta, senão a emenda vira um bico.
+  const at = (i: number) => points[((i % n) + n) % n];
+  const out: string[] = [`M${at(0)[0]},${at(0)[1]}`];
+
+  for (let i = 0; i < n; i++) {
+    const [x0, y0] = at(i - 1);
+    const [x1, y1] = at(i);
+    const [x2, y2] = at(i + 1);
+    const [x3, y3] = at(i + 2);
+    const k = tension / 6;
+    const c1x = x1 + (x2 - x0) * k, c1y = y1 + (y2 - y0) * k;
+    const c2x = x2 - (x3 - x1) * k, c2y = y2 - (y3 - y1) * k;
+    out.push(`C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}`);
+  }
+  return out.join(' ') + ' Z';
+}
+
+export const MAINLAND_PATH = toSmoothPath(MAINLAND);
+export const BEYOND_WALL_PATH = toSmoothPath(BEYOND_THE_WALL);
 
 /** A Muralha: 300 léguas de gelo entre o Norte e o que vem depois. */
 export const WALL_PATH = 'M270,190 L611,190';
@@ -182,15 +215,19 @@ const REGION_POLYGONS: Record<string, Array<[number, number]>> = {
  * verde-oliva única e as fronteiras não se leem.
  */
 export const REGION_COLORS: Record<string, string> = {
-  north: '#7d93a6',        // cinza-azulado: neve e pedra
-  vale: '#8ca8ad',         // montanhas altas
-  riverlands: '#7f9a63',   // várzeas do Tridente
-  iron_islands: '#6c7a80', // rocha e sal
-  westerlands: '#b09a5c',  // ouro de Rochedo Casterly
-  crownlands: '#9c8672',   // terras da corte
-  reach: '#8fae5c',        // o celeiro dos Sete Reinos
-  stormlands: '#6f8b6a',   // florestas úmidas
-  dorne: '#c2a06a',        // areia
+  // Antes eram pastéis lavados, todos com a mesma luminosidade — o mapa saía
+  // como gráfico de pizza. Agora cada reino tem valor próprio além de matiz:
+  // o Norte é frio e escuro, a Campina clara e saturada, Dorne queimada. É a
+  // diferença de VALOR, não de cor, que faz as fronteiras se lerem sem traço.
+  north: '#6b7f8c',        // pedra molhada e neve suja
+  vale: '#7d9296',         // granito alto
+  riverlands: '#6f8b4e',   // várzea fértil do Tridente
+  iron_islands: '#5a666c', // rocha, sal, pouca vida
+  westerlands: '#a58a45',  // ouro e colina seca
+  crownlands: '#8a7259',   // terra revirada de estrada e corte
+  reach: '#8fb44a',        // o celeiro: o verde mais vivo do mapa
+  stormlands: '#527a52',   // floresta úmida, escura
+  dorne: '#c9964e',        // areia sob sol duro
 };
 
 export const REGION_SHAPES: Array<{ regionId: string; d: string; clip: boolean; color: string }> =
