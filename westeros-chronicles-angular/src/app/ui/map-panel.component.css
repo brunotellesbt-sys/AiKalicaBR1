@@ -177,3 +177,8 @@
 .region-overlay .region{fill:transparent;stroke:rgba(255,255,255,.18);stroke-width:2}
 .region-overlay .region:hover{fill:rgba(255,255,255,.08)}
 .region-overlay .region.selected{fill:rgba(255,209,102,.16);stroke:#ffd166}
+
+/* Água interior. Mais clara que o mar aberto — lago raso reflete céu, e a
+   diferença de tom é o que impede que ele leia como um buraco no continente. */
+.lake{fill:#2f6f96;stroke:#bfe3f5;stroke-width:1.8;stroke-opacity:.45;pointer-events:none}
+.lake-island{fill:#6f8557;stroke:#22301c;stroke-width:1.2;pointer-events:none}

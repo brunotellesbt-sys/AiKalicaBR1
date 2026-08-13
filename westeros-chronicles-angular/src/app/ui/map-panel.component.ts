@@ -10,6 +10,7 @@ import {
   REGION_SHAPES,
   ISLANDS,
   RIVERS,
+  LAKES,
   REGION_LABELS,
   REGION_COLORS,
   TERRAIN_GLYPHS,
@@ -104,6 +105,7 @@ export class MapPanelComponent {
   readonly regionShapes = REGION_SHAPES;
   readonly islands = ISLANDS;
   readonly rivers = RIVERS;
+  readonly lakes = LAKES;
   readonly regionLabels = REGION_LABELS;
   // O relevo é recortado por duas máscaras diferentes: as feições ao norte da
   // Muralha pertencem às Terras Além dela, que não fazem parte do continente.

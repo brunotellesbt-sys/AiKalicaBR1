@@ -95,6 +95,13 @@
 
             <path class="river" *ngFor="let d of rivers" [attr.d]="d"/>
 
+            <!-- Lagos. Vêm depois dos rios e antes do relevo: água interior é
+                 corpo d'água, não deve receber glifo de montanha por cima. -->
+            <ng-container *ngFor="let l of lakes">
+              <path class="lake" [attr.d]="l.d"><title>{{l.label}}</title></path>
+              <path class="lake-island" *ngIf="l.island" [attr.d]="l.island"/>
+            </ng-container>
+
             <!-- Relevo. Vem depois dos rios e antes da camada interativa: o
                  terreno é decoração e não pode roubar o clique da região. -->
             <g
