@@ -95,6 +95,10 @@ um mapa cartografado. Quem quiser um mapa fiel traz a própria imagem:
    longa.
 3. Preencha `MAP_IMAGE` em `src/app/core/data/map-image.ts`.
 
+Para o passo 2 há uma ferramenta: abra `tools/calibrar-mapa.html` no navegador,
+escolha a imagem, clique nos dois locais e copie o bloco pronto. A imagem não sai
+da sua máquina — o arquivo é lido localmente, sem upload e sem servidor.
+
 Os outros 293 locais se posicionam sozinhos. Duas âncoras bastam porque nenhum
 mapa de Westeros é publicado girado ou espelhado: a transformação entre os dois
 espaços é só escala e deslocamento. Escolha âncoras bem afastadas — base curta
