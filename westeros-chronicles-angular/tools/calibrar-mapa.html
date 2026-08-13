@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<title>Calibrar mapa — Westeros Chronicles</title>
+<!--
+  Ferramenta de calibração do mapa por imagem.
+
+  Para usar uma imagem própria como mapa de fundo é preciso saber onde dois
+  locais conhecidos caem NELA, em pixels. Fazer isso num editor de imagem
+  funciona mas é chato e fácil de errar por alguns pixels — e erro de âncora
+  vira erro grande do outro lado do mapa.
+
+  Aqui é só abrir este arquivo no navegador, escolher a imagem e clicar em dois
+  pontos. Sai o bloco pronto para colar em src/app/core/data/map-image.ts.
+
+  A imagem NÃO sai da sua máquina: `URL.createObjectURL` lê o arquivo
+  localmente, sem upload, sem servidor. Este arquivo é HTML estático e não
+  manda nada para lugar nenhum.
+-->
+<style>
+  :root{ --bg:#12100c; --panel:#1b1712; --line:#3a2f24; --text:#e8ded0;
+         --muted:#9c8d78; --accent:#b08d4d; --good:#5c8a4a; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  header{padding:18px 22px;border-bottom:1px solid var(--line)}
+  h1{margin:0;font-size:19px;letter-spacing:.3px}
+  .sub{color:var(--muted);font-size:13px;margin-top:4px}
+  main{padding:22px;display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:22px}
+  @media (max-width:980px){ main{grid-template-columns:1fr} }
+
+  .stage{border:1px solid var(--line);border-radius:14px;overflow:hidden;
+         background:var(--panel);position:relative}
+  .stage img{display:block;width:100%;height:auto;cursor:crosshair}
+  .stage.empty{padding:60px 20px;text-align:center;color:var(--muted)}
+
+  .pin{position:absolute;width:18px;height:18px;margin:-9px 0 0 -9px;
+       border-radius:50%;border:2px solid #12100c;pointer-events:none;
+       box-shadow:0 0 0 2px rgba(255,255,255,.5)}
+  .pin.a{background:#5c8a4a} .pin.b{background:#c8613a}
+
+  aside{display:flex;flex-direction:column;gap:14px}
+  .card{border:1px solid var(--line);border-radius:14px;padding:14px;background:var(--panel)}
+  .card h2{margin:0 0 8px;font-size:14px;letter-spacing:.4px;text-transform:uppercase;
+           color:var(--muted);font-weight:600}
+  label{display:block;font-size:13px;color:var(--muted);margin-bottom:4px}
+  input[type=text]{width:100%;padding:8px 10px;border-radius:9px;
+                   border:1px solid var(--line);background:#0f0d0a;color:var(--text)}
+  input[type=file]{width:100%;color:var(--muted);font-size:13px}
+  button{padding:9px 12px;border-radius:9px;border:1px solid var(--line);
+         background:#241e17;color:var(--text);cursor:pointer;font:inherit}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);color:#1a1408;border-color:var(--accent);font-weight:700}
+  .row{display:flex;gap:8px;align-items:center}
+  .step{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line)}
+  .step:first-of-type{border-top:0}
+  .dot{width:20px;height:20px;border-radius:50%;flex:0 0 20px;margin-top:2px;
+       display:grid;place-items:center;font-size:12px;font-weight:700;color:#12100c}
+  .dot.a{background:#5c8a4a} .dot.b{background:#c8613a} .dot.done{background:var(--muted)}
+  .coord{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;color:var(--text)}
+  pre{margin:0;padding:12px;border-radius:10px;background:#0f0d0a;border:1px solid var(--line);
+      overflow:auto;font-size:12.5px;line-height:1.45;white-space:pre}
+  .hint{color:var(--muted);font-size:12.5px;margin-top:8px}
+  .warn{border-color:#7a5a2a;background:#211a10}
+</style>
+
+<header>
+  <h1>Calibrar mapa por imagem</h1>
+  <div class="sub">Escolha a imagem, clique em dois locais conhecidos, copie a configuração.
+    A imagem fica no seu navegador — nada é enviado.</div>
+</header>
+
+<main>
+  <div>
+    <div class="stage empty" id="stage">
+      Escolha uma imagem para começar.
+    </div>
+  </div>
+
+  <aside>
+    <div class="card">
+      <h2>1 · Imagem</h2>
+      <input type="file" id="file" accept="image/*">
+      <div class="hint" id="dims"></div>
+    </div>
+
+    <div class="card">
+      <h2>2 · Âncoras</h2>
+      <div class="step">
+        <div class="dot a" id="dotA">A</div>
+        <div style="flex:1">
+          <label for="idA">Primeiro local</label>
+          <input type="text" id="idA" value="winterfell">
+          <div class="coord" id="coordA">— clique no mapa —</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="dot b" id="dotB">B</div>
+        <div style="flex:1">
+          <label for="idB">Segundo local</label>
+          <input type="text" id="idB" value="kings_landing">
+          <div class="coord" id="coordB">— clique no mapa —</div>
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button id="reset">Recomeçar</button>
+        <span class="hint" style="margin:0">Escolha pontos bem afastados.</span>
+      </div>
+    </div>
+
+    <div class="card" id="outCard" style="display:none">
+      <h2>3 · Cole em map-image.ts</h2>
+      <pre id="out"></pre>
+      <div class="row" style="margin-top:10px">
+        <button class="primary" id="copy">Copiar</button>
+        <span class="hint" id="copied" style="margin:0"></span>
+      </div>
+    </div>
+
+    <div class="card warn">
+      <h2>Antes de publicar</h2>
+      <div class="hint" style="margin:0">
+        Imagens em <code>src/assets/</code> estão no <code>.gitignore</code>: uso local não
+        vai para o repositório. Se for publicar o jogo, a imagem vai junto no build — e aí
+        a licença dela precisa cobrir redistribuição. Arte de mapa comercial normalmente
+        não cobre.
+      </div>
+    </div>
+  </aside>
+</main>
+
+<script>
+(() => {
+  const stage = document.getElementById('stage');
+  const fileInput = document.getElementById('file');
+  const dims = document.getElementById('dims');
+  const out = document.getElementById('out');
+  const outCard = document.getElementById('outCard');
+
+  let img = null;
+  let natural = { w: 0, h: 0 };
+  // Alterna entre A e B a cada clique; recomeça em A depois de B.
+  let next = 'a';
+  const picks = { a: null, b: null };
+
+  fileInput.addEventListener('change', e => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+
+    stage.classList.remove('empty');
+    stage.textContent = '';
+
+    img = document.createElement('img');
+    // Objeto local: o arquivo nunca sai da máquina.
+    img.src = URL.createObjectURL(f);
+    img.addEventListener('load', () => {
+      natural = { w: img.naturalWidth, h: img.naturalHeight };
+      dims.textContent = `${f.name} — ${natural.w} × ${natural.h} px`;
+      render();
+    });
+    stage.appendChild(img);
+
+    img.addEventListener('click', ev => {
+      const r = img.getBoundingClientRect();
+      // A imagem é exibida redimensionada; o que importa é o pixel REAL.
+      const scale = natural.w / r.width;
+      picks[next] = {
+        x: Math.round((ev.clientX - r.left) * scale),
+        y: Math.round((ev.clientY - r.top) * scale),
+      };
+      next = next === 'a' ? 'b' : 'a';
+      render();
+    });
+  });
+
+  document.getElementById('reset').addEventListener('click', () => {
+    picks.a = picks.b = null;
+    next = 'a';
+    render();
+  });
+
+  document.getElementById('copy').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(out.textContent);
+      document.getElementById('copied').textContent = 'copiado';
+      setTimeout(() => document.getElementById('copied').textContent = '', 1600);
+    } catch {
+      document.getElementById('copied').textContent = 'selecione e copie à mão';
+    }
+  });
+
+  function fmt(p) {
+    return p ? `x: ${p.x}, y: ${p.y}` : '— clique no mapa —';
+  }
+
+  function render() {
+    document.getElementById('coordA').textContent = fmt(picks.a);
+    document.getElementById('coordB').textContent = fmt(picks.b);
+    document.getElementById('dotA').className = 'dot ' + (picks.a ? 'done' : 'a');
+    document.getElementById('dotB').className = 'dot ' + (picks.b ? 'done' : 'b');
+
+    stage.querySelectorAll('.pin').forEach(n => n.remove());
+    if (!img || !natural.w) return;
+
+    const r = img.getBoundingClientRect();
+    const shown = r.width / natural.w;
+    for (const k of ['a', 'b']) {
+      if (!picks[k]) continue;
+      const pin = document.createElement('div');
+      pin.className = 'pin ' + k;
+      pin.style.left = (picks[k].x * shown) + 'px';
+      pin.style.top = (picks[k].y * shown) + 'px';
+      stage.appendChild(pin);
+    }
+
+    if (picks.a && picks.b) {
+      const d = Math.hypot(picks.b.x - picks.a.x, picks.b.y - picks.a.y);
+      // Base curta transforma erro de poucos pixels em erro grande do outro
+      // lado do mapa — vale avisar em vez de deixar sair torto.
+      const aviso = d < natural.w * 0.25
+        ? '\n// ATENÇÃO: âncoras muito próximas. Escolha dois pontos mais afastados.'
+        : '';
+      const nome = (fileInput.files?.[0]?.name) || 'mapa.jpg';
+      out.textContent =
+`export const MAP_IMAGE: MapImageConfig | null = {
+  src: 'assets/${nome}',
+  width: ${natural.w},
+  height: ${natural.h},
+  anchors: [
+    { locationId: '${document.getElementById('idA').value.trim()}', x: ${picks.a.x}, y: ${picks.a.y} },
+    { locationId: '${document.getElementById('idB').value.trim()}', x: ${picks.b.x}, y: ${picks.b.y} },
+  ],
+};${aviso}`;
+      outCard.style.display = '';
+    } else {
+      outCard.style.display = 'none';
+    }
+  }
+
+  for (const id of ['idA', 'idB']) {
+    document.getElementById(id).addEventListener('input', render);
+  }
+})();
+</script>
+</html>
