@@ -1,16 +1,2 @@
 # Local release archives
 *.zip
-
-# Imagens de mapa de fundo.
-#
-# O modo MAP_IMAGE (src/app/core/data/map-image.ts) aceita uma imagem própria
-# como mapa. Elas ficam fora do versionamento de propósito: um mapa de terceiro
-# commitado aqui vai junto no build publicado do GitHub Pages, e aí a licença
-# dele precisaria cobrir redistribuição — o que normalmente não cobre.
-#
-# Uso local é decisão de quem roda. Publicar é outra coisa, e esta regra evita
-# que a segunda aconteça por acidente.
-westeros-chronicles-angular/src/assets/*.png
-westeros-chronicles-angular/src/assets/*.jpg
-westeros-chronicles-angular/src/assets/*.jpeg
-westeros-chronicles-angular/src/assets/*.webp
